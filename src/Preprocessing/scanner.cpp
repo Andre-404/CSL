@@ -237,7 +237,7 @@ Token Scanner::identifier() {
 }
 
 TokenType Scanner::identifierType() {
-	string tokenString = curFile->sourceFile.substr(start, current - start + 1);
+	string tokenString = curFile->sourceFile.substr(start, current - start);
 	
 	// language keyword
 	if (keywordToTokenType.contains(tokenString)) return keywordToTokenType[tokenString];

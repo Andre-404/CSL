@@ -43,6 +43,7 @@ namespace preprocessing {
 		//expands a function like macro
 		vector<Token> expandMacro(Macro& toExpand, vector<Token>& tokens, int pos, std::unordered_map<string, Macro>& macros, vector<Macro>& macroStack);
 		void replaceMacros(vector<Token>& tokens, std::unordered_map<string, Macro>& macros, vector<Macro>& macroStack);
+		int parseMacroFuncArgs(vector<vector<Token>>& args, vector<Token>& tokens, int pos, int arity);
 
 		CSLModule* scanFile(string unitName);
 		void topsort(CSLModule* unit);

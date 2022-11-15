@@ -137,11 +137,12 @@ std::tuple<vector<Token>, unordered_map<string, Macro>> Preprocessor::processDir
 						}
 					}
 					curMacro.params.push_back(arg);
-					if (checkNext(tokens, i) == TokenType::COMMA) ++i;
-					else {
+					if (!isAtEnd(tokens, i) && checkNext(tokens, i) == TokenType::COMMA) ++i;
+					else if (!isAtEnd(tokens, i) && checkNext(tokens, i) != TokenType::RIGHT_PAREN) {
 						error(tokens[i + 1], "Expected ',' after paramter name");
 						break;
 					}
+					else break;
 				}
 				//we continue to next loop iter here because if we're at EOF and try erasing i + 1 we'll get a error
 				if (isAtEnd(tokens, i) || checkNext(tokens, i) != TokenType::RIGHT_PAREN) {
@@ -246,6 +247,7 @@ vector<Token> replaceFuncMacroParams(Macro& toExpand, vector<vector<Token>>& arg
 					fin.erase(fin.begin() + i);
 					fin.insert(fin.begin() + i, args[j].begin(), args[j].end());
 					i--;
+					break;
 				}
 			}
 		}
@@ -253,7 +255,7 @@ vector<Token> replaceFuncMacroParams(Macro& toExpand, vector<vector<Token>>& arg
 	return fin;
 }
 
-int parseMacroFuncArgs(vector<vector<Token>>& args, vector<Token>& tokens, int pos) {
+int Preprocessor::parseMacroFuncArgs(vector<vector<Token>>& args, vector<Token>& tokens, int pos, int arity) {
 	int argCount = 0;
 	//very scuffed solution, but it works for when a function call is passed as a argument
 	//it works by keeping a "parenthesis" count, and we only exit if we encounter a right paren and
@@ -272,7 +274,10 @@ int parseMacroFuncArgs(vector<vector<Token>>& args, vector<Token>& tokens, int p
 		if (checkNext(tokens, pos) == TokenType::COMMA) pos++;
 		argCount++;
 		args.push_back(vector<Token>());
-	} 
+	}
+	if (argCount != arity) {
+		error(tokens[pos], "Expected '" + std::to_string(arity) + "' arguments, got '" + std::to_string(pos) + "'");
+	}
 	return pos;
 }
 
@@ -280,44 +285,6 @@ vector<Token> Preprocessor::expandMacro(Macro& toExpand, unordered_map<string, M
 	//copy macro body
 	vector<Token> tokens = toExpand.value;
 	replaceMacros(tokens, macros, macroStack);
-	/*
-	for (int i = 0; i < tokens.size(); i++) {
-		Token& token = tokens[i];
-		if (token.type != TokenType::IDENTIFIER) continue;
-		if (macros.count(token.getLexeme()) == 0) continue;
-
-		//if the macro is already on the stack, it's a recursive macro and we throw an error
-		Macro& macro = macros[token.getLexeme()];
-		if (containsMacro(macroStack, macro)) {
-			error(macro.name, "Recursive macro expansion detected.");
-			tokens.clear();
-			continue;
-		}
-
-		macroStack.push_back(macro);
-		if (macro.isFunctionLike) {
-			//get rid of macro name
-			tokens.erase(tokens.begin() + i);
-			//recursive expansion
-			//i - 1 because when we delete the name(if the macro is called correctly) we'll be right at the '(', and since we're
-			//always checking ahead, and not at the current position, we need to backtrack a little
-			vector<Token> expanded = expandMacro(macro, tokens, i - 1, macros, macroStack);
-			//inserts expanded body
-			tokens.insert(tokens.begin() + i, expanded.begin(), expanded.end());
-			i--;
-			macroStack.pop_back();
-			continue;
-		}
-		//recursivly expands the macro
-		vector<Token> expanded = expandMacro(macro, macros, macroStack);
-		//delete the name
-		tokens.erase(tokens.begin() + i);
-		//inserts expanded body
-		tokens.insert(tokens.begin() + i, expanded.begin(), expanded.end());
-		i--;
-		//pops the macro used for his expansion(to preserve the stack order)
-		macroStack.pop_back();
-	}*/
 	return tokens;
 }
 
@@ -330,7 +297,7 @@ vector<Token> Preprocessor::expandMacro(Macro& toExpand, vector<Token>& callToke
 	pos++;
 	//parses the args
 	vector<vector<Token>> args;
-	int newPos = parseMacroFuncArgs(args, callTokens, pos);
+	int newPos = parseMacroFuncArgs(args, callTokens, pos, toExpand.params.size());
 	if (checkNext(callTokens, newPos) != TokenType::RIGHT_PAREN) {
 		error(callTokens[newPos], "Expected a ')' after macro args.");
 		return vector<Token>();
