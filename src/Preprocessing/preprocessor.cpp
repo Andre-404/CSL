@@ -55,6 +55,7 @@ CSLModule* Preprocessor::scanFile(string moduleName) {
 			unit->deps.push_back(allUnits[depName]);
 			continue;
 		}
+
 		unit->deps.push_back(scanFile(depName));
 	}
 	unit->resolvedDeps = true;

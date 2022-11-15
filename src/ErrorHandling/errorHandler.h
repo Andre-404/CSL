@@ -31,7 +31,7 @@ public:
 	vector<CompileTimeError> errors;
 	vector<RuntimeError> stackTrace;
 
-	void showCompileErrors() {};
+	void showCompileErrors();
 	void showRuntimeErrors() {};
 	ErrorHandler() {}
 };

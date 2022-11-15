@@ -48,3 +48,9 @@ void report(File* src, Token& token, string msg) {
 	underlineSymbol(token.str);
 	std::cout << "\n";
 }
+
+void ErrorHandler::showCompileErrors() {
+	for (CompileTimeError error : errors) {
+		report(error.origin->file, error.token, error.errorText);
+	}
+}
