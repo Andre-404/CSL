@@ -33,8 +33,11 @@ CSLModule* Preprocessor::scanFile(string moduleName) {
 	vector<Token> tokens = scanner.tokenizeSource(readFile(fullPath), moduleName);
 	CSLModule* unit = new CSLModule(tokens, scanner.getFile());
 	allUnits[moduleName] = unit;
+	curUnit = unit;
 	//detects macro and import, gets rid of newline tokens, and returns the tokens of dep names
 	std::tuple<vector<Token>, unordered_map<string, Macro>> result = processDirectives(unit);
+	vector<Macro> stack;
+	replaceMacros(unit->tokens, std::get<1>(result), stack);
 	vector<Token> depsToParse = std::get<0>(result);
 	for (Token dep : depsToParse) {
 		//since import names are strings, we get rid of ""
@@ -54,8 +57,6 @@ CSLModule* Preprocessor::scanFile(string moduleName) {
 		}
 		unit->deps.push_back(scanFile(depName));
 	}
-	vector<Macro> stack;
-	replaceMacros(unit->tokens, std::get<1>(result), stack);
 	unit->resolvedDeps = true;
 	for (Token token : unit->tokens) {
 		std::cout << token.getLexeme() << "\n";
@@ -127,6 +128,10 @@ std::tuple<vector<Token>, unordered_map<string, Macro>> Preprocessor::processDir
 					}
 					curMacro.params.push_back(arg);
 					if (checkNext(tokens, i) == TokenType::COMMA) ++i;
+					else {
+						error(tokens[i + 1], "Expected ',' after paramter name");
+						break;
+					}
 				}
 				//we continue to next loop iter here because if we're at EOF and try erasing i + 1 we'll get a error
 				if (isAtEnd(tokens, i) || checkNext(tokens, i) != TokenType::RIGHT_PAREN) {

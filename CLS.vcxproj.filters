@@ -5,6 +5,7 @@
     <ClCompile Include="src\Preprocessing\scanner.cpp" />
     <ClCompile Include="src\files.cpp" />
     <ClCompile Include="src\Preprocessing\preprocessor.cpp" />
+    <ClCompile Include="src\ErrorHandling\errorHandler.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Preprocessing\scanner.h" />

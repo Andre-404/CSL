@@ -152,6 +152,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\ErrorHandling\errorHandler.cpp" />
     <ClCompile Include="src\files.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\Preprocessing\preprocessor.cpp" />
