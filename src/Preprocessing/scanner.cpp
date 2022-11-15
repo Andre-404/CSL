@@ -32,12 +32,15 @@ std::unordered_map<string, TokenType> keywordToTokenType = {
 	{"yield", TokenType::YIELD}
 };
 
+using namespace preprocessing;
+
 Scanner::Scanner() {
 	curFile = nullptr;
 	line = 0;
 	start = 0;
 	current = 0;
 	hadError = false;
+	curFile = nullptr;
 }
 
 vector<Token> Scanner::tokenizeSource(string source, string sourceName) {

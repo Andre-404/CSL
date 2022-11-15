@@ -1,6 +1,14 @@
 #pragma once
 #include "../common.h"
-#include "../Preprocessing/scanner.h"
+#include "../modulesDefs.h"
+
+struct SystemError {
+	string errorText;
+
+	SystemError(string _errorText) {
+		errorText = _errorText;
+	}
+};
 
 struct CompileTimeError {
 	string errorText;
@@ -28,10 +36,18 @@ struct RuntimeError {
 
 class ErrorHandler {
 public:
-	vector<CompileTimeError> errors;
-	vector<RuntimeError> stackTrace;
+	//errors during preprocessing, building of the AST tree and compiling
+	vector<CompileTimeError> compileErrors;
+	//stack trace when a runtime error occurs
+	vector<RuntimeError> runtimeErrors;
+	//system level errors(eg. not being able to access a file)
+	vector<SystemError> systemErrors;
 
-	void showCompileErrors() {};
+	void showCompileErrors();
 	void showRuntimeErrors() {};
 	ErrorHandler() {}
+
+	void addError(CompileTimeError error);
+	void addError(RuntimeError error);
+	void addError(SystemError error);
 };
