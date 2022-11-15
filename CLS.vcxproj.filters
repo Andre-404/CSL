@@ -2,5 +2,15 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\Preprocessing\scanner.cpp" />
+    <ClCompile Include="src\files.cpp" />
+    <ClCompile Include="src\Preprocessing\preprocessor.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\Preprocessing\scanner.h" />
+    <ClInclude Include="src\common.h" />
+    <ClInclude Include="src\Preprocessing\preprocessor.h" />
+    <ClInclude Include="src\ErrorHandling\errorHandler.h" />
+    <ClInclude Include="src\files.h" />
   </ItemGroup>
 </Project>
