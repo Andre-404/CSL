@@ -236,14 +236,13 @@ Token Scanner::identifier() {
 	return makeToken(identifierType());
 }
 
-//trie implementation
 TokenType Scanner::identifierType() {
-	string& source = curFile->sourceFile;
-	for (auto iterator = keywordToTokenType.begin(); iterator != keywordToTokenType.end(); iterator++) {
-		if (checkKeyword(0, iterator->first)) return iterator->second;
-	}
+	string tokenString = curFile->sourceFile.substr(start, current - start + 1);
+	
+	// language keyword
+	if (keywordToTokenType.contains(tokenString)) return keywordToTokenType[tokenString];
 
-	//variable name
+	// variable name
 	return TokenType::IDENTIFIER;
 }
 
