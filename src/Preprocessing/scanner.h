@@ -3,25 +3,6 @@
 
 namespace preprocessing {
 
-struct Span{
-	uInt64 line;
-	uInt64 column;
-	uInt64 length;
-
-	File* sourceFile;
-	Span() {
-		line = 0;
-		column = 0;
-		length = 0;
-		sourceFile = nullptr;
-	}
-	Span(uInt64 _line, uInt64 _column, uInt64 _len, File* _src) : line(_line), column(_column), length(_len), sourceFile(_src) {};
-	string getStr() {
-		uInt64 start = sourceFile->lines[line - 1] + column;
-		return sourceFile->sourceFile.substr(start, length);
-	}
-};
-
 class Scanner {
 	public:
 		vector<Token> tokenizeSource(string source, string sourcename);
