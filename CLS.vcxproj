@@ -73,23 +73,23 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <OutDir>${SolutionDir}bin\${Platform}\${Configuration}\</OutDir>
-    <IntDir>${SolutionDir}bin\intermediates\${Platform}\${Configuration}\</IntDir>
+    <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)bin\intermediates\$(Platform)\$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
-    <OutDir>${SolutionDir}bin\${Platform}\${Configuration}\</OutDir>
-    <IntDir>${SolutionDir}bin\intermediates\${Platform}\${Configuration}\</IntDir>
+    <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)bin\intermediates\$(Platform)\$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <OutDir>${SolutionDir}bin\${Platform}\${Configuration}\</OutDir>
-    <IntDir>${SolutionDir}bin\intermediates\${Platform}\${Configuration}\</IntDir>
+    <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)bin\intermediates\$(Platform)\$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <OutDir>${SolutionDir}bin\${Platform}\${Configuration}\</OutDir>
-    <IntDir>${SolutionDir}bin\intermediates\${Platform}\${Configuration}\</IntDir>
+    <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)bin\intermediates\$(Platform)\$(Configuration)\</IntDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -162,6 +162,7 @@
     <ClInclude Include="src\common.h" />
     <ClInclude Include="src\ErrorHandling\errorHandler.h" />
     <ClInclude Include="src\files.h" />
+    <ClInclude Include="src\modulesDefs.h" />
     <ClInclude Include="src\Preprocessing\preprocessor.h" />
     <ClInclude Include="src\Preprocessing\scanner.h" />
   </ItemGroup>

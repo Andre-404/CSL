@@ -1,10 +1,13 @@
 #include "scanner.h"
 
+using namespace preprocessing;
+
 Scanner::Scanner() {
 	line = 0;
 	start = 0;
 	current = 0;
 	hadError = false;
+	curFile = nullptr;
 }
 
 vector<Token> Scanner::tokenizeSource(string source, string sourceName) {
@@ -120,7 +123,7 @@ char Scanner::peek() {
 }
 
 char Scanner::peekNext() {
-	if (isAtEnd()) return '\0';
+	if (isAtEnd() || current + 1 >= curFile->sourceFile.size()) return '\0';
 	return curFile->sourceFile[current + 1];
 }
 
@@ -140,6 +143,7 @@ void Scanner::skipWhitespace() {
 			}
 			//if we have a /**/ comment, we loop until we find */
 			else if (peekNext() == '*') {
+				advance();
 				advance();
 				while (!(peek() == '*' && peekNext() == '/') && !isAtEnd()) {
 					if (peek() == '\n') {

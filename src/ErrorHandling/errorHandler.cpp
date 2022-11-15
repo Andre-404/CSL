@@ -50,7 +50,19 @@ void report(File* src, Token& token, string msg) {
 }
 
 void ErrorHandler::showCompileErrors() {
-	for (CompileTimeError error : errors) {
+	for (CompileTimeError error : compileErrors) {
 		report(error.origin->file, error.token, error.errorText);
 	}
+}
+
+void ErrorHandler::addError(CompileTimeError error) {
+	compileErrors.push_back(error);
+}
+
+void ErrorHandler::addError(RuntimeError error) {
+	runtimeErrors.push_back(error);
+}
+
+void ErrorHandler::addError(SystemError error) {
+	systemErrors.push_back(error);
 }

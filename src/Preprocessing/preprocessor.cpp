@@ -4,6 +4,7 @@
 #include <iostream>
 
 using std::unordered_map;
+using namespace preprocessing;
 
 Preprocessor::Preprocessor(ErrorHandler& _handler) : errorHandler(_handler) {
 	projectRootPath = "";
@@ -19,7 +20,8 @@ bool Preprocessor::preprocessProject(string mainFilePath) {
 	using namespace std::filesystem;
 	path p(mainFilePath);
 	//checks file validity
-	if (p.extension().string() != ".csl" || p.stem().string() != "main") {
+	if (p.extension().string() != ".csl" || p.stem().string() != "main" || !exists(p)) {
+		errorHandler.addError(SystemError("Couldn't find main.csl"));
 		return true;
 	}
 	projectRootPath = p.parent_path().string() + "/";
@@ -55,8 +57,13 @@ CSLModule* Preprocessor::scanFile(string moduleName) {
 			unit->deps.push_back(allUnits[depName]);
 			continue;
 		}
-
-		unit->deps.push_back(scanFile(depName));
+		std::filesystem::path p(projectRootPath + depName);
+		if (std::filesystem::exists(p)) {
+			unit->deps.push_back(scanFile(depName));
+		}
+		else {
+			error(dep, "File " + depName + " doesn't exist.");
+		}
 	}
 	unit->resolvedDeps = true;
 	for (Token token : unit->tokens) {
@@ -222,7 +229,6 @@ void Preprocessor::replaceMacros(vector<Token>& tokens, unordered_map<string, Ma
 	}
 }
 
-
 vector<Token> replaceFuncMacroParams(Macro& toExpand, vector<vector<Token>>& args) {
 	//given a set of args, it replaces all params in the macro body with the args
 	//this relies on args and params being in same positions in the array
@@ -376,5 +382,5 @@ vector<Token> Preprocessor::expandMacro(Macro& toExpand, vector<Token>& callToke
 
 void Preprocessor::error(Token token, string msg) {
 	hadError = true;
-	errorHandler.errors.push_back(CompileTimeError(msg, curUnit, token));
+	errorHandler.addError(CompileTimeError(msg, curUnit, token));
 }

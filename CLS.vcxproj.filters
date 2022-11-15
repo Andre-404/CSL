@@ -13,5 +13,6 @@
     <ClInclude Include="src\Preprocessing\preprocessor.h" />
     <ClInclude Include="src\ErrorHandling\errorHandler.h" />
     <ClInclude Include="src\files.h" />
+    <ClInclude Include="src\modulesDefs.h" />
   </ItemGroup>
 </Project>

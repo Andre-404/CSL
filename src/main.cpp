@@ -6,7 +6,7 @@
 
 int main(int argc, char* argv[]) {
 	ErrorHandler h;
-	Preprocessor p(h);
+	preprocessing::Preprocessor p(h);
 	bool a = p.preprocessProject("C:\\Temp\\main.csl");
 	h.showCompileErrors();
 	return 0;
