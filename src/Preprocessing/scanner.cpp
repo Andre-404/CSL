@@ -1,6 +1,39 @@
 #include "scanner.h"
+#include <iostream>
+
+// Map to convert keywords in string form to their corresponding TokenType
+std::unordered_map<string, TokenType> keywordToTokenType = {
+	{"and", TokenType::AND},
+	{"break", TokenType::BREAK},
+	{"class", TokenType::CLASS},
+	{"case", TokenType::CASE},
+	{"continue", TokenType::CONTINUE},
+	{"default", TokenType::DEFAULT},
+	{"else", TokenType::ELSE},
+	{"export", TokenType::EXPORT},
+	{"if", TokenType::IF},
+	{"import", TokenType::IMPORT},
+	{"nil", TokenType::NIL},
+	{"macro", TokenType::MACRO},
+	{"or", TokenType::OR},
+	{"print", TokenType::PRINT},
+	{"return", TokenType::RETURN},
+	{"run", TokenType::RUN},
+	{"super", TokenType::SUPER},
+	{"switch", TokenType::SWITCH},
+	{"var", TokenType::VAR},
+	{"while", TokenType::WHILE},
+	{"false", TokenType::FALSE},
+	{"for", TokenType::FOR},
+	{"func", TokenType::FUNC},
+	{"fiber", TokenType::FIBER},
+	{"this", TokenType::THIS},
+	{"true", TokenType::TRUE},
+	{"yield", TokenType::YIELD}
+};
 
 Scanner::Scanner() {
+	curFile = nullptr;
 	line = 0;
 	start = 0;
 	current = 0;
@@ -8,6 +41,7 @@ Scanner::Scanner() {
 }
 
 vector<Token> Scanner::tokenizeSource(string source, string sourceName) {
+	// Setup
 	curFile = new File(source, sourceName);
 	line = 1;
 	start = 0;
@@ -16,14 +50,13 @@ vector<Token> Scanner::tokenizeSource(string source, string sourceName) {
 	hadError = false;
 	tokens.clear();
 
-	if (source != "") {
-		Token token = scanToken();
+	// Tokenization
+	Token token;
+	do {
+		token = scanToken();
 		tokens.push_back(token);
-		while (token.type != TokenType::TOKEN_EOF) {
-			token = scanToken();
-			tokens.push_back(token);
-		}
-	}
+	} while (token.type != TokenType::TOKEN_EOF);
+
 	return tokens;
 }
 
@@ -41,7 +74,12 @@ bool Scanner::isAtEnd() {
 	return current >= curFile->sourceFile.size();
 }
 
-//if matched we consume the token
+// Checks if a given index is contained within the file (Is non-negative and less than file size)
+bool Scanner::isIndexInFile(int index) {
+	return 0 <= index && index < curFile->sourceFile.size();
+}
+
+//if matched we consume the character
 bool Scanner::match(char expected) {
 	if (isAtEnd()) return false;
 	if (curFile->sourceFile[current] != expected) return false;
@@ -56,13 +94,12 @@ char Scanner::advance() {
 Token Scanner::scanToken() {
 	skipWhitespace();
 	start = current;
-
 	if (isAtEnd()) return makeToken(TokenType::TOKEN_EOF);
 
 	char c = advance();
 	//identifiers start with _ or [a-z][A-Z]
-	if (isDigit(c)) return number();
-	if (isAlpha(c)) return identifier();
+	if (isdigit(c)) return number();
+	if (isalpha(c) || c == '_') return identifier();
 
 	switch (c) {
 	case '(': return makeToken(TokenType::LEFT_PAREN);
@@ -83,28 +120,25 @@ Token Scanner::scanToken() {
 	case '^': return makeToken(match('=') ? TokenType::BITWISE_XOR_EQUAL : TokenType::BITWISE_XOR);
 	case '%': return makeToken(match('=') ? TokenType::PERCENTAGE_EQUAL : TokenType::PERCENTAGE);
 	case '~': return makeToken(TokenType::TILDA);
-	case '!':
-		return makeToken(match('=') ? TokenType::BANG_EQUAL : TokenType::BANG);
-	case '=':						  
-		return makeToken(match('=') ? TokenType::EQUAL_EQUAL : TokenType::EQUAL);
-	case '<':						  
-		return makeToken(match('=') ? TokenType::LESS_EQUAL : match('<') ? TokenType::BITSHIFT_LEFT : TokenType::LESS);
-	case '>':						  
-		return makeToken(match('=') ? TokenType::GREATER_EQUAL : match('>') ? TokenType::BITSHIFT_RIGHT : TokenType::GREATER);
+	case '!': return makeToken(match('=') ? TokenType::BANG_EQUAL : TokenType::BANG);
+	case '=': return makeToken(match('=') ? TokenType::EQUAL_EQUAL : TokenType::EQUAL);
+	case '<': return makeToken(match('=') ? TokenType::LESS_EQUAL : match('<') ? TokenType::BITSHIFT_LEFT : TokenType::LESS);
+	case '>': return makeToken(match('=') ? TokenType::GREATER_EQUAL : match('>') ? TokenType::BITSHIFT_RIGHT : TokenType::GREATER);
 	case '"': return string_();
 	case ':': return makeToken(match(':') ? TokenType::DOUBLE_COLON : TokenType::COLON);
 	case '?': return makeToken(TokenType::QUESTIONMARK);
 	case '\n':
+		Token newLineToken = makeToken(TokenType::NEWLINE);
 		curFile->lines.push_back(current);
 		line++;
-		return makeToken(TokenType::NEWLINE);
+		return newLineToken;
 	}
 
 	return errorToken("Unexpected character.");
 }
 
 Token Scanner::makeToken(TokenType type) {
-	Span newSpan(line, start - curFile->lines[curFile->lines.size() - 1], current - start, curFile);
+	Span newSpan(line, start - curFile->lines.back(), current - start, curFile);
 	Token token(newSpan, type);
 	string str = token.getLexeme();
 	return token;
@@ -120,7 +154,7 @@ char Scanner::peek() {
 }
 
 char Scanner::peekNext() {
-	if (isAtEnd()) return '\0';
+	if (!isIndexInFile(current+1)) return '\0';
 	return curFile->sourceFile[current + 1];
 }
 
@@ -134,14 +168,13 @@ void Scanner::skipWhitespace() {
 			advance();
 			break;
 		case '/':
-			if (peekNext() == '/') {
-				// A  // comment goes until the end of the line.
-				while (peek() != '\n' && !isAtEnd()) advance();
-			}
-			//if we have a /**/ comment, we loop until we find */
+			// Standard comment
+			if (peekNext() == '/') while (!isAtEnd() && peek() != '\n') advance();
+			// Multi-line comment
 			else if (peekNext() == '*') {
 				advance();
-				while (!(peek() == '*' && peekNext() == '/') && !isAtEnd()) {
+				advance();
+				while (!isAtEnd() && !(peek() == '*' && peekNext() == '/')) {
 					if (peek() == '\n') {
 						line++;
 						curFile->lines.push_back(current);
@@ -180,117 +213,42 @@ Token Scanner::string_() {
 	return makeToken(TokenType::STRING);
 }
 
-bool Scanner::isDigit(char c) {
-	return c >= '0' && c <= '9';
-}
-
 Token Scanner::number() {
-	while (isDigit(peek())) advance();
+	while (isdigit(peek())) advance();
 
 	// Look for a fractional part.
-	if (peek() == '.' && isDigit(peekNext())) {
+	if (peek() == '.' && isdigit(peekNext())) {
 		// Consume the ".".
 		advance();
 
-		while (isDigit(peek())) advance();
+		while (isdigit(peek())) advance();
 	}
 
 	return makeToken(TokenType::NUMBER);
 }
 
-bool Scanner::isAlpha(char c) {
-	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
-}
-
-//first character of the identifier has to be alphabetical, rest can be alphanumerical + _
 Token Scanner::identifier() {
-	while (isAlpha(peek()) || isDigit(peek())) advance();
+	//first character of the identifier has to be alphabetical, rest can be alphanumerical + _
+	while (isalnum(peek()) || peek() == '_') advance();
 	return makeToken(identifierType());
 }
 
 //trie implementation
 TokenType Scanner::identifierType() {
 	string& source = curFile->sourceFile;
-	switch (source[start]) {
-	case 'a': return checkKeyword(1, 2, "nd", TokenType::AND);
-	case 'b': return checkKeyword(1, 4, "reak", TokenType::BREAK);
-	case 'c':
-		if (current - start > 1) {
-			switch (source[start + 1]) {
-			case 'l': return checkKeyword(2, 3, "ass", TokenType::CLASS);
-			case 'a': return checkKeyword(2, 2, "se", TokenType::CASE);
-			case 'o': return checkKeyword(2, 6, "ntinue", TokenType::CONTINUE);
-			}
-		}
-		break;
-	case 'd': return checkKeyword(1, 6, "efault", TokenType::DEFAULT);
-	case 'e':
-		if (current - start > 1) {
-			switch (source[start + 1]) {
-			case 'l':  return checkKeyword(2, 2, "se", TokenType::ELSE);
-			case 'x':  return checkKeyword(2, 4, "port", TokenType::EXPORT);
-			}
-		}
-	case 'i':
-		if (current - start > 1) {
-			switch (source[start + 1]) {
-			case 'f': return TokenType::IF;
-			case 'm': return checkKeyword(2, 4, "port", TokenType::IMPORT);
-			}
-		}
-		break;
-	case 'n': return checkKeyword(1, 2, "il", TokenType::NIL);
-	case 'm': return checkKeyword(1, 4, "acro", TokenType::MACRO);
-	case 'o': return checkKeyword(1, 1, "r", TokenType::OR);
-	case 'p': return checkKeyword(1, 4, "rint", TokenType::PRINT);
-	case 'r':
-		if (current - start > 1) {
-			switch (source[start + 1]) {
-			case 'e': return checkKeyword(2, 4, "turn", TokenType::RETURN);
-			case 'u': return checkKeyword(2, 1, "n", TokenType::RUN);
-			}
-		}
-		break;
-	case 's':
-		if (current - start > 1) {
-			switch (source[start + 1]) {
-			case 'u': return checkKeyword(2, 3, "per", TokenType::SUPER);
-			case 'w': return checkKeyword(2, 4, "itch", TokenType::SWITCH);
-			}
-		}
-		break;
-	case 'v': return checkKeyword(1, 2, "ar", TokenType::VAR);
-	case 'w': return checkKeyword(1, 4, "hile", TokenType::WHILE);
-	case 'f':
-		if (current - start > 1) {
-			switch (source[start + 1]) {
-			case 'a': return checkKeyword(2, 3, "lse", TokenType::FALSE);
-			case 'o': return checkKeyword(2, 1, "r", TokenType::FOR);
-			case 'u': return checkKeyword(2, 2, "nc", TokenType::FUNC);
-			case 'i': return checkKeyword(2, 3, "ber", TokenType::FIBER);
-			}
-		}
-		break;
-	case 't':
-		if (current - start > 1) {
-			switch (source[start + 1]) {
-			case 'h': return checkKeyword(2, 2, "is", TokenType::THIS);
-			case 'r': return checkKeyword(2, 2, "ue", TokenType::TRUE);
-			}
-		}
-		break;
-	case 'y':
-		return checkKeyword(1, 4, "ield", TokenType::YIELD);
+	for (auto iterator = keywordToTokenType.begin(); iterator != keywordToTokenType.end(); iterator++) {
+		if (checkKeyword(0, iterator->first)) return iterator->second;
 	}
+
 	//variable name
 	return TokenType::IDENTIFIER;
 }
 
-TokenType Scanner::checkKeyword(int strt, int length, const char* rest, TokenType type) {
-	if (current - start == strt + length && curFile->sourceFile.substr(start + strt, length).compare(rest) == 0) {
-		return type;
+bool Scanner::checkKeyword(int keywordOffset, string keyword) {
+	if (!isIndexInFile(start + keywordOffset + keyword.length())) return false;
+	if (curFile->sourceFile.substr(start + keywordOffset, keyword.length()) == keyword) {
+		return true;
 	}
-
-	return TokenType::IDENTIFIER;
+	return false;
 }
 #pragma endregion

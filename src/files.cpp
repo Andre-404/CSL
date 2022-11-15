@@ -5,14 +5,12 @@
 #include <sstream>
 
 string readFile(char* path) {
-
 	std::filesystem::path p(path);
 	if (std::filesystem::exists(p)) {
 		std::stringstream ss;
-		uInt64 size = std::filesystem::file_size(p);
-		std::ifstream is(path);
-		ss << is.rdbuf();
-		is.close();
+		std::ifstream file(path);
+		ss << file.rdbuf();
+		file.close();
 		return ss.str();
 	}
 	else {
@@ -20,9 +18,11 @@ string readFile(char* path) {
 		return "";
 	}
 }
+
 string readFile(const char* path) {
 	return readFile((char*)path);
 }
+
 string readFile(string& path) {
 	return readFile(path.c_str());
 }

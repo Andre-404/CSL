@@ -18,10 +18,12 @@ Preprocessor::~Preprocessor() {
 bool Preprocessor::preprocessProject(string mainFilePath) {
 	using namespace std::filesystem;
 	path p(mainFilePath);
+
 	//checks file validity
 	if (p.extension().string() != ".csl" || p.stem().string() != "main") {
 		return true;
 	}
+
 	projectRootPath = p.parent_path().string() + "/";
 	CSLModule* mainModule = scanFile("main.csl");
 	topsort(mainModule);

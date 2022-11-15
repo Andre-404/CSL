@@ -2,7 +2,7 @@
 <Project>
   <ProjectOutputs>
     <ProjectOutput>
-      <FullPath>C:\ProjektiAndrea\CLS\${SolutionDir}bin\${Platform}\${Configuration}\CSL.exe</FullPath>
+      <FullPath>C:\Users\Korisnik\Documents\GitHub\CSL\${SolutionDir}bin\${Platform}\${Configuration}\CSL.exe</FullPath>
     </ProjectOutput>
   </ProjectOutputs>
   <ContentFiles />
