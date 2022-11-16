@@ -95,8 +95,8 @@ char Scanner::advance() {
 }
 
 Token Scanner::scanToken() {
-	skipWhitespace();
 	start = current;
+	if(consumeWhitespace()) return makeToken(TokenType::WHITESPACE);
 	if (isAtEnd()) return makeToken(TokenType::TOKEN_EOF);
 
 	char c = advance();
@@ -161,7 +161,8 @@ char Scanner::peekNext() {
 	return curFile->sourceFile[current + 1];
 }
 
-void Scanner::skipWhitespace() {
+bool Scanner::consumeWhitespace() {
+	int whitespaceCount = 0;
 	while (true) {
 		char c = peek();
 		switch (c) {
@@ -169,6 +170,7 @@ void Scanner::skipWhitespace() {
 		case '\r':
 		case '\t':
 			advance();
+			whitespaceCount++;
 			break;
 		case '/':
 			// Standard comment
@@ -190,11 +192,11 @@ void Scanner::skipWhitespace() {
 				}
 			}
 			else {
-				return;
+				return whitespaceCount > 0;
 			}
 			break;
 		default:
-			return;
+			return whitespaceCount > 0;
 		}
 	}
 }

@@ -69,7 +69,7 @@ CSLModule* Preprocessor::scanFile(string moduleName) {
 	}
 	unit->resolvedDeps = true;
 	for (Token token : unit->tokens) {
-		std::cout << token.getLexeme() << "\n";
+		std::cout << token.getLexeme() << static_cast<int>(token.type) << "\n";
 	}
 	return unit;
 }

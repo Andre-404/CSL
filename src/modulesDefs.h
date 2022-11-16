@@ -32,7 +32,7 @@ enum class TokenType {
 	IMPORT, MACRO, EXPORT,
 	YIELD, FIBER, RUN,
 
-	NEWLINE, ERROR, TOKEN_EOF
+	WHITESPACE, NEWLINE, ERROR, TOKEN_EOF
 };
 
 struct File {
