@@ -163,6 +163,7 @@
     <ClInclude Include="src\ErrorHandling\errorHandler.h" />
     <ClInclude Include="src\files.h" />
     <ClInclude Include="src\modulesDefs.h" />
+    <ClInclude Include="src\Parsing\ASTDefs.h" />
     <ClInclude Include="src\Preprocessing\preprocessor.h" />
     <ClInclude Include="src\Preprocessing\scanner.h" />
   </ItemGroup>

@@ -30,7 +30,6 @@ enum class TokenType {
 	SWITCH, CASE, DEFAULT,
 	PRINT, VAR,
 	IMPORT, ADDMACRO, REMOVEMACRO, EXPORT,
-	YIELD, FIBER, RUN,
 
 	WHITESPACE, NEWLINE, ERROR, TOKEN_EOF
 };
@@ -43,8 +42,6 @@ struct File {
 	std::vector<uInt> lines;
 	File(string& src, string& _name) : sourceFile(src), name(_name) {};
 	File() {}
-
-
 };
 
 //span of characters in a source file of code

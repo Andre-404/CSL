@@ -49,20 +49,68 @@ void report(File* src, Token& token, string msg) {
 	std::cout << "\n";
 }
 
-void ErrorHandler::showCompileErrors() {
-	for (CompileTimeError error : compileErrors) {
-		report(error.origin->file, error.token, error.errorText);
+namespace errorHandler {
+	namespace {
+		struct SystemError {
+			string errorText;
+
+			SystemError(string _errorText) {
+				errorText = _errorText;
+			}
+		};
+		struct CompileTimeError {
+			string errorText;
+			File* origin;
+			Token token;
+
+			CompileTimeError(string _errorText, File* _origin, Token _token) {
+				errorText = _errorText;
+				origin = _origin;
+				token = _token;
+			}
+		};
+		struct RuntimeError {
+			string errorText;
+			string funcName;
+			CSLModule* origin;
+
+			RuntimeError(string _errorText, CSLModule* _origin, string _funcName) {
+				errorText = _errorText;
+				origin = _origin;
+				funcName = _funcName;
+			}
+		};
+
+		//errors during preprocessing, building of the AST tree and compiling
+		vector<CompileTimeError> compileErrors;
+		//stack trace when a runtime error occurs
+		vector<RuntimeError> runtimeErrors;
+		//system level errors(eg. not being able to access a file)
+		vector<SystemError> systemErrors;
 	}
-}
 
-void ErrorHandler::addError(CompileTimeError error) {
-	compileErrors.push_back(error);
-}
+	void showCompileErrors() {
+		for (CompileTimeError error : compileErrors) {
+			report(error.origin, error.token, error.errorText);
+		}
+	}
 
-void ErrorHandler::addError(RuntimeError error) {
-	runtimeErrors.push_back(error);
-}
+	void showRuntimeErrors() {
+		//TODO: implement this when you get to stack tracing
+	}
+	void showSystemErrors() {
+		for (SystemError error : systemErrors) {
+			std::cout << "System error: " << error.errorText << "\n";
+		}
+	}
 
-void ErrorHandler::addError(SystemError error) {
-	systemErrors.push_back(error);
+	void addCompileError(string msg, Token token) {
+		compileErrors.push_back(CompileTimeError(msg, token.str.sourceFile, token));
+	}
+	void addRuntimeError(string msg, string funcName, CSLModule* origin) {
+		runtimeErrors.push_back(RuntimeError(msg, origin, funcName));
+	}
+	void addSystemError(string msg) {
+		systemErrors.push_back(SystemError(msg));
+	}
 }

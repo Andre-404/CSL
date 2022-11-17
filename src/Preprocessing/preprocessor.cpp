@@ -165,7 +165,7 @@ vector<Token> FunctionMacro::expand(unordered_map<string, unique_ptr<Macro>>& ma
 	return expandedExpression;
 }
 
-Preprocessor::Preprocessor(ErrorHandler& _handler) : errorHandler(_handler) {
+Preprocessor::Preprocessor(){
 	projectRootPath = "";
 	hadError = false;
 	curUnit = nullptr;
@@ -181,7 +181,7 @@ bool Preprocessor::preprocessProject(string mainFilePath) {
 
 	// Check file validity
 	if (p.extension().string() != ".csl" || p.stem().string() != "main" || !exists(p)) {
-		errorHandler.addError(SystemError("Couldn't find main.csl"));
+		errorHandler::addSystemError("Couldn't find main.csl");
 		return true;
 	}
 
@@ -355,5 +355,5 @@ vector<Token> Preprocessor::processDirectivesAndMacros(CSLModule* unit) {
 
 void Preprocessor::error(Token token, string msg) {
 	hadError = true;
-	errorHandler.addError(CompileTimeError(msg, curUnit, token));
+	errorHandler::addCompileError(msg, token);
 }

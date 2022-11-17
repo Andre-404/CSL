@@ -19,7 +19,6 @@ std::unordered_map<string, TokenType> keywordToTokenType = {
 	{"or", TokenType::OR},
 	{"print", TokenType::PRINT},
 	{"return", TokenType::RETURN},
-	{"run", TokenType::RUN},
 	{"super", TokenType::SUPER},
 	{"switch", TokenType::SWITCH},
 	{"var", TokenType::VAR},
@@ -27,10 +26,8 @@ std::unordered_map<string, TokenType> keywordToTokenType = {
 	{"false", TokenType::FALSE},
 	{"for", TokenType::FOR},
 	{"func", TokenType::FUNC},
-	{"fiber", TokenType::FIBER},
 	{"this", TokenType::THIS},
 	{"true", TokenType::TRUE},
-	{"yield", TokenType::YIELD}
 };
 
 using namespace preprocessing;

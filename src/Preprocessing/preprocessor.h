@@ -6,11 +6,10 @@
 #include <unordered_set>
 #include <memory>
 
-using std::unordered_set;
-using std::unordered_map;
-using std::unique_ptr;
-
 namespace preprocessing {
+	using std::unordered_set;
+	using std::unordered_map;
+	using std::unique_ptr;
 	class Macro {
 	public:
 		bool isExpanded = false;
@@ -46,7 +45,7 @@ namespace preprocessing {
 
 	class Preprocessor {
 	public:
-		Preprocessor(ErrorHandler& handler);
+		Preprocessor();
 		~Preprocessor();
 		bool preprocessProject(string mainFilePath);
 
@@ -56,7 +55,6 @@ namespace preprocessing {
 	private:
 		string projectRootPath;
 		Scanner scanner;
-		ErrorHandler& errorHandler;
 		CSLModule* curUnit;
 
 		unordered_map<string, CSLModule*> allUnits;
