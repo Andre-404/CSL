@@ -49,14 +49,19 @@ vector<vector<Token>> getArguments(const vector<Token>& value, int& i) {
 			break;
 		}
 		i++;
-	} while (getTokenType(i) != TokenType::TOKEN_EOF && bracketBalance > 0);
+	} while (getTokenType(i) != TokenType::TOKEN_EOF && getTokenType(i) != TokenType::NEWLINE && bracketBalance > 0);
 	// Make sure i is at the ending bracket
 	i--;
+
+	if (bracketBalance != 0) {
+		// Throw "we didn't find a regular bracket sequence for this macros arguments" error
+	}
+
 	return args;
 }
 
 // Takes a macro that starts at position source[i], fully expands it and appends it to destination, whilst moving i to the end of the macro
-// Ignores ignoredMacro (to prevent infinite recursion)
+// Ignores elements of ignoredMacros (to prevent infinite recursion)
 void processMacro(unordered_map<string, unique_ptr<Macro>>& macros, unordered_set<string>& ignoredMacros, vector<Token>& destination, const vector<Token>& source, int& i) {
 	string macroName = source[i].getLexeme();
 
@@ -174,7 +179,7 @@ bool Preprocessor::preprocessProject(string mainFilePath) {
 	using namespace std::filesystem;
 	path p(mainFilePath);
 
-	//checks file validity
+	// Check file validity
 	if (p.extension().string() != ".csl" || p.stem().string() != "main" || !exists(p)) {
 		errorHandler.addError(SystemError("Couldn't find main.csl"));
 		return true;
@@ -226,14 +231,8 @@ CSLModule* Preprocessor::scanFile(string moduleName) {
 	return unit;
 }
 
-
-TokenType checkNext(vector<Token>& tokens, int pos) {
-	if (pos + 1 >= tokens.size()) return TokenType::TOKEN_EOF;
-	return tokens[pos + 1].type;
-}
-
 bool isAtEnd(vector<Token>& tokens, int pos) {
-	return checkNext(tokens, pos) == TokenType::TOKEN_EOF;
+	return pos >= tokens.size();
 }
 
 void Preprocessor::topsort(CSLModule* unit) {
@@ -305,6 +304,7 @@ vector<Token> Preprocessor::processDirectivesAndMacros(CSLModule* unit) {
 			// Add tokens to macro value (until newline)
 			while (getTypeAt(tokens, i) != TokenType::NEWLINE && getTypeAt(tokens, i) != TokenType::TOKEN_EOF) {
 				if (tokens[i].type == TokenType::WHITESPACE) { i++;  continue; }
+
 				macros[macroName.getLexeme()]->value.push_back(tokens[i++]);
 			}
 		}
