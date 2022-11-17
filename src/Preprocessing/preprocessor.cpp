@@ -3,8 +3,190 @@
 #include "../files.h"
 #include <iostream>
 
+
+using std::map;
 using std::unordered_map;
 using namespace preprocessing;
+
+
+// Helper functions for preprocessor and macros
+
+// Securely retrieve type of tokens[pos]
+TokenType getTypeAt(const vector<Token>& tokens, const int pos) {
+	if (pos < 0 || pos >= tokens.size()) return TokenType::TOKEN_EOF;
+	return tokens[pos].type;
+}
+
+// Gets arguments of form (x, y, z...) and move given index to end of arguments
+vector<vector<Token>> getArguments(const vector<Token>& value, int& i) {
+	int bracketBalance = 0;
+	vector<vector<Token>> args = { {} };
+
+	auto getTokenType = [&](int i) {
+		if (i < 0 || value.size() <= i) return TokenType::TOKEN_EOF;
+		return value[i].type;
+	};
+
+	do {
+		switch (getTokenType(i)) {
+		case TokenType::LEFT_PAREN:
+			if (bracketBalance > 0) args.back().push_back(value[i]);
+			bracketBalance++;
+			break;
+		case TokenType::RIGHT_PAREN:
+			bracketBalance--;
+			if (bracketBalance > 0) args.back().push_back(value[i]);
+			break;
+		case TokenType::COMMA:
+			// Check if comma is splitting macro arguments
+			if (bracketBalance == 1) { args.push_back(vector<Token>()); }
+			else args.back().push_back(value[i]);
+			break;
+		case TokenType::WHITESPACE:
+			break;
+		default:
+			args.back().push_back(value[i]);
+			break;
+		}
+		i++;
+	} while (getTokenType(i) != TokenType::TOKEN_EOF && bracketBalance > 0);
+	// Make sure i is at the ending bracket
+	i--;
+	return args;
+}
+
+// Takes a macro that starts at position source[i], fully expands it and appends it to destination, whilst moving i to the end of the macro
+// Ignores ignoredMacro (to prevent infinite recursion)
+void processMacro(unordered_map<string, unique_ptr<Macro>>& macros, string ignoredMacro, vector<Token>& destination, const vector<Token>& source, int& i) {
+	string macroName = source[i].getLexeme();
+
+	if (getTypeAt(source, i + 1) == TokenType::WHITESPACE) i++;
+	vector<Token> expanded;
+
+	// Function-like macro
+	if (getTypeAt(source, i + 1) == TokenType::LEFT_PAREN) {
+		i++;
+		vector<vector<Token>> args = getArguments(source, i);
+		expanded = macros[macroName]->expand(macros, args, ignoredMacro);
+	}
+	// Object-like macro
+	else {
+		expanded = macros[macroName]->expand(macros, ignoredMacro);
+	}
+
+	destination.insert(destination.end(), expanded.begin(), expanded.end());
+}
+
+// Macros
+
+ObjectMacro::ObjectMacro(Token _name)
+{
+	name = _name;
+}
+
+vector<Token> ObjectMacro::expand(unordered_map<string, unique_ptr<Macro>>& macros, const string& ignoredMacro) {
+	vector<Token> expanded;
+
+	auto getTokenType = [&](int i) {
+		if (i < 0 || value.size() <= i) return TokenType::TOKEN_EOF;
+		return value[i].type;
+	};
+
+	for (int i = 0; i < (int)value.size(); i++) {
+		Token& token = value[i];
+		if (token.type != TokenType::IDENTIFIER) { expanded.push_back(token); continue; }
+		string lexeme = token.getLexeme();
+		// Expand found macros (and ignore recursive macro calls)
+		if (macros.contains(lexeme) && lexeme != ignoredMacro) {
+			processMacro(macros, ignoredMacro, expanded, value, i);
+		}
+		else {
+			expanded.push_back(token);
+		}
+	}
+
+	return expanded;
+}
+
+vector<Token> ObjectMacro::expand(unordered_map<string, unique_ptr<Macro>>& macros, vector<vector<Token>>& args, const string& ignoredMacro) {
+	// Throw an error
+	return vector<Token>();
+}
+
+FunctionMacro::FunctionMacro(Token _name, unordered_map<string, int> _argumentToIndex) {
+	name = _name;
+	argumentToIndex = _argumentToIndex;
+}
+
+vector<Token> FunctionMacro::expand(unordered_map<string, unique_ptr<Macro>>& macros, const string& ignoredMacro) {
+	// Throw an error
+	return vector<Token>();
+}
+
+// Expands a function-like macro. First fully expands the arguments, then substitutes them into the macro body, and finally it expands the whole macro body again.
+vector<Token> FunctionMacro::expand(unordered_map<string, unique_ptr<Macro>>& macros, vector<vector<Token>>& args, const string& ignoredMacro) {
+	// Check for correct number of arguments provided
+	if (args.size() != argumentToIndex.size()) {
+		// Throw error wrong number of args
+	}
+	
+	vector<Token> substitutedExpression;
+	vector<Token> expandedExpression;
+
+	auto getTokenType = [&](int i) {
+		if (i < 0 || value.size() <= i) return TokenType::TOKEN_EOF;
+		return value[i].type;
+	};
+
+	// Expand arguments
+	for (int i = 0; i < (int)args.size(); i++) {
+		vector<Token> expandedArg;
+		for (int j = 0; j < (int)args[i].size(); j++) {
+			string lexeme = args[i][j].getLexeme();
+			// Macro
+			if (macros.contains(lexeme)) {
+				processMacro(macros, lexeme, expandedArg, args[i], j);
+			}
+			// Non-macro token
+			else {
+				expandedArg.push_back(args[i][j]);
+			}
+		}
+		args[i] = expandedArg;
+	}
+
+	// Substitute arguments into macro body
+	for (int i = 0; i < (int)value.size(); i++) {
+		Token& token = value[i];
+		if (token.type != TokenType::IDENTIFIER) { substitutedExpression.push_back(token); continue; }
+		// Expand variables
+		if (argumentToIndex.contains(token.getLexeme())) {
+			int argIndex = argumentToIndex[token.getLexeme()];
+			substitutedExpression.insert(substitutedExpression.end(), args[argIndex].begin(), args[argIndex].end());
+		}
+		// Non-macro identifier
+		else {
+			substitutedExpression.push_back(token);
+		}
+	}
+
+	// Expand the entire macro body
+	for (int i = 0; i < (int)substitutedExpression.size(); i++) {
+		Token& token = substitutedExpression[i];
+		if (token.type != TokenType::IDENTIFIER) { expandedExpression.push_back(token); continue; }
+		string lexeme = token.getLexeme();
+		// Expand macros
+		if (macros.contains(lexeme) && lexeme != ignoredMacro) {
+			processMacro(macros, ignoredMacro, expandedExpression, substitutedExpression, i);
+		}
+		// Non-macro identifier
+		else {
+			expandedExpression.push_back(token);
+		}
+	}
+
+	return expandedExpression;
+}
 
 Preprocessor::Preprocessor(ErrorHandler& _handler) : errorHandler(_handler) {
 	projectRootPath = "";
@@ -38,12 +220,10 @@ CSLModule* Preprocessor::scanFile(string moduleName) {
 	CSLModule* unit = new CSLModule(tokens, scanner.getFile());
 	allUnits[moduleName] = unit;
 	curUnit = unit;
-	//detects macro and import, gets rid of newline tokens, and returns the tokens of dep names
-	std::tuple<vector<Token>, unordered_map<string, Macro>> result = processDirectives(unit);
-	vector<Macro> stack;
-	replaceMacros(unit->tokens, std::get<1>(result), stack);
-	vector<Token> depsToParse = std::get<0>(result);
-	for (Token dep : depsToParse) {
+	
+	vector<Token> depsToParse = processDirectivesAndMacros(unit);
+
+	for (const Token& dep : depsToParse) {
 		//since import names are strings, we get rid of ""
 		string depName = dep.getLexeme();
 		depName.erase(0, 1);
@@ -68,8 +248,8 @@ CSLModule* Preprocessor::scanFile(string moduleName) {
 		}
 	}
 	unit->resolvedDeps = true;
-	for (Token token : unit->tokens) {
-		std::cout << token.getLexeme() << static_cast<int>(token.type) << "\n";
+	for (const Token& token : unit->tokens) {
+		std::cout << token.getLexeme() << " " << static_cast<int>(token.type) << "\n";
 	}
 	return unit;
 }
@@ -84,13 +264,6 @@ bool isAtEnd(vector<Token>& tokens, int pos) {
 	return checkNext(tokens, pos) == TokenType::TOKEN_EOF;
 }
 
-bool containsMacro(vector<Macro>& macros, Macro& _macro) {
-	for (int i = 0; i < macros.size(); i++) {
-		if (macros[i].name.getLexeme() == _macro.name.getLexeme()) return true;
-	}
-	return false;
-}
-
 void Preprocessor::topsort(CSLModule* unit) {
 	//TODO: we can get a stack overflow if this goes into deep recursion, try making a iterative stack based DFS implementation
 	unit->traversed = true;
@@ -100,253 +273,113 @@ void Preprocessor::topsort(CSLModule* unit) {
 	sortedUnits.push_back(unit);
 }
 
-std::tuple<vector<Token>, unordered_map<string, Macro>> Preprocessor::processDirectives(CSLModule* unit) {
+vector<Token> Preprocessor::processDirectivesAndMacros(CSLModule* unit) {
 	vector<Token>& tokens = unit->tokens;
+	vector<Token> resultTokens; // Tokenization after processing imports and macros
 	vector<Token> importTokens;
-	unordered_map<string, Macro> declaredMacros;
+	unordered_map<string, unique_ptr<Macro>> macros;
+
 	for (int i = 0; i < tokens.size(); i++) {
 		Token& token = tokens[i];
-		if (token.type == TokenType::MACRO) {
-			if (checkNext(tokens, i) != TokenType::IDENTIFIER) {
-				error(tokens[i], "Expected macro name");
-				continue;
-			}
-			//deletes the macro keyword and macro name
-			//doing tokens.begin() twice because itertor might update
-			tokens.erase(tokens.begin() + i);
-			Token name = tokens[i];
-			tokens.erase(tokens.begin() + i--);
+		// Exclude whitespace and new line tokens from final tokenization (they are only used for macro processing)
+		if (token.type == TokenType::WHITESPACE || token.type == TokenType::NEWLINE) { continue; }
 
-			Macro curMacro = Macro(name);
-			if (declaredMacros.count(name.str.getStr()) > 0) {
-				error(tokens[i], "Macro redefinition not allowed.");
+		// Add a macro
+		if (token.type == TokenType::ADDMACRO) {
+			// Move to macro name (skip a whitespace)
+			if (getTypeAt(tokens, ++i) != TokenType::WHITESPACE) { error(tokens[i], "Expected whitespace."); continue; }
+			if (getTypeAt(tokens, ++i) != TokenType::IDENTIFIER) { error(tokens[i], "Expected macro name."); continue; }
+
+			Token macroName = tokens[i];
+			
+			// Check if already declared
+			if (macros.contains(macroName.getLexeme())) {
+				error(macroName, "Macro redefinition not allowed.");
 				continue;
 			}
-			//detecting if we have a function like macro(eg. macro add(a, b): (a + b)
-			if (checkNext(tokens, i) == TokenType::LEFT_PAREN) {
-				//used to later delete params and macro definition
-				int curPos = ++i;
-				//parses arguments
-				while (!isAtEnd(tokens, i) && checkNext(tokens, i) != TokenType::RIGHT_PAREN) {
-					Token& arg = tokens[++i];
-					//checking if we already have a param of the same name
-					for (int j = 0; j < curMacro.params.size(); j++) {
-						if (arg.getLexeme() == curMacro.params[j].getLexeme()) {
-							error(arg, "Cannot have 2 or more arguments of the same name.");
-							break;
-						}
-					}
-					curMacro.params.push_back(arg);
-					if (!isAtEnd(tokens, i) && checkNext(tokens, i) == TokenType::COMMA) ++i;
-					else if (!isAtEnd(tokens, i) && checkNext(tokens, i) != TokenType::RIGHT_PAREN) {
-						error(tokens[i + 1], "Expected ',' after paramter name");
+
+			// Function-like macro
+			if (getTypeAt(tokens, i+1) == TokenType::LEFT_PAREN) {
+				// Move to opening bracket
+				i += 1;
+
+				// Parse arguments
+				unordered_map<string, int> argumentToIndex;
+
+				vector<vector<Token>> args = getArguments(tokens, i);
+
+				for (int j = 0; j < (int)args.size(); j++) {
+					if (args[j].size() != 1) {
+						error(macroName, "Each macro argument should contain exactly 1 token.");
 						break;
 					}
-					else break;
+					string argName = args[j][0].getLexeme();
+					if (argumentToIndex.contains(argName)) {
+						error(args[j][0], "Cannot have 2 or more arguments of the same name.");
+						break;
+					}
+					argumentToIndex[argName] = j;
 				}
-				//we continue to next loop iter here because if we're at EOF and try erasing i + 1 we'll get a error
-				if (isAtEnd(tokens, i) || checkNext(tokens, i) != TokenType::RIGHT_PAREN) {
-					error(tokens[i], "Expected ')' after arguments.");
-					continue;
-				}
-				i++;
-				//macro add(a, b): (a + b)
-				//deletes  ^^^^^^
-				auto it = tokens.begin();
-				tokens.erase(it + curPos, it + 1 + i);
-				i = curPos - 1;
-				curMacro.isFunctionLike = true;
+
+				macros[macroName.getLexeme()] = std::make_unique<FunctionMacro>(macroName, argumentToIndex);
 			}
-			//every macro declaration must have ':' before it's body
-			//(this is used to differentiate between normal macros and function like macros
-			if (checkNext(tokens, i) != TokenType::COLON) {
-				error(tokens[i], "Expected ':' following macro name.");
-				continue;
+			// Object-like macro
+			else {
+				macros[macroName.getLexeme()] = std::make_unique<ObjectMacro>(macroName);
 			}
-			tokens.erase(tokens.begin() + 1 + i);
-			//loops until we hit a \n
-			//for each iteration, we add the token to macro body and then delete it(keeping i in check so that we don't go outside of boundries)
-			while (!isAtEnd(tokens, i) && checkNext(tokens, i) != TokenType::NEWLINE) {
-				curMacro.value.push_back(tokens[++i]);
-				tokens.erase(tokens.begin() + i--);
+
+			if (getTypeAt(tokens, i + 1) != TokenType::WHITESPACE) { error(tokens[i + 1], "Expected whitespace."); continue; }
+
+			// Move to macro value
+			i += 2;
+
+			// Add tokens to macro value (until newline)
+			while (getTypeAt(tokens, i) != TokenType::NEWLINE && getTypeAt(tokens, i) != TokenType::TOKEN_EOF) {
+				if (tokens[i].type == TokenType::WHITESPACE) { i++;  continue; }
+				macros[macroName.getLexeme()]->value.push_back(tokens[i++]);
 			}
-			declaredMacros[curMacro.name.getLexeme()] = curMacro;
 		}
+		// Remove a macro
+		else if (token.type == TokenType::REMOVEMACRO) {
+			// Move to macro name (skip a whitespace)
+			if (getTypeAt(tokens, ++i) != TokenType::WHITESPACE) { error(tokens[i], "Expected whitespace."); continue; }
+			if (getTypeAt(tokens, ++i) != TokenType::IDENTIFIER) { error(tokens[i], "Expected macro name."); continue; }
+
+			Token macroName = tokens[i];
+			if (!macros.contains(macroName.getLexeme())) { error(macroName, "Macro wasn't defined yet."); continue; }
+
+			// Remove the macro
+			macros.erase(macroName.getLexeme());
+		}
+		// Add a dependency
 		else if (token.type == TokenType::IMPORT) {
-			if (checkNext(tokens, i) != TokenType::STRING) error(tokens[i], "Expected a module name.");
-			//deletes both the import keyword and module name tokens from the token list, and add them to deps that need parsing
-			tokens.erase(tokens.begin() + i);
-			Token name = tokens[i];
-			tokens.erase(tokens.begin() + i--);
-			importTokens.push_back(name);
-		}
-		else if (token.type == TokenType::NEWLINE) {
-			//this token is used for macro bodies, and isn't needed for anything else, so we delete it when we find it
-			tokens.erase(tokens.begin() + i--);
-		}
-	}
-	return std::make_tuple(importTokens, declaredMacros);
-}
+			// Move to dependency name
+			i += 2;
 
-void Preprocessor::replaceMacros(vector<Token>& tokens, unordered_map<string, Macro>& macros, vector<Macro>& macroStack) {
-	for (int i = 0; i < tokens.size(); i++) {
-		Token token = tokens[i];
-		if (token.type != TokenType::IDENTIFIER) continue;
-		if (macros.count(token.getLexeme()) == 0) continue;
-		Macro& macro = macros[token.getLexeme()];
+			if (getTypeAt(tokens, i) != TokenType::STRING) error(tokens[i], "Expected a module name.");
 
-		//if a macro is function like we need to parse it's arguments 
-		//and replace the params inside the macro body with the provided args
-		//this is a simple token replacement
-		if (macro.isFunctionLike) {
-			//delete macro name
-			tokens.erase(tokens.begin() + i);
-			//calling a function here to detect possible cyclical macros
-			macroStack.push_back(macro);
-			vector<Token> expanded = expandMacro(macro, tokens, i - 1, macros, macroStack);
-			macroStack.pop_back();
-			//for better error detection
-			for (Token& expandedToken : expanded) {
-				expandedToken.line = token.line;
-				expandedToken.partOfMacro = true;
-				expandedToken.macro = token.str;
+			// Add dependency to list of dependencies
+			Token dependencyName = tokens[i];
+
+			importTokens.push_back(dependencyName);
+		}
+		else if (token.type == TokenType::IDENTIFIER) {
+			// Process macro
+			if (macros.contains(token.getLexeme())) {
+				processMacro(macros, token.getLexeme(), resultTokens, tokens, i);
 			}
-			//insert the macro body with the params replaced by args
-			tokens.insert(tokens.begin() + i, expanded.begin(), expanded.end());
-			i--;
-			continue;
-		}
-		//normal macros
-		//get rid of macro name
-		tokens.erase(tokens.begin() + i);
-		macroStack.push_back(macro);
-		vector<Token> expanded = expandMacro(macro, macros, macroStack);
-		for (Token& expandedToken : expanded) {
-			expandedToken.line = token.line;
-			expandedToken.partOfMacro = true;
-			expandedToken.macro = token.str;
-		}
-		macroStack.pop_back();
-		tokens.insert(tokens.begin() + i, expanded.begin(), expanded.end());
-		i--;
-	}
-}
-
-vector<Token> replaceFuncMacroParams(Macro& toExpand, vector<vector<Token>>& args) {
-	//given a set of args, it replaces all params in the macro body with the args
-	//this relies on args and params being in same positions in the array
-
-	//copy macro body
-	vector<Token> fin = toExpand.value;
-	for (int i = 0; i < fin.size(); i++) {
-		Token& token = fin[i];
-		if (token.type == TokenType::IDENTIFIER) {
-			for (int j = 0; j < toExpand.params.size(); j++) {
-				//if this is a param, delete it and copy the args body
-				if (token.getLexeme() == toExpand.params[j].getLexeme()) {
-					fin.erase(fin.begin() + i);
-					fin.insert(fin.begin() + i, args[j].begin(), args[j].end());
-					i--;
-					break;
-				}
+			// Non-macro identifier
+			else {
+				resultTokens.push_back(token);
 			}
 		}
-	}
-	return fin;
-}
-
-int Preprocessor::parseMacroFuncArgs(vector<vector<Token>>& args, vector<Token>& tokens, int pos, int arity) {
-	int argCount = 0;
-	//very scuffed solution, but it works for when a function call is passed as a argument
-	//it works by keeping a "parenthesis" count, and we only exit if we encounter a right paren and
-	//parenCount is 0(meaning we're not inside some other function call)
-	int parenCount = 0;
-	args.push_back(vector<Token>());
-	while (!isAtEnd(tokens, pos) && checkNext(tokens, pos) != TokenType::RIGHT_PAREN) {
-		//since arguments can be a undefined number of tokens long, we need to parse until we hit either ',' or ')'
-		while (!isAtEnd(tokens, pos) && (parenCount > 0 || (checkNext(tokens, pos) != TokenType::COMMA && checkNext(tokens, pos) != TokenType::RIGHT_PAREN))) {
-			//if parenCount > 0 then we're inside either a call or something else
-			if (checkNext(tokens, pos) == TokenType::LEFT_PAREN) parenCount++;
-			else if (checkNext(tokens, pos) == TokenType::RIGHT_PAREN) parenCount--;
-			args[argCount].push_back(tokens[++pos]);
+		else {
+			resultTokens.push_back(token);
 		}
-		//arg delimiter
-		if (checkNext(tokens, pos) == TokenType::COMMA) pos++;
-		argCount++;
-		args.push_back(vector<Token>());
 	}
-	if (argCount != arity) {
-		error(tokens[pos], "Expected '" + std::to_string(arity) + "' arguments, got '" + std::to_string(pos) + "'");
-	}
-	return pos;
-}
+	unit->tokens = resultTokens;
 
-vector<Token> Preprocessor::expandMacro(Macro& toExpand, unordered_map<string, Macro>& macros, vector<Macro>& macroStack) {
-	//copy macro body
-	vector<Token> tokens = toExpand.value;
-	replaceMacros(tokens, macros, macroStack);
-	return tokens;
-}
-
-//replaces the params inside the macro body with the args provided
-vector<Token> Preprocessor::expandMacro(Macro& toExpand, vector<Token>& callTokens, int pos, unordered_map<string, Macro>& macros, vector<Macro>& macroStack) {
-	if (checkNext(callTokens, pos) != TokenType::LEFT_PAREN) {
-		error(callTokens[pos], "Expected a '(' for macro arguments.");
-		return vector<Token>();
-	}
-	pos++;
-	//parses the args
-	vector<vector<Token>> args;
-	int newPos = parseMacroFuncArgs(args, callTokens, pos, toExpand.params.size());
-	if (checkNext(callTokens, newPos) != TokenType::RIGHT_PAREN) {
-		error(callTokens[newPos], "Expected a ')' after macro args.");
-		return vector<Token>();
-	}
-	newPos++;
-	//.... macro(arg1, arg2)
-	//erases:   ^^^^^^^^^^^^
-	callTokens.erase(callTokens.begin() + pos, callTokens.begin() + newPos + 1);
-	//replaces the params in the macro body with args we've parsed
-	vector<Token> tokens = replaceFuncMacroParams(toExpand, args);
-
-	replaceMacros(tokens, macros, macroStack);
-	/*
-	//checks for macros in the new macro body
-	for (int i = 0; i < tokens.size(); i++) {
-		Token& token = tokens[i];
-		if (token.type != TokenType::IDENTIFIER) continue;
-		if (macros.count(token.getLexeme()) == 0) continue;
-
-		Macro& macro = macros[token.getLexeme()];
-		if (containsMacro(macroStack, macro)) {
-			error(macro.name, "Recursive macro expansion detected.");
-			tokens.clear();
-			break;
-		}
-		macroStack.push_back(macro);
-
-		if (macro.isFunctionLike) {
-			//erases the name
-			tokens.erase(tokens.begin() + i);
-			//i - 1 because when we delete the name(if the macro is called correctly) we'll be right at the '(', and since we're
-			//always checking ahead, and not at the current position, we need to backtrack a little
-			vector<Token> expanded = expandMacro(_macro, tokens, i - 1);
-			tokens.insert(tokens.begin() + i, expanded.begin(), expanded.end());
-			i--;
-			//preserves stack behaviour
-			macroStack.pop_back();
-			continue;
-		}
-		//recursive expansion
-		vector<Token> expanded = expandMacro(_macro);
-		//erases the name
-		tokens.erase(tokens.begin() + i);
-		tokens.insert(tokens.begin() + i, expanded.begin(), expanded.end());
-		i--;
-		//preserves stack behaviour
-		macroStack.pop_back();
-	}*/
-	return tokens;
+	return importTokens;
 }
 
 void Preprocessor::error(Token token, string msg) {

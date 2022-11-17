@@ -29,7 +29,7 @@ enum class TokenType {
 	CLASS, THIS, SUPER,
 	SWITCH, CASE, DEFAULT,
 	PRINT, VAR,
-	IMPORT, MACRO, EXPORT,
+	IMPORT, ADDMACRO, REMOVEMACRO, EXPORT,
 	YIELD, FIBER, RUN,
 
 	WHITESPACE, NEWLINE, ERROR, TOKEN_EOF
@@ -62,7 +62,7 @@ struct Span {
 		sourceFile = nullptr;
 	}
 	Span(uInt64 _line, uInt64 _column, uInt64 _len, File* _src) : line(_line), column(_column), length(_len), sourceFile(_src) {};
-	string getStr() {
+	string getStr() const {
 		uInt start = sourceFile->lines[line - 1] + column;
 		return sourceFile->sourceFile.substr(start, length);
 	}
@@ -103,7 +103,7 @@ struct Token {
 		line = _line;
 		partOfMacro = false;
 	}
-	string getLexeme() {
+	string getLexeme() const {
 		if (isSynthetic) return string(ptr);
 		return str.getStr();
 	}

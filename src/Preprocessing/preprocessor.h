@@ -3,19 +3,47 @@
 #include "scanner.h"
 #include "../ErrorHandling/errorHandler.h"
 #include <unordered_map>
+#include <map>
+#include <string>
 #include <tuple>
+#include <queue>
+#include <memory>
+
+using std::unordered_map;
+using std::unique_ptr;
 
 namespace preprocessing {
-
-	struct Macro {
+	class Macro {
+	public:
+		bool isExpanded = false;
 		Token name;
 		std::vector<Token> value;
-		bool isFunctionLike = false;
-		//only for function like macros
-		std::vector<Token> params;
+		// Expand object-like macro
+		virtual vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, const string& ignoredMacro) = 0;
+		// Expand function-like macro
+		virtual vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, vector<vector<Token>>& arguments, const string& ignoredMacro) = 0;
+	};
 
-		Macro() {};
-		Macro(Token _name) : name(_name) {};
+	class ObjectMacro : public Macro {
+	public:
+		ObjectMacro() {};
+		ObjectMacro(Token _name);
+
+		vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, const string& ignoredMacro);
+
+		vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, vector<vector<Token>>& args, const string& ignoredMacro);
+	};
+
+	class FunctionMacro : public Macro {
+	public:
+		unordered_map<string, int> argumentToIndex;
+
+		FunctionMacro() {};
+		FunctionMacro(Token _name, unordered_map<string, int> _argumentToIndex);
+
+		vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, const string& ignoredMacro);
+
+		vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, vector<vector<Token>>& args, const string& ignoredMacro);
 	};
 
 	class Preprocessor {
@@ -33,17 +61,10 @@ namespace preprocessing {
 		ErrorHandler& errorHandler;
 		CSLModule* curUnit;
 
-		std::unordered_map<string, CSLModule*> allUnits;
+		unordered_map<string, CSLModule*> allUnits;
 		vector<CSLModule*> sortedUnits;
 
-		std::tuple<vector<Token>, std::unordered_map<string, Macro>> processDirectives(CSLModule* unit);
-
-		//expands a normal macro
-		vector<Token> expandMacro(Macro& toExpand, std::unordered_map<string, Macro>& macros, vector<Macro>& macroStack);
-		//expands a function like macro
-		vector<Token> expandMacro(Macro& toExpand, vector<Token>& tokens, int pos, std::unordered_map<string, Macro>& macros, vector<Macro>& macroStack);
-		void replaceMacros(vector<Token>& tokens, std::unordered_map<string, Macro>& macros, vector<Macro>& macroStack);
-		int parseMacroFuncArgs(vector<vector<Token>>& args, vector<Token>& tokens, int pos, int arity);
+		vector<Token> processDirectivesAndMacros(CSLModule* unit);
 
 		CSLModule* scanFile(string unitName);
 		void topsort(CSLModule* unit);
