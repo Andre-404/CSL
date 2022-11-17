@@ -3,12 +3,10 @@
 #include "scanner.h"
 #include "../ErrorHandling/errorHandler.h"
 #include <unordered_map>
-#include <map>
-#include <string>
-#include <tuple>
-#include <queue>
+#include <unordered_set>
 #include <memory>
 
+using std::unordered_set;
 using std::unordered_map;
 using std::unique_ptr;
 
@@ -19,9 +17,9 @@ namespace preprocessing {
 		Token name;
 		std::vector<Token> value;
 		// Expand object-like macro
-		virtual vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, const string& ignoredMacro) = 0;
+		virtual vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, unordered_set<string>& ignoredMacros) = 0;
 		// Expand function-like macro
-		virtual vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, vector<vector<Token>>& arguments, const string& ignoredMacro) = 0;
+		virtual vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, vector<vector<Token>>& arguments, unordered_set<string>& ignoredMacros) = 0;
 	};
 
 	class ObjectMacro : public Macro {
@@ -29,9 +27,9 @@ namespace preprocessing {
 		ObjectMacro() {};
 		ObjectMacro(Token _name);
 
-		vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, const string& ignoredMacro);
+		vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, unordered_set<string>& ignoredMacros);
 
-		vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, vector<vector<Token>>& args, const string& ignoredMacro);
+		vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, vector<vector<Token>>& args, unordered_set<string>& ignoredMacros);
 	};
 
 	class FunctionMacro : public Macro {
@@ -41,9 +39,9 @@ namespace preprocessing {
 		FunctionMacro() {};
 		FunctionMacro(Token _name, unordered_map<string, int> _argumentToIndex);
 
-		vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, const string& ignoredMacro);
+		vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, unordered_set<string>& ignoredMacros);
 
-		vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, vector<vector<Token>>& args, const string& ignoredMacro);
+		vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, vector<vector<Token>>& args, unordered_set<string>& ignoredMacros);
 	};
 
 	class Preprocessor {
