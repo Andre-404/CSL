@@ -4,7 +4,7 @@
 #include <iostream>
 
 
-using std::map;
+using std::unordered_set;
 using std::unordered_map;
 using namespace preprocessing;
 
@@ -57,7 +57,7 @@ vector<vector<Token>> getArguments(const vector<Token>& value, int& i) {
 
 // Takes a macro that starts at position source[i], fully expands it and appends it to destination, whilst moving i to the end of the macro
 // Ignores ignoredMacro (to prevent infinite recursion)
-void processMacro(unordered_map<string, unique_ptr<Macro>>& macros, string ignoredMacro, vector<Token>& destination, const vector<Token>& source, int& i) {
+void processMacro(unordered_map<string, unique_ptr<Macro>>& macros, unordered_set<string>& ignoredMacros, vector<Token>& destination, const vector<Token>& source, int& i) {
 	string macroName = source[i].getLexeme();
 
 	if (getTypeAt(source, i + 1) == TokenType::WHITESPACE) i++;
@@ -67,48 +67,47 @@ void processMacro(unordered_map<string, unique_ptr<Macro>>& macros, string ignor
 	if (getTypeAt(source, i + 1) == TokenType::LEFT_PAREN) {
 		i++;
 		vector<vector<Token>> args = getArguments(source, i);
-		expanded = macros[macroName]->expand(macros, args, ignoredMacro);
+		expanded = macros[macroName]->expand(macros, args, ignoredMacros);
 	}
 	// Object-like macro
 	else {
-		expanded = macros[macroName]->expand(macros, ignoredMacro);
+		expanded = macros[macroName]->expand(macros, ignoredMacros);
 	}
 
 	destination.insert(destination.end(), expanded.begin(), expanded.end());
 }
 
-// Macros
-
-ObjectMacro::ObjectMacro(Token _name)
-{
-	name = _name;
-}
-
-vector<Token> ObjectMacro::expand(unordered_map<string, unique_ptr<Macro>>& macros, const string& ignoredMacro) {
-	vector<Token> expanded;
-
-	auto getTokenType = [&](int i) {
-		if (i < 0 || value.size() <= i) return TokenType::TOKEN_EOF;
-		return value[i].type;
-	};
-
-	for (int i = 0; i < (int)value.size(); i++) {
-		Token& token = value[i];
-		if (token.type != TokenType::IDENTIFIER) { expanded.push_back(token); continue; }
+// Fully macro expands given tokenized expression
+vector<Token> macroExpandExpression(unordered_map<string, unique_ptr<Macro>>& macros, unordered_set<string>& ignoredMacros, vector<Token>& expression) {
+	vector<Token> result;
+	for (int i = 0; i < (int)expression.size(); i++) {
+		Token& token = expression[i];
+		if (token.type != TokenType::IDENTIFIER) { result.push_back(token); continue; }
 		string lexeme = token.getLexeme();
-		// Expand found macros (and ignore recursive macro calls)
-		if (macros.contains(lexeme) && lexeme != ignoredMacro) {
-			processMacro(macros, ignoredMacro, expanded, value, i);
+		// Expand found macros (ignoring already expanded macros to prevent infinite expansion)
+		if (macros.contains(lexeme) && !ignoredMacros.contains(lexeme)) {
+			processMacro(macros, ignoredMacros, result, expression, i);
 		}
 		else {
-			expanded.push_back(token);
+			result.push_back(token);
 		}
 	}
+	return result;
+}
 
+ObjectMacro::ObjectMacro(Token _name) { name = _name; }
+
+vector<Token> ObjectMacro::expand(unordered_map<string, unique_ptr<Macro>>& macros, unordered_set<string>& ignoredMacros) {
+	ignoredMacros.insert(name.getLexeme());
+
+	vector<Token> expanded = macroExpandExpression(macros, ignoredMacros, value);
+
+	ignoredMacros.erase(name.getLexeme());
+	
 	return expanded;
 }
 
-vector<Token> ObjectMacro::expand(unordered_map<string, unique_ptr<Macro>>& macros, vector<vector<Token>>& args, const string& ignoredMacro) {
+vector<Token> ObjectMacro::expand(unordered_map<string, unique_ptr<Macro>>& macros, vector<vector<Token>>& args, unordered_set<string>& ignoredMacros) {
 	// Throw an error
 	return vector<Token>();
 }
@@ -118,41 +117,23 @@ FunctionMacro::FunctionMacro(Token _name, unordered_map<string, int> _argumentTo
 	argumentToIndex = _argumentToIndex;
 }
 
-vector<Token> FunctionMacro::expand(unordered_map<string, unique_ptr<Macro>>& macros, const string& ignoredMacro) {
+vector<Token> FunctionMacro::expand(unordered_map<string, unique_ptr<Macro>>& macros, unordered_set<string>& ignoredMacros) {
 	// Throw an error
 	return vector<Token>();
 }
 
 // Expands a function-like macro. First fully expands the arguments, then substitutes them into the macro body, and finally it expands the whole macro body again.
-vector<Token> FunctionMacro::expand(unordered_map<string, unique_ptr<Macro>>& macros, vector<vector<Token>>& args, const string& ignoredMacro) {
+vector<Token> FunctionMacro::expand(unordered_map<string, unique_ptr<Macro>>& macros, vector<vector<Token>>& args, unordered_set<string>& ignoredMacros) {
 	// Check for correct number of arguments provided
 	if (args.size() != argumentToIndex.size()) {
 		// Throw error wrong number of args
 	}
 	
 	vector<Token> substitutedExpression;
-	vector<Token> expandedExpression;
-
-	auto getTokenType = [&](int i) {
-		if (i < 0 || value.size() <= i) return TokenType::TOKEN_EOF;
-		return value[i].type;
-	};
 
 	// Expand arguments
 	for (int i = 0; i < (int)args.size(); i++) {
-		vector<Token> expandedArg;
-		for (int j = 0; j < (int)args[i].size(); j++) {
-			string lexeme = args[i][j].getLexeme();
-			// Macro
-			if (macros.contains(lexeme)) {
-				processMacro(macros, lexeme, expandedArg, args[i], j);
-			}
-			// Non-macro token
-			else {
-				expandedArg.push_back(args[i][j]);
-			}
-		}
-		args[i] = expandedArg;
+		args[i] = macroExpandExpression(macros, ignoredMacros, args[i]);
 	}
 
 	// Substitute arguments into macro body
@@ -170,20 +151,11 @@ vector<Token> FunctionMacro::expand(unordered_map<string, unique_ptr<Macro>>& ma
 		}
 	}
 
-	// Expand the entire macro body
-	for (int i = 0; i < (int)substitutedExpression.size(); i++) {
-		Token& token = substitutedExpression[i];
-		if (token.type != TokenType::IDENTIFIER) { expandedExpression.push_back(token); continue; }
-		string lexeme = token.getLexeme();
-		// Expand macros
-		if (macros.contains(lexeme) && lexeme != ignoredMacro) {
-			processMacro(macros, ignoredMacro, expandedExpression, substitutedExpression, i);
-		}
-		// Non-macro identifier
-		else {
-			expandedExpression.push_back(token);
-		}
-	}
+	ignoredMacros.insert(name.getLexeme());
+
+	vector<Token> expandedExpression = macroExpandExpression(macros, ignoredMacros, substitutedExpression);
+
+	ignoredMacros.erase(name.getLexeme());
 
 	return expandedExpression;
 }
@@ -309,15 +281,12 @@ vector<Token> Preprocessor::processDirectivesAndMacros(CSLModule* unit) {
 				vector<vector<Token>> args = getArguments(tokens, i);
 
 				for (int j = 0; j < (int)args.size(); j++) {
-					if (args[j].size() != 1) {
-						error(macroName, "Each macro argument should contain exactly 1 token.");
-						break;
-					}
+					if (args[j].size() != 1) { error(macroName, "Each macro argument should contain exactly 1 token."); break; }
+
 					string argName = args[j][0].getLexeme();
-					if (argumentToIndex.contains(argName)) {
-						error(args[j][0], "Cannot have 2 or more arguments of the same name.");
-						break;
-					}
+
+					if (argumentToIndex.contains(argName)) { error(args[j][0], "Cannot have 2 or more arguments of the same name."); break; }
+					
 					argumentToIndex[argName] = j;
 				}
 
@@ -366,7 +335,8 @@ vector<Token> Preprocessor::processDirectivesAndMacros(CSLModule* unit) {
 		else if (token.type == TokenType::IDENTIFIER) {
 			// Process macro
 			if (macros.contains(token.getLexeme())) {
-				processMacro(macros, token.getLexeme(), resultTokens, tokens, i);
+				unordered_set<string> ignoredMacros;
+				processMacro(macros, ignoredMacros, resultTokens, tokens, i);
 			}
 			// Non-macro identifier
 			else {
@@ -377,6 +347,7 @@ vector<Token> Preprocessor::processDirectivesAndMacros(CSLModule* unit) {
 			resultTokens.push_back(token);
 		}
 	}
+
 	unit->tokens = resultTokens;
 
 	return importTokens;
