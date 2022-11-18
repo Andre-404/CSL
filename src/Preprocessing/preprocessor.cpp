@@ -167,7 +167,6 @@ vector<Token> FunctionMacro::expand(unordered_map<string, unique_ptr<Macro>>& ma
 
 Preprocessor::Preprocessor(){
 	projectRootPath = "";
-	hadError = false;
 	curUnit = nullptr;
 }
 
@@ -175,20 +174,19 @@ Preprocessor::~Preprocessor() {
 	//for (preprocessUnit* pUnit : sortedUnits) delete pUnit;
 }
 
-bool Preprocessor::preprocessProject(string mainFilePath) {
+void Preprocessor::preprocessProject(string mainFilePath) {
 	using namespace std::filesystem;
 	path p(mainFilePath);
 
 	// Check file validity
 	if (p.extension().string() != ".csl" || p.stem().string() != "main" || !exists(p)) {
 		errorHandler::addSystemError("Couldn't find main.csl");
-		return true;
+		return;
 	}
 
 	projectRootPath = p.parent_path().string() + "/";
 	CSLModule* mainModule = scanFile("main.csl");
 	topsort(mainModule);
-	return hadError;
 }
 
 CSLModule* Preprocessor::scanFile(string moduleName) {

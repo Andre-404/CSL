@@ -93,7 +93,7 @@ struct Token {
 		partOfMacro = false;
 	}
 	//construct a token which doesn't appear in the source file(eg. splitting a += b into a = a + b, where '+' is synthetic)
-	Token(const char* _ptr, uInt64 _line, TokenType _type) {
+	Token(const char* _ptr, uInt64 _line, TokenType _type, Token parentToken) {
 		ptr = _ptr;
 		isSynthetic = true;
 		type = _type;

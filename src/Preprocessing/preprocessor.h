@@ -47,7 +47,7 @@ namespace preprocessing {
 	public:
 		Preprocessor();
 		~Preprocessor();
-		bool preprocessProject(string mainFilePath);
+		void preprocessProject(string mainFilePath);
 
 		vector<CSLModule*> getSortedUnits() { return sortedUnits; }
 	private:
