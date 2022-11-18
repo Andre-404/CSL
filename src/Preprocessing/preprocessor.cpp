@@ -354,6 +354,6 @@ vector<Token> Preprocessor::processDirectivesAndMacros(CSLModule* unit) {
 }
 
 void Preprocessor::error(Token token, string msg) {
-	hadError = true;
+	errorHandler::hadError = true;
 	errorHandler::addCompileError(msg, token);
 }

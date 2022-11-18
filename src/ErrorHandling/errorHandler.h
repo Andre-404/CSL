@@ -10,4 +10,6 @@ namespace errorHandler {
 	void addCompileError(string msg, Token token);
 	void addRuntimeError(string msg, string funcName, CSLModule* origin);
 	void addSystemError(string msg);
+
+	bool hadError = false;
 }

@@ -50,8 +50,6 @@ namespace preprocessing {
 		bool preprocessProject(string mainFilePath);
 
 		vector<CSLModule*> getSortedUnits() { return sortedUnits; }
-
-		bool hadError;
 	private:
 		string projectRootPath;
 		Scanner scanner;

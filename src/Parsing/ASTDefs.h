@@ -21,8 +21,6 @@ namespace AST {
 	class FuncDecl;
 	class ClassDecl;
 
-	class ExportDirective;
-
 	class PrintStmt;
 	class ExprStmt;
 	class BlockStmt;
@@ -72,7 +70,6 @@ namespace AST {
 	//visitor pattern
 	class visitor {
 	public:
-		virtual ~visitor() {};
 		virtual void visitAssignmentExpr(AssignmentExpr* expr) = 0;
 		virtual void visitSetExpr(SetExpr* expr) = 0;
 		virtual void visitConditionalExpr(ConditionalExpr* expr) = 0;
@@ -89,8 +86,6 @@ namespace AST {
 		virtual void visitVarDecl(VarDecl* decl) = 0;
 		virtual void visitFuncDecl(FuncDecl* decl) = 0;
 		virtual void visitClassDecl(ClassDecl* decl) = 0;
-
-		virtual void visitExportDirective(ExportDirective* directive) = 0;
 
 		virtual void visitPrintStmt(PrintStmt* stmt) = 0;
 		virtual void visitExprStmt(ExprStmt* stmt) = 0;
@@ -444,10 +439,9 @@ namespace AST {
 		vector<ASTNode*> stmts;
 		Token caseType;//case or default
 
-		CaseStmt(ASTNode* _expr, vector<ASTNode*>& _stmts, Token _caseType) {
+		CaseStmt(ASTNode* _expr, vector<ASTNode*>& _stmts) {
 			expr = _expr;
 			stmts = _stmts;
-			caseType = _caseType;
 		}
 		void accept(visitor* vis) {
 			vis->visitCaseStmt(this);
@@ -505,20 +499,6 @@ namespace AST {
 			vis->visitClassDecl(this);
 		}
 		Token getName() { return name; }
-	};
-
-	class ExportDirective : public ASTNode {
-	public:
-		Token name;
-		ASTDecl* decl;
-
-		ExportDirective(ASTDecl* _decl) {
-			decl = _decl;
-			name = decl->getName();
-		}
-		void accept(visitor* vis) {
-			vis->visitExportDirective(this);
-		}
 	};
 #pragma endregion
 
