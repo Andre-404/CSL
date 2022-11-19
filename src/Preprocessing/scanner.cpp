@@ -94,8 +94,8 @@ char Scanner::advance() {
 
 Token Scanner::scanToken() {
 	start = current;
-	if(consumeWhitespace()) return makeToken(TokenType::WHITESPACE);
 	if (isAtEnd()) return makeToken(TokenType::TOKEN_EOF);
+	if(consumeWhitespace()) return makeToken(TokenType::WHITESPACE);
 
 	char c = advance();
 	//identifiers start with _ or [a-z][A-Z]
