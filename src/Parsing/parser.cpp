@@ -282,20 +282,20 @@ vector<TranslationUnit*> Parser::parse(vector<CSLModule*> modules) {
 		processedUnits.push_back(unit);
 		curUnit = unit;
 
-		current = 0;
-		loopDepth = 0;
-		switchDepth = 0;
-		while (!isAtEnd()) {
-			try {
-				unit->stmts.push_back(exportDirective());
-			}
-			catch (ParserException e) {
-				sync();
+			current = 0;
+			loopDepth = 0;
+			switchDepth = 0;
+			while (!isAtEnd()) {
+				try {
+					unit->stmts.push_back(exportDirective());
+				}
+				catch (ParserException e) {
+					sync();
+				}
 			}
 		}
+		return processedUnits;
 	}
-	return processedUnits;
-}
 
 shared_ptr<ASTNode> Parser::expression(int prec) {
 	Token token = advance();
@@ -613,11 +613,10 @@ Token Parser::consume(TokenType type, string msg) {
 	throw error(peek(), msg);
 }
 
-ParserException Parser::error(Token token, string msg) {
-	errorHandler::addCompileError(msg, token);
-	errorHandler::hadError = true;
-	return ParserException();
-}
+	ParserException Parser::error(Token token, string msg) {
+		errorHandler::addCompileError(msg, token);
+		return ParserException();
+	}
 
 //syncs when we find a ';' or one of the reserved words
 void Parser::sync() {

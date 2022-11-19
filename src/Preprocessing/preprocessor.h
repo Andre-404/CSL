@@ -9,15 +9,14 @@ namespace preprocessing {
 	using std::unordered_set;
 	using std::unordered_map;
 	using std::unique_ptr;
+
 	class Macro {
 	public:
 		bool isExpanded = false;
 		Token name;
 		std::vector<Token> value;
-		// Expand object-like macro
-		virtual vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, unordered_set<string>& ignoredMacros) = 0;
-		// Expand function-like macro
-		virtual vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, vector<vector<Token>>& arguments, unordered_set<string>& ignoredMacros) = 0;
+		// Expand macro into destination
+		virtual vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, unordered_set<string>& ignoredMacros, vector<Token>& source, int& i) = 0;
 	};
 
 	class ObjectMacro : public Macro {
@@ -25,9 +24,7 @@ namespace preprocessing {
 		ObjectMacro() {};
 		ObjectMacro(Token _name);
 
-		vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, unordered_set<string>& ignoredMacros);
-
-		vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, vector<vector<Token>>& args, unordered_set<string>& ignoredMacros);
+		vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, unordered_set<string>& ignoredMacros, vector<Token>& source, int& i);
 	};
 
 	class FunctionMacro : public Macro {
@@ -37,9 +34,7 @@ namespace preprocessing {
 		FunctionMacro() {};
 		FunctionMacro(Token _name, unordered_map<string, int> _argumentToIndex);
 
-		vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, unordered_set<string>& ignoredMacros);
-
-		vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, vector<vector<Token>>& args, unordered_set<string>& ignoredMacros);
+		vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, unordered_set<string>& ignoredMacros, vector<Token>& source, int& i);
 	};
 
 	class Preprocessor {
@@ -61,8 +56,6 @@ namespace preprocessing {
 
 		CSLModule* scanFile(string unitName);
 		void topsort(CSLModule* unit);
-
-		void error(Token token, string msg);
 	};
 
 }

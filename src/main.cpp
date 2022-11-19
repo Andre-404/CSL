@@ -8,6 +8,7 @@
 int main(int argc, char* argv[]) {
 	preprocessing::Preprocessor p;
 	p.preprocessProject("C:\\Temp\\main.csl");
+	errorHandler::showCompileErrors();
 	AST::Parser pa;
 	pa.parse(p.getSortedUnits());
 	return 0;

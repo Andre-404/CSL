@@ -22,15 +22,13 @@ void underlineSymbol(Span symbol) {
 
 	string line = std::to_string(symbol.line);
 	std::cout << yellow + src->name + black + ":" + cyan + line + " | " + black;
-	std::cout << src->sourceFile.substr(lineStart, lineEnd - lineStart);
+	std::cout << src->sourceFile.substr(lineStart, lineEnd - lineStart) << std::endl;
 
-	string temp = "";
-	temp.insert(0, src->name.size() + line.size() + 4, ' ');
-	uInt64 tempN = 0;
-	for (; tempN < symbol.column; tempN++) temp.append(" ");
-	for (; tempN < symbol.column + symbol.length; tempN++) temp.append("^");
+	string highlight;
+	highlight.insert(highlight.end(), src->name.length() + line.length() + 4 + symbol.column, ' ');
+	highlight.insert(highlight.end(), symbol.length, '^');
 
-	std::cout << red + temp + black + "\n";
+	std::cout << red + highlight + black + "\n";
 }
 
 void report(File* src, Token& token, string msg) {
@@ -46,7 +44,6 @@ void report(File* src, Token& token, string msg) {
 }
 
 namespace errorHandler {
-	bool hadError = false;
 	namespace {
 		struct SystemError {
 			string errorText;
@@ -109,5 +106,9 @@ namespace errorHandler {
 	}
 	void addSystemError(string msg) {
 		systemErrors.push_back(SystemError(msg));
+	}
+
+	bool hasErrors() {
+		return !compileErrors.empty() || !runtimeErrors.empty() || !systemErrors.empty();
 	}
 }
