@@ -3,7 +3,7 @@
 #include "../modulesDefs.h"
 
 namespace AST {
-
+	using std::shared_ptr;
 	class AssignmentExpr;
 	class SetExpr;
 	class ConditionalExpr;
@@ -84,9 +84,9 @@ namespace AST {
 	class AssignmentExpr : public ASTNode {
 	public:
 		Token name;
-		ASTNode* value;
+		shared_ptr<ASTNode> value;
 
-		AssignmentExpr(Token _name, ASTNode* _value) {
+		AssignmentExpr(Token _name, shared_ptr<ASTNode> _value) {
 			name = _name;
 			value = _value;
 		}
@@ -97,13 +97,13 @@ namespace AST {
 
 	class SetExpr : public ASTNode {
 	public:
-		ASTNode* callee;
-		ASTNode* field;
+		shared_ptr<ASTNode> callee;
+		shared_ptr<ASTNode> field;
 		Token accessor;
 		Token op;
-		ASTNode* value;
+		shared_ptr<ASTNode> value;
 
-		SetExpr(ASTNode* _callee, ASTNode* _field, Token _accessor, Token _op, ASTNode* _val) {
+		SetExpr(shared_ptr<ASTNode> _callee, shared_ptr<ASTNode> _field, Token _accessor, Token _op, shared_ptr<ASTNode> _val) {
 			callee = _callee;
 			field = _field;
 			accessor = _accessor;
@@ -117,11 +117,11 @@ namespace AST {
 
 	class ConditionalExpr : public ASTNode {
 	public:
-		ASTNode* condition;
-		ASTNode* thenBranch;
-		ASTNode* elseBranch;
+		shared_ptr<ASTNode> condition;
+		shared_ptr<ASTNode> thenBranch;
+		shared_ptr<ASTNode> elseBranch;
 
-		ConditionalExpr(ASTNode* _condition, ASTNode* _thenBranch, ASTNode* _elseBranch) {
+		ConditionalExpr(shared_ptr<ASTNode> _condition, shared_ptr<ASTNode> _thenBranch, shared_ptr<ASTNode> _elseBranch) {
 			condition = condition;
 			thenBranch = _thenBranch;
 			elseBranch = _elseBranch;
@@ -134,10 +134,10 @@ namespace AST {
 	class BinaryExpr : public ASTNode {
 	public:
 		Token op;
-		ASTNode* left;
-		ASTNode* right;
+		shared_ptr<ASTNode> left;
+		shared_ptr<ASTNode> right;
 
-		BinaryExpr(ASTNode* _left, Token _op, ASTNode* _right) {
+		BinaryExpr(shared_ptr<ASTNode> _left, Token _op, shared_ptr<ASTNode> _right) {
 			left = _left;
 			op = _op;
 			right = _right;
@@ -150,10 +150,10 @@ namespace AST {
 	class UnaryExpr : public ASTNode {
 	public:
 		Token op;
-		ASTNode* right;
+		shared_ptr<ASTNode> right;
 		bool isPrefix;
 
-		UnaryExpr(Token _op, ASTNode* _right, bool _isPrefix) {
+		UnaryExpr(Token _op, shared_ptr<ASTNode> _right, bool _isPrefix) {
 			op = op;
 			right = right;
 			isPrefix = _isPrefix;
@@ -165,9 +165,9 @@ namespace AST {
 
 	class ArrayLiteralExpr : public ASTNode {
 	public:
-		vector<ASTNode*> members;
+		vector<shared_ptr<ASTNode>> members;
 
-		ArrayLiteralExpr(vector<ASTNode*>& _members) {
+		ArrayLiteralExpr(vector<shared_ptr<ASTNode>>& _members) {
 			members = _members;
 		}
 		void accept(visitor* vis) {
@@ -177,10 +177,10 @@ namespace AST {
 
 	class CallExpr : public ASTNode {
 	public:
-		ASTNode* callee;
-		vector<ASTNode*> args;
+		shared_ptr<ASTNode> callee;
+		vector<shared_ptr<ASTNode>> args;
 
-		CallExpr(ASTNode* _callee, vector<ASTNode*>& _args) {
+		CallExpr(shared_ptr<ASTNode> _callee, vector<shared_ptr<ASTNode>>& _args) {
 			callee = _callee;
 			args = _args;
 		}
@@ -191,11 +191,11 @@ namespace AST {
 
 	class FieldAccessExpr : public ASTNode {
 	public:
-		ASTNode* callee;
+		shared_ptr<ASTNode> callee;
 		Token accessor;
-		ASTNode* field;
+		shared_ptr<ASTNode> field;
 
-		FieldAccessExpr(ASTNode* _callee, Token _accessor, ASTNode* _field) {
+		FieldAccessExpr(shared_ptr<ASTNode> _callee, Token _accessor, shared_ptr<ASTNode> _field) {
 			callee = _callee;
 			accessor = _accessor;
 			field = _field;
@@ -219,29 +219,13 @@ namespace AST {
 
 	class GroupingExpr : public ASTNode {
 	public:
-		ASTNode* expr;
+		shared_ptr<ASTNode> expr;
 
-		GroupingExpr(ASTNode* _expr) {
+		GroupingExpr(shared_ptr<ASTNode> _expr) {
 			expr = _expr;
 		}
 		void accept(visitor* vis) {
 			vis->visitGroupingExpr(this);
-		}
-	};
-
-	class UnaryVarAlterExpr : public ASTNode {
-	public:
-		ASTNode* incrementExpr;
-		Token token;
-		bool isPrefix;
-
-		UnaryVarAlterExpr(ASTNode* _incrementExpr, Token _token, bool _isPrefix) {
-			incrementExpr = _incrementExpr;
-			token = _token;
-			isPrefix = _isPrefix;
-		}
-		void accept(visitor* vis) {
-			vis->visitUnaryVarAlterExpr(this);
 		}
 	};
 
@@ -258,9 +242,9 @@ namespace AST {
 	};
 
 	struct structEntry {
-		ASTNode* expr;
+		shared_ptr<ASTNode> expr;
 		Token name;
-		structEntry(Token _name, ASTNode* _expr) : expr(_expr), name(_name) {};
+		structEntry(Token _name, shared_ptr<ASTNode> _expr) : expr(_expr), name(_name) {};
 	};
 
 	class StructLiteral : public ASTNode {
@@ -281,9 +265,9 @@ namespace AST {
 
 	class PrintStmt : public ASTNode {
 	public:
-		ASTNode* expr;
+		shared_ptr<ASTNode> expr;
 
-		PrintStmt(ASTNode* _expr) {
+		PrintStmt(shared_ptr<ASTNode> _expr) {
 			expr = _expr;
 		}
 		void accept(visitor* vis) {
@@ -293,9 +277,9 @@ namespace AST {
 
 	class ExprStmt : public ASTNode {
 	public:
-		ASTNode* expr;
+		shared_ptr<ASTNode> expr;
 
-		ExprStmt(ASTNode* _expr) {
+		ExprStmt(shared_ptr<ASTNode> _expr) {
 			expr = _expr;
 		}
 		void accept(visitor* vis) {
@@ -305,10 +289,10 @@ namespace AST {
 
 	class VarDecl : public ASTDecl {
 	public:
-		ASTNode* value;
+		shared_ptr<ASTNode> value;
 		Token name;
 
-		VarDecl(Token _name, ASTNode* _value) {
+		VarDecl(Token _name, shared_ptr<ASTNode> _value) {
 			name = _name;
 			value = _value;
 		}
@@ -320,9 +304,9 @@ namespace AST {
 
 	class BlockStmt : public ASTNode {
 	public:
-		vector<ASTNode*> statements;
+		vector<shared_ptr<ASTNode>> statements;
 
-		BlockStmt(vector<ASTNode*> _statements) {
+		BlockStmt(vector<shared_ptr<ASTNode>> _statements) {
 			statements = _statements;
 		}
 		void accept(visitor* vis) {
@@ -332,11 +316,11 @@ namespace AST {
 
 	class IfStmt : public ASTNode {
 	public:
-		ASTNode* thenBranch;
-		ASTNode* elseBranch;
-		ASTNode* condition;
+		shared_ptr<ASTNode> thenBranch;
+		shared_ptr<ASTNode> elseBranch;
+		shared_ptr<ASTNode> condition;
 
-		IfStmt(ASTNode* _then, ASTNode* _else, ASTNode* _condition) {
+		IfStmt(shared_ptr<ASTNode> _then, shared_ptr<ASTNode> _else, shared_ptr<ASTNode> _condition) {
 			condition = _condition;
 			thenBranch = _then;
 			elseBranch = _else;
@@ -348,10 +332,10 @@ namespace AST {
 
 	class WhileStmt : public ASTNode {
 	public:
-		ASTNode* body;
-		ASTNode* condition;
+		shared_ptr<ASTNode> body;
+		shared_ptr<ASTNode> condition;
 
-		WhileStmt(ASTNode* _body, ASTNode* _condition) {
+		WhileStmt(shared_ptr<ASTNode> _body, shared_ptr<ASTNode> _condition) {
 			body = _body;
 			condition = _condition;
 		}
@@ -362,12 +346,12 @@ namespace AST {
 
 	class ForStmt : public ASTNode {
 	public:
-		ASTNode* body;
-		ASTNode* init;
-		ASTNode* condition;
-		ASTNode* increment;
+		shared_ptr<ASTNode> body;
+		shared_ptr<ASTNode> init;
+		shared_ptr<ASTNode> condition;
+		shared_ptr<ASTNode> increment;
 
-		ForStmt(ASTNode* _init, ASTNode* _condition, ASTNode* _increment, ASTNode* _body) {
+		ForStmt(shared_ptr<ASTNode> _init, shared_ptr<ASTNode> _condition, shared_ptr<ASTNode> _increment, shared_ptr<ASTNode> _body) {
 			init = _init;
 			condition = _condition;
 			increment = _increment;
@@ -404,11 +388,11 @@ namespace AST {
 
 	class SwitchStmt : public ASTNode {
 	public:
-		ASTNode* expr;
-		vector<ASTNode*> cases;
+		shared_ptr<ASTNode> expr;
+		vector<shared_ptr<ASTNode>> cases;
 		bool hasDefault;
 
-		SwitchStmt(ASTNode* _expr, vector<ASTNode*> _cases, bool _hasDefault) {
+		SwitchStmt(shared_ptr<ASTNode> _expr, vector<shared_ptr<ASTNode>> _cases, bool _hasDefault) {
 			expr = _expr;
 			cases = _cases;
 			hasDefault = _hasDefault;
@@ -420,11 +404,11 @@ namespace AST {
 
 	class CaseStmt : public ASTNode {
 	public:
-		ASTNode* expr;
-		vector<ASTNode*> stmts;
+		shared_ptr<ASTNode> expr;
+		vector<shared_ptr<ASTNode>> stmts;
 		Token caseType;//case or default
 
-		CaseStmt(ASTNode* _expr, vector<ASTNode*>& _stmts) {
+		CaseStmt(shared_ptr<ASTNode> _expr, vector<shared_ptr<ASTNode>>& _stmts) {
 			expr = _expr;
 			stmts = _stmts;
 		}
@@ -437,10 +421,10 @@ namespace AST {
 	public:
 		vector<Token> args;
 		int arity;
-		ASTNode* body;
+		shared_ptr<ASTNode> body;
 		Token name;
 
-		FuncDecl(Token _name, vector<Token> _args, ASTNode* _body) {
+		FuncDecl(Token _name, vector<Token> _args, shared_ptr<ASTNode> _body) {
 			name = _name;
 			args = _args;
 			arity = _args.size();
@@ -454,11 +438,11 @@ namespace AST {
 
 	class ReturnStmt : public ASTNode {
 	public:
-		ASTNode* expr;
+		shared_ptr<ASTNode> expr;
 		//for error reporting
 		Token keyword;
 
-		ReturnStmt(ASTNode* _expr, Token _keyword) {
+		ReturnStmt(shared_ptr<ASTNode> _expr, Token _keyword) {
 			expr = _expr;
 			keyword = _keyword;
 		}
@@ -471,10 +455,10 @@ namespace AST {
 	public:
 		Token name;
 		Token inheritedClass;
-		vector<ASTNode*> methods;
+		vector<shared_ptr<ASTNode>> methods;
 		bool inherits;
 
-		ClassDecl(Token _name, vector<ASTNode*> _methods, Token _inheritedClass, bool _inherits) {
+		ClassDecl(Token _name, vector<shared_ptr<ASTNode>> _methods, Token _inheritedClass, bool _inherits) {
 			name = _name;
 			methods = _methods;
 			inheritedClass = _inheritedClass;

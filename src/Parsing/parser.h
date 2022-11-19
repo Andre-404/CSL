@@ -31,20 +31,20 @@ namespace AST {
 
 	class PrefixParselet {
 	public:
-		virtual ASTNode* parse(Token token) = 0;
+		virtual shared_ptr<ASTNode> parse(Token token) = 0;
 		Parser* cur;
 		int prec;
 	};
 
 	class InfixParselet {
 	public:
-		virtual ASTNode* parse(ASTNode* left, Token token, int surroundingPrec) = 0;
+		virtual shared_ptr<ASTNode> parse(shared_ptr<ASTNode> left, Token token, int surroundingPrec) = 0;
 		Parser* cur;
 		int prec;
 	};
 
 	struct TranslationUnit {
-		vector<ASTNode*> stmts;
+		vector<shared_ptr<ASTNode>> stmts;
 		CSLModule* src;
 		//exported declarations
 		vector<Token> exports;
@@ -61,7 +61,7 @@ namespace AST {
 	class Parser {
 	public:
 		Parser();
-		vector<TranslationUnit*> parse(vector<CSLModule*>& modules);
+		vector<TranslationUnit*> parse(vector<CSLModule*> modules);
 
 	private:
 		TranslationUnit* curUnit;
@@ -77,8 +77,8 @@ namespace AST {
 		void addInfix(TokenType type, InfixParselet* parselet, precedence prec);
 
 #pragma region Expressions
-		ASTNode* expression(int prec);
-		ASTNode* expression();
+		shared_ptr<ASTNode> expression(int prec);
+		shared_ptr<ASTNode> expression();
 
 		friend class fieldAccessExpr;
 		friend class callExpr;
@@ -91,24 +91,24 @@ namespace AST {
 #pragma endregion
 
 #pragma region Statements
-		ASTNode* exportDirective();
-		ASTNode* declaration();
-		ASTNode* varDecl();
-		ASTNode* funcDecl();
-		ASTNode* classDecl();
+		shared_ptr<ASTNode> exportDirective();
+		shared_ptr<ASTNode> declaration();
+		shared_ptr<ASTDecl> varDecl();
+		shared_ptr<ASTDecl> funcDecl();
+		shared_ptr<ASTDecl> classDecl();
 
-		ASTNode* statement();
-		ASTNode* printStmt();
-		ASTNode* exprStmt();
-		ASTNode* blockStmt();
-		ASTNode* ifStmt();
-		ASTNode* whileStmt();
-		ASTNode* forStmt();
-		ASTNode* breakStmt();
-		ASTNode* continueStmt();
-		ASTNode* switchStmt();
-		ASTNode* caseStmt();
-		ASTNode* returnStmt();
+		shared_ptr<ASTNode> statement();
+		shared_ptr<ASTNode> printStmt();
+		shared_ptr<ASTNode> exprStmt();
+		shared_ptr<ASTNode> blockStmt();
+		shared_ptr<ASTNode> ifStmt();
+		shared_ptr<ASTNode> whileStmt();
+		shared_ptr<ASTNode> forStmt();
+		shared_ptr<ASTNode> breakStmt();
+		shared_ptr<ASTNode> continueStmt();
+		shared_ptr<ASTNode> switchStmt();
+		shared_ptr<CaseStmt> caseStmt();
+		shared_ptr<ASTNode> returnStmt();
 
 #pragma endregion
 
