@@ -7,6 +7,7 @@
 
 namespace AST {
 	using std::unique_ptr;
+	typedef std::shared_ptr<ASTNode> ASTNodePtr;
 	class Parser;
 
 	enum class precedence {
@@ -31,14 +32,14 @@ namespace AST {
 
 	class PrefixParselet {
 	public:
-		virtual shared_ptr<ASTNode> parse(Token token) = 0;
+		virtual ASTNodePtr parse(Token token) = 0;
 		Parser* cur;
 		int prec;
 	};
 
 	class InfixParselet {
 	public:
-		virtual shared_ptr<ASTNode> parse(shared_ptr<ASTNode> left, Token token, int surroundingPrec) = 0;
+		virtual ASTNodePtr parse(ASTNodePtr left, Token token, int surroundingPrec) = 0;
 		Parser* cur;
 		int prec;
 	};
@@ -77,8 +78,8 @@ namespace AST {
 		void addInfix(TokenType type, InfixParselet* parselet, precedence prec);
 
 #pragma region Expressions
-		shared_ptr<ASTNode> expression(int prec);
-		shared_ptr<ASTNode> expression();
+		ASTNodePtr expression(int prec);
+		ASTNodePtr expression();
 
 		friend class fieldAccessExpr;
 		friend class callExpr;
@@ -91,24 +92,24 @@ namespace AST {
 #pragma endregion
 
 #pragma region Statements
-		shared_ptr<ASTNode> exportDirective();
-		shared_ptr<ASTNode> declaration();
+		ASTNodePtr exportDirective();
+		ASTNodePtr declaration();
 		shared_ptr<ASTDecl> varDecl();
 		shared_ptr<ASTDecl> funcDecl();
 		shared_ptr<ASTDecl> classDecl();
 
-		shared_ptr<ASTNode> statement();
-		shared_ptr<ASTNode> printStmt();
-		shared_ptr<ASTNode> exprStmt();
-		shared_ptr<ASTNode> blockStmt();
-		shared_ptr<ASTNode> ifStmt();
-		shared_ptr<ASTNode> whileStmt();
-		shared_ptr<ASTNode> forStmt();
-		shared_ptr<ASTNode> breakStmt();
-		shared_ptr<ASTNode> continueStmt();
-		shared_ptr<ASTNode> switchStmt();
+		ASTNodePtr statement();
+		ASTNodePtr printStmt();
+		ASTNodePtr exprStmt();
+		ASTNodePtr blockStmt();
+		ASTNodePtr ifStmt();
+		ASTNodePtr whileStmt();
+		ASTNodePtr forStmt();
+		ASTNodePtr breakStmt();
+		ASTNodePtr continueStmt();
+		ASTNodePtr switchStmt();
 		shared_ptr<CaseStmt> caseStmt();
-		shared_ptr<ASTNode> returnStmt();
+		ASTNodePtr returnStmt();
 
 #pragma endregion
 

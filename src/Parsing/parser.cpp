@@ -8,15 +8,15 @@ namespace AST {
 #pragma region Parselets
 	//!, -, ~, ++a and --a
 	class unaryPrefixExpr : public PrefixParselet {
-		shared_ptr<ASTNode> parse(Token token) {
-			shared_ptr<ASTNode> expr = cur->expression(prec);
+		ASTNodePtr parse(Token token) {
+			ASTNodePtr expr = cur->expression(prec);
 			return make_shared<UnaryExpr>(token, expr, true);
 		}
 	};
 
 	//numbers, string, boolean, nil, array and struct literals, grouping as well as super calls
 	class literalExpr : public PrefixParselet {
-		shared_ptr<ASTNode> parse(Token token) {
+		ASTNodePtr parse(Token token) {
 			switch (token.type) {
 				//only thing that gets inherited is methods
 			case TokenType::SUPER: {
@@ -26,13 +26,13 @@ namespace AST {
 			}
 			case TokenType::LEFT_PAREN: {
 				//grouping can contain a expr of any precedence
-				shared_ptr<ASTNode> expr = cur->expression();
+				ASTNodePtr expr = cur->expression();
 				cur->consume(TokenType::RIGHT_PAREN, "Expected ')' at the end of grouping expression.");
 				return make_shared<GroupingExpr>(expr);
 			}
 									  //Array literal
 			case TokenType::LEFT_BRACKET: {
-				vector<shared_ptr<ASTNode>> members;
+				vector<ASTNodePtr> members;
 				if (!(cur->peek().type == TokenType::RIGHT_BRACKET)) {
 					do {
 						members.push_back(cur->expression());
@@ -49,7 +49,7 @@ namespace AST {
 					do {
 						Token identifier = cur->consume(TokenType::IDENTIFIER, "Expected a identifier.");
 						cur->consume(TokenType::COLON, "Expected a ':' after identifier");
-						shared_ptr<ASTNode> expr = cur->expression();
+						ASTNodePtr expr = cur->expression();
 						entries.emplace_back(identifier, expr);
 					} while (cur->match(TokenType::COMMA));
 				}
@@ -65,9 +65,9 @@ namespace AST {
 
 	//variable assignment
 	class assignmentExpr : public InfixParselet {
-		shared_ptr<ASTNode> parse(shared_ptr<ASTNode> left, Token token, int surroundingPrec) {
+		ASTNodePtr parse(ASTNodePtr left, Token token, int surroundingPrec) {
 			//makes it right associative
-			shared_ptr<ASTNode> right = parseAssign(left, token);
+			ASTNodePtr right = parseAssign(left, token);
 			if (!dynamic_cast<LiteralExpr*>(left.get()) || dynamic_cast<LiteralExpr*>(left.get())->token.type != TokenType::IDENTIFIER) {
 				throw cur->error(token, "Left side is not assignable");
 			}
@@ -75,8 +75,8 @@ namespace AST {
 		}
 
 		//used for parsing assignment tokens(eg. =, +=, *=...)
-		shared_ptr<ASTNode> parseAssign(shared_ptr<ASTNode> left, Token op) {
-			shared_ptr<ASTNode> right = cur->expression();
+		ASTNodePtr parseAssign(ASTNodePtr left, Token op) {
+			ASTNodePtr right = cur->expression();
 			switch (op.type) {
 			case TokenType::EQUAL: {
 				break;
@@ -120,26 +120,26 @@ namespace AST {
 
 	//?: operator
 	class conditionalExpr : public InfixParselet {
-		shared_ptr<ASTNode> parse(shared_ptr<ASTNode> left, Token token, int surroundingPrec) {
-			shared_ptr<ASTNode> thenBranch = cur->expression(prec - 1);
+		ASTNodePtr parse(ASTNodePtr left, Token token, int surroundingPrec) {
+			ASTNodePtr thenBranch = cur->expression(prec - 1);
 			cur->consume(TokenType::COLON, "Expected ':' after then branch.");
-			shared_ptr<ASTNode> elseBranch = cur->expression(prec - 1);
+			ASTNodePtr elseBranch = cur->expression(prec - 1);
 			return make_shared<ConditionalExpr>(left, thenBranch, elseBranch);
 		}
 	};
 
 	//any binary operation
 	class binaryExpr : public InfixParselet {
-		shared_ptr<ASTNode> parse(shared_ptr<ASTNode> left, Token token, int surroundingPrec) {
-			shared_ptr<ASTNode> right = cur->expression(prec);
+		ASTNodePtr parse(ASTNodePtr left, Token token, int surroundingPrec) {
+			ASTNodePtr right = cur->expression(prec);
 			return make_shared<BinaryExpr>(left, token, right);
 		}
 	};
 
 	//a++, a--
 	class unaryPostfixExpr : public InfixParselet {
-		shared_ptr<ASTNode> parse(shared_ptr<ASTNode> var, Token op, int surroundingPrec) {
-			shared_ptr<ASTNode> expr = cur->expression(prec);
+		ASTNodePtr parse(ASTNodePtr var, Token op, int surroundingPrec) {
+			ASTNodePtr expr = cur->expression(prec);
 			return make_shared<UnaryExpr>(op, expr, false);
 		}
 	};
@@ -147,8 +147,8 @@ namespace AST {
 	//function calling
 	class callExpr : public InfixParselet {
 	public:
-		shared_ptr<ASTNode> parse(shared_ptr<ASTNode> left, Token token, int surroundingPrec) {
-			vector<shared_ptr<ASTNode>> args;
+		ASTNodePtr parse(ASTNodePtr left, Token token, int surroundingPrec) {
+			vector<ASTNodePtr> args;
 			if (!cur->check(TokenType::RIGHT_PAREN)) {
 				do {
 					args.push_back(cur->expression());
@@ -162,8 +162,8 @@ namespace AST {
 	//accessing struct, class or array fields
 	class fieldAccessExpr : public InfixParselet {
 	public:
-		shared_ptr<ASTNode> parse(shared_ptr<ASTNode> left, Token token, int surroundingPrec) {
-			shared_ptr<ASTNode> field = nullptr;
+		ASTNodePtr parse(ASTNodePtr left, Token token, int surroundingPrec) {
+			ASTNodePtr field = nullptr;
 			if (token.type == TokenType::LEFT_BRACKET) {//array/struct with string access
 				field = cur->expression();
 				cur->consume(TokenType::RIGHT_BRACKET, "Expect ']' after array/map access.");
@@ -184,7 +184,7 @@ namespace AST {
 					TokenType::STAR_EQUAL, TokenType::BITWISE_XOR_EQUAL, TokenType::BITWISE_AND_EQUAL,
 					TokenType::BITWISE_OR_EQUAL, TokenType::PERCENTAGE_EQUAL })) {
 				Token op = cur->previous();
-				shared_ptr<ASTNode> val = cur->expression();
+				ASTNodePtr val = cur->expression();
 				return make_shared<SetExpr>(left, field, token, op, val);
 			}
 			return make_shared<FieldAccessExpr>(left, token, field);
@@ -297,7 +297,7 @@ vector<TranslationUnit*> Parser::parse(vector<CSLModule*> modules) {
 		return processedUnits;
 	}
 
-shared_ptr<ASTNode> Parser::expression(int prec) {
+ASTNodePtr Parser::expression(int prec) {
 	Token token = advance();
 	//check if the token has a prefix function associated with it, and if it does, parse with it
 	if (prefixParselets.count(token.type) == 0) {
@@ -320,12 +320,12 @@ shared_ptr<ASTNode> Parser::expression(int prec) {
 	return left;
 }
 
-shared_ptr<ASTNode> Parser::expression() {
+ASTNodePtr Parser::expression() {
 	return expression(0);
 }
 
 #pragma region Statements and declarations
-shared_ptr<ASTNode> Parser::exportDirective() {
+ASTNodePtr Parser::exportDirective() {
 	//export is only allowed in global scope
 	if (match(TokenType::EXPORT)) {
 		//after export only keywords allowed are: var, class, func
@@ -343,7 +343,7 @@ shared_ptr<ASTNode> Parser::exportDirective() {
 	return declaration();
 }
 
-shared_ptr<ASTNode> Parser::declaration() {
+ASTNodePtr Parser::declaration() {
 	if (match(TokenType::VAR)) return varDecl();
 	else if (match(TokenType::CLASS)) return classDecl();
 	else if (match(TokenType::FUNC)) return funcDecl();
@@ -352,7 +352,7 @@ shared_ptr<ASTNode> Parser::declaration() {
 
 shared_ptr<ASTDecl> Parser::varDecl() {
 	Token name = consume(TokenType::IDENTIFIER, "Expected a variable identifier.");
-	shared_ptr<ASTNode> expr = nullptr;
+	ASTNodePtr expr = nullptr;
 	//if no initializer is present the variable is initialized to null
 	if (match(TokenType::EQUAL)) {
 		expr = expression();
@@ -384,7 +384,7 @@ shared_ptr<ASTDecl> Parser::funcDecl() {
 	}
 	consume(TokenType::RIGHT_PAREN, "Expect ')' after arguments");
 	consume(TokenType::LEFT_BRACE, "Expect '{' after arguments.");
-	shared_ptr<ASTNode> body = blockStmt();
+	ASTNodePtr body = blockStmt();
 
 	loopDepth = tempLoopDepth;
 	switchDepth = tempSwitchDepth;
@@ -398,7 +398,7 @@ shared_ptr<ASTDecl> Parser::classDecl() {
 	if (match(TokenType::COLON)) inherited = consume(TokenType::IDENTIFIER, "Expected a parent class name.");
 	consume(TokenType::LEFT_BRACE, "Expect '{' before class body.");
 	//a class body can contain only methods(fields are initialized in the constructor)
-	vector<shared_ptr<ASTNode>> methods;
+	vector<ASTNodePtr> methods;
 	while (!check(TokenType::RIGHT_BRACE) && !isAtEnd()) {
 		methods.push_back(funcDecl());
 	}
@@ -406,7 +406,7 @@ shared_ptr<ASTDecl> Parser::classDecl() {
 	return make_shared<ClassDecl>(name, methods, inherited, inherited.type != TokenType::LEFT_BRACE);
 }
 
-shared_ptr<ASTNode> Parser::statement() {
+ASTNodePtr Parser::statement() {
 	if (match({ TokenType::PRINT, TokenType::LEFT_BRACE, TokenType::IF, TokenType::WHILE,
 		TokenType::FOR, TokenType::BREAK, TokenType::SWITCH,
 		TokenType::RETURN, TokenType::CONTINUE })) {
@@ -427,20 +427,20 @@ shared_ptr<ASTNode> Parser::statement() {
 }
 
 //temporary, later we'll remove this and add print as a native function
-shared_ptr<ASTNode> Parser::printStmt() {
-	shared_ptr<ASTNode> expr = expression();
+ASTNodePtr Parser::printStmt() {
+	ASTNodePtr expr = expression();
 	consume(TokenType::SEMICOLON, "Expected ';' after expression.");
 	return make_shared<PrintStmt>(expr);
 }
 
-shared_ptr<ASTNode> Parser::exprStmt() {
-	shared_ptr<ASTNode> expr = expression();
+ASTNodePtr Parser::exprStmt() {
+	ASTNodePtr expr = expression();
 	consume(TokenType::SEMICOLON, "Expected ';' after expression.");
 	return make_shared<ExprStmt>(expr);
 }
 
-shared_ptr<ASTNode> Parser::blockStmt() {
-	vector<shared_ptr<ASTNode>> stmts;
+ASTNodePtr Parser::blockStmt() {
+	vector<ASTNodePtr> stmts;
 	//TokenType::LEFT_BRACE is already consumed
 	while (!check(TokenType::RIGHT_BRACE)) {
 		stmts.push_back(declaration());
@@ -449,76 +449,76 @@ shared_ptr<ASTNode> Parser::blockStmt() {
 	return make_shared<BlockStmt>(stmts);
 }
 
-shared_ptr<ASTNode> Parser::ifStmt() {
+ASTNodePtr Parser::ifStmt() {
 	consume(TokenType::LEFT_PAREN, "Expect '(' after 'if'.");
-	shared_ptr<ASTNode> condition = expression();
+	ASTNodePtr condition = expression();
 	consume(TokenType::RIGHT_PAREN, "Expect ')' after condition.");
 	//using statement() instead of declaration() disallows declarations directly in a control flow body
 	//declarations are still allowed in block statement
-	shared_ptr<ASTNode> thenBranch = statement();
-	shared_ptr<ASTNode> elseBranch = nullptr;
+	ASTNodePtr thenBranch = statement();
+	ASTNodePtr elseBranch = nullptr;
 	if (match(TokenType::ELSE)) {
 		elseBranch = statement();
 	}
 	return make_shared<IfStmt>(thenBranch, elseBranch, condition);
 }
 
-shared_ptr<ASTNode> Parser::whileStmt() {
+ASTNodePtr Parser::whileStmt() {
 	//loop depth is used 
 	loopDepth++;
 	consume(TokenType::LEFT_PAREN, "Expect '(' after 'while'.");
-	shared_ptr<ASTNode> condition = expression();
+	ASTNodePtr condition = expression();
 	consume(TokenType::RIGHT_PAREN, "Expect ')' after condition.");
-	shared_ptr<ASTNode> body = statement();
+	ASTNodePtr body = statement();
 	loopDepth--;
 	return make_shared<WhileStmt>(body, condition);
 }
 
-shared_ptr<ASTNode> Parser::forStmt() {
+ASTNodePtr Parser::forStmt() {
 	loopDepth++;
 	consume(TokenType::LEFT_PAREN, "Expect '(' after 'for'.");
 	//initializer can either be: empty, a new variable declaration, or any expression
-	shared_ptr<ASTNode> init = nullptr;
+	ASTNodePtr init = nullptr;
 	if (match(TokenType::SEMICOLON)) {
 		//do nothing
 	}
 	else if (match(TokenType::VAR)) init = varDecl();
 	else init = exprStmt();
 
-	shared_ptr<ASTNode> condition = nullptr;
+	ASTNodePtr condition = nullptr;
 	//we don't want to use exprStmt() because it emits OP_POP, and we'll need the value to determine whether to jump
 	if (!match(TokenType::SEMICOLON)) condition = expression();
 	consume(TokenType::SEMICOLON, "Expect ';' after loop condition");
 
-	shared_ptr<ASTNode> increment = nullptr;
+	ASTNodePtr increment = nullptr;
 	//using expression() here instead of exprStmt() because there is no trailing ';'
 	if (!check(TokenType::RIGHT_PAREN)) increment = expression();
 	consume(TokenType::RIGHT_PAREN, "Expect ')' after 'for' clauses.");
 	//disallows declarations unless they're in a block
-	shared_ptr<ASTNode> body = statement();
+	ASTNodePtr body = statement();
 	loopDepth--;
 	return make_shared<ForStmt>(init, condition, increment, body);
 }
 
-shared_ptr<ASTNode> Parser::breakStmt() {
+ASTNodePtr Parser::breakStmt() {
 	if (loopDepth == 0 && switchDepth == 0) throw error(previous(), "Cannot use 'break' outside of loops or switch statements.");
 	consume(TokenType::SEMICOLON, "Expect ';' after break.");
 	return make_shared<BreakStmt>(previous());
 }
 
-shared_ptr<ASTNode> Parser::continueStmt() {
+ASTNodePtr Parser::continueStmt() {
 	if (loopDepth == 0) throw error(previous(), "Cannot use 'continue' outside of loops.");
 	consume(TokenType::SEMICOLON, "Expect ';' after continue.");
 	return make_shared<ContinueStmt>(previous());
 }
 
-shared_ptr<ASTNode> Parser::switchStmt() {
+ASTNodePtr Parser::switchStmt() {
 	consume(TokenType::LEFT_PAREN, "Expect '(' after 'switch'.");
-	shared_ptr<ASTNode> expr = expression();
+	ASTNodePtr expr = expression();
 	consume(TokenType::RIGHT_PAREN, "Expect ')' after expression.");
 	consume(TokenType::LEFT_BRACE, "Expect '{' after switch expression.");
 	switchDepth++;
-	vector<shared_ptr<ASTNode>> cases;
+	vector<ASTNodePtr> cases;
 	bool hasDefault = false;
 
 	while (!check(TokenType::RIGHT_BRACE) && match({ TokenType::CASE, TokenType::DEFAULT })) {
@@ -537,14 +537,14 @@ shared_ptr<ASTNode> Parser::switchStmt() {
 }
 
 shared_ptr<CaseStmt> Parser::caseStmt() {
-	shared_ptr<ASTNode> matchExpr = nullptr;
+	ASTNodePtr matchExpr = nullptr;
 	if (previous().type != TokenType::DEFAULT) {
 		matchExpr = expression((int)precedence::PRIMARY);
 
 		if (!dynamic_cast<LiteralExpr*>(matchExpr.get())) throw error(previous(), "Expression must be a constant literal(string, number, boolean or nil).");
 	}
 	consume(TokenType::COLON, "Expect ':' after 'case'.");
-	vector<shared_ptr<ASTNode>> stmts;
+	vector<ASTNodePtr> stmts;
 	while (!check(TokenType::CASE) && !check(TokenType::RIGHT_BRACE) && !check(TokenType::DEFAULT)) {
 		stmts.push_back(statement());
 	}
@@ -552,7 +552,7 @@ shared_ptr<CaseStmt> Parser::caseStmt() {
 }
 
 shared_ptr<ASTNode> Parser::returnStmt() {
-	shared_ptr<ASTNode> expr = nullptr;
+	ASTNodePtr expr = nullptr;
 	Token keyword = previous();
 	if (!match(TokenType::SEMICOLON)) {
 		expr = expression();
