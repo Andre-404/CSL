@@ -11,5 +11,5 @@ namespace errorHandler {
 	void addRuntimeError(string msg, string funcName, CSLModule* origin);
 	void addSystemError(string msg);
 
-	bool hadError = false;
+	extern bool hadError;
 }

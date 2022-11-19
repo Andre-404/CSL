@@ -61,7 +61,7 @@ struct Span {
 	}
 	Span(uInt64 _line, uInt64 _column, uInt64 _len, File* _src) : line(_line), column(_column), length(_len), sourceFile(_src) {};
 	string getStr() const {
-		uInt start = sourceFile->lines[line - 1] + column;
+		uInt64 start = sourceFile->lines[line - 1] + column;
 		return sourceFile->sourceFile.substr(start, length);
 	}
 };

@@ -9,8 +9,9 @@ namespace AST {
 	class ConditionalExpr;
 	class BinaryExpr;
 	class UnaryExpr;
-	class ArrayDeclExpr;
+	class ArrayLiteralExpr;
 	class CallExpr;
+	class FieldAccessExpr;
 	class GroupingExpr;
 	class UnaryVarAlterExpr;
 	class StructLiteral;
@@ -33,40 +34,6 @@ namespace AST {
 	class CaseStmt;
 	class ReturnStmt;
 
-	enum class ASTType {
-		ASSINGMENT,
-		SET,
-		CONDITIONAL,
-		OR,
-		AND,
-		BINARY,
-		UNARY,
-		GROUPING,
-		ARRAY,
-		VAR_ALTER,
-		CALL,
-		STRUCT_LITERAL,
-		LITERAL,
-		SUPER,
-		VAR_DECL,
-		PRINT_STMT,
-		EXPR_STMT,
-		BLOCK_STMT,
-		IF_STMT,
-		WHILE_STMT,
-		FOR_STMT,
-		FOREACH_STMT,
-		BREAK_STMT,
-		CONTINUE_STMT,
-		SWITCH_STMT,
-		CASE,
-		FUNC,
-		CLASS,
-		EXPORT,
-
-		RETURN,
-	};
-
 	//visitor pattern
 	class visitor {
 	public:
@@ -77,8 +44,9 @@ namespace AST {
 		virtual void visitUnaryExpr(UnaryExpr* expr) = 0;
 		virtual void visitUnaryVarAlterExpr(UnaryVarAlterExpr* expr) = 0;
 		virtual void visitCallExpr(CallExpr* expr) = 0;
+		virtual void visitFieldAccessExpr(FieldAccessExpr* expr) = 0;
 		virtual void visitGroupingExpr(GroupingExpr* expr) = 0;
-		virtual void visitArrayDeclExpr(ArrayDeclExpr* expr) = 0;
+		virtual void visitArrayDeclExpr(ArrayLiteralExpr* expr) = 0;
 		virtual void visitStructLiteralExpr(StructLiteral* expr) = 0;
 		virtual void visitLiteralExpr(LiteralExpr* expr) = 0;
 		virtual void visitSuperExpr(SuperExpr* expr) = 0;
@@ -102,7 +70,6 @@ namespace AST {
 
 	class ASTNode {
 	public:
-		ASTType type;
 		virtual ~ASTNode() {};
 		virtual void accept(visitor* vis) = 0;
 	};
@@ -133,13 +100,15 @@ namespace AST {
 		ASTNode* callee;
 		ASTNode* field;
 		Token accessor;
+		Token op;
 		ASTNode* value;
 
-		SetExpr(ASTNode* _callee, ASTNode* _field, Token _accessor, ASTNode* _val) {
+		SetExpr(ASTNode* _callee, ASTNode* _field, Token _accessor, Token _op, ASTNode* _val) {
 			callee = _callee;
 			field = _field;
 			accessor = _accessor;
 			value = _val;
+			op = _op;
 		}
 		void accept(visitor* vis) {
 			vis->visitSetExpr(this);
@@ -182,21 +151,23 @@ namespace AST {
 	public:
 		Token op;
 		ASTNode* right;
+		bool isPrefix;
 
-		UnaryExpr(Token _op, ASTNode* _right) {
+		UnaryExpr(Token _op, ASTNode* _right, bool _isPrefix) {
 			op = op;
 			right = right;
+			isPrefix = _isPrefix;
 		}
 		void accept(visitor* vis) {
 			vis->visitUnaryExpr(this);
 		}
 	};
 
-	class ArrayDeclExpr : public ASTNode {
+	class ArrayLiteralExpr : public ASTNode {
 	public:
 		vector<ASTNode*> members;
 
-		ArrayDeclExpr(vector<ASTNode*>& _members) {
+		ArrayLiteralExpr(vector<ASTNode*>& _members) {
 			members = _members;
 		}
 		void accept(visitor* vis) {
@@ -207,16 +178,30 @@ namespace AST {
 	class CallExpr : public ASTNode {
 	public:
 		ASTNode* callee;
-		Token accessor;
 		vector<ASTNode*> args;
 
-		CallExpr(ASTNode* _callee, Token _accessor, vector<ASTNode*>& _args) {
+		CallExpr(ASTNode* _callee, vector<ASTNode*>& _args) {
 			callee = _callee;
-			accessor = _accessor;
 			args = _args;
 		}
 		void accept(visitor* vis) {
 			vis->visitCallExpr(this);
+		}
+	};
+
+	class FieldAccessExpr : public ASTNode {
+	public:
+		ASTNode* callee;
+		Token accessor;
+		ASTNode* field;
+
+		FieldAccessExpr(ASTNode* _callee, Token _accessor, ASTNode* _field) {
+			callee = _callee;
+			accessor = _accessor;
+			field = _field;
+		}
+		void accept(visitor* vis) {
+			vis->visitFieldAccessExpr(this);
 		}
 	};
 

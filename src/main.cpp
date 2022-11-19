@@ -6,6 +6,6 @@
 
 int main(int argc, char* argv[]) {
 	preprocessing::Preprocessor p;
-	bool a = p.preprocessProject("C:\\Temp\\main.csl");
+	p.preprocessProject("C:\\Temp\\main.csl");
 	return 0;
 }

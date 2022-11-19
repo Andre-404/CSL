@@ -2,6 +2,7 @@
 #include <filesystem>
 #include "../files.h"
 #include <iostream>
+#include "../ErrorHandling/errorHandler.h"
 
 
 using std::unordered_set;

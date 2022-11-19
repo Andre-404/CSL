@@ -41,15 +41,12 @@ void report(File* src, Token& token, string msg) {
 	string name = "\u001b[38;5;220m" + src->name + black;
 	std::cout << red + "error: " + black + msg + "\n";
 
-	if (token.partOfMacro) {
-		underlineSymbol(token.macro);
-	}
-
 	underlineSymbol(token.str);
 	std::cout << "\n";
 }
 
 namespace errorHandler {
+	bool hadError = false;
 	namespace {
 		struct SystemError {
 			string errorText;

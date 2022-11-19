@@ -6,6 +6,7 @@
 #include <unordered_map>
 
 namespace AST {
+	using std::unique_ptr;
 	class Parser;
 
 	enum class precedence {
@@ -60,7 +61,6 @@ namespace AST {
 	class Parser {
 	public:
 		Parser();
-		~Parser();
 		vector<TranslationUnit*> parse(vector<CSLModule*>& modules);
 
 	private:
@@ -70,26 +70,24 @@ namespace AST {
 		int loopDepth;
 		int switchDepth;
 
-		std::unordered_map<TokenType, PrefixParselet*> prefixParselets;
-		std::unordered_map<TokenType, InfixParselet*> infixParselets;
+		std::unordered_map<TokenType, unique_ptr<PrefixParselet>> prefixParselets;
+		std::unordered_map<TokenType, unique_ptr<InfixParselet>> infixParselets;
 
 		void addPrefix(TokenType type, PrefixParselet* parselet, precedence prec);
 		void addInfix(TokenType type, InfixParselet* parselet, precedence prec);
 
 #pragma region Expressions
-		ASTNode* parseAssign(ASTNode* left, Token op);
 		ASTNode* expression(int prec);
 		ASTNode* expression();
 
 		friend class fieldAccessExpr;
 		friend class callExpr;
-		friend class unaryVarAlterPostfix;
 		friend class binaryExpr;
 		friend class conditionalExpr;
 		friend class assignmentExpr;
-		friend class unaryVarAlterPrefix;
 		friend class literalExpr;
-		friend class unaryExpr;
+		friend class unaryPrefixExpr;
+		friend class unaryPostfixExpr;
 #pragma endregion
 
 #pragma region Statements
@@ -106,7 +104,6 @@ namespace AST {
 		ASTNode* ifStmt();
 		ASTNode* whileStmt();
 		ASTNode* forStmt();
-		ASTNode* foreachStmt();
 		ASTNode* breakStmt();
 		ASTNode* continueStmt();
 		ASTNode* switchStmt();
@@ -138,8 +135,6 @@ namespace AST {
 		ParserException error(Token token, string msg);
 
 		void sync();
-
-		CallExpr* finishCall(ASTNode* callee);
 
 		int getPrec();
 #pragma endregion

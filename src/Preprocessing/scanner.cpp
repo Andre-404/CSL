@@ -205,7 +205,7 @@ Token Scanner::string_() {
 		advance();
 	}
 
-	if (isAtEnd()) return errorToken("Unterminated string.");
+	if (isAtEnd()) return makeToken(TokenType::ERROR);
 
 	// The closing quote.
 	advance();

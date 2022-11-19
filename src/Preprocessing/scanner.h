@@ -18,7 +18,6 @@ class Scanner {
 
 		Token scanToken();
 		Token makeToken(TokenType type);
-		Token errorToken(const char* message);
 
 		bool isAtEnd();
 		bool isIndexInFile(int index);

@@ -1,7 +1,6 @@
 #pragma once
 #include "../common.h"
 #include "scanner.h"
-#include "../ErrorHandling/errorHandler.h"
 #include <unordered_map>
 #include <unordered_set>
 #include <memory>
