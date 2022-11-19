@@ -1,5 +1,6 @@
 #pragma once
 #include "common.h"
+#include <memory>
 
 enum class TokenType {
 	// Single-character tokens.
@@ -68,41 +69,36 @@ struct Span {
 struct Token {
 	TokenType type;
 	Span str;
-	//for things like synthetic tokens and expanded macros
-	long long line;
-	bool partOfMacro;
-	Span macro;
 
+	//for things like synthetic tokens and expanded macros
 	bool isSynthetic;
-	const char* ptr;
+	std::shared_ptr<Token> ptr;
 	//default constructor
 	Token() {
 		isSynthetic = false;
 		ptr = nullptr;
-		line = -1;
-		partOfMacro = false;
 		type = TokenType::LEFT_PAREN;
 	}
 	//construct a token from source file string data
 	Token(Span _str, TokenType _type) {
 		isSynthetic = false;
-		line = _str.line;
 		ptr = nullptr;
 		str = _str;
 		type = _type;
-		partOfMacro = false;
 	}
 	//construct a token which doesn't appear in the source file(eg. splitting a += b into a = a + b, where '+' is synthetic)
-	Token(const char* _ptr, uInt64 _line, TokenType _type, Token parentToken) {
-		ptr = _ptr;
+	Token(TokenType _type, Token parentToken) {
+		ptr = std::shared_ptr<Token>(new Token(parentToken));
 		isSynthetic = true;
 		type = _type;
-		line = _line;
-		partOfMacro = false;
 	}
 	string getLexeme() const {
-		if (isSynthetic) return string(ptr);
+		if (type == TokenType::ERROR) return "Unexpected character.";
 		return str.getStr();
+	}
+
+	void addParentToken(Token token) {
+		ptr = std::shared_ptr<Token>(new Token(token));
 	}
 };
 

@@ -135,7 +135,7 @@ Token Scanner::scanToken() {
 		return newLineToken;
 	}
 
-	return errorToken("Unexpected character.");
+	return makeToken(TokenType::ERROR);
 }
 
 Token Scanner::makeToken(TokenType type) {
@@ -143,10 +143,6 @@ Token Scanner::makeToken(TokenType type) {
 	Token token(newSpan, type);
 	string str = token.getLexeme();
 	return token;
-}
-
-Token Scanner::errorToken(const char* message) {
-	return Token(message, line, TokenType::ERROR);
 }
 
 char Scanner::peek() {

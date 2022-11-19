@@ -1,5 +1,4 @@
 #pragma once
-#pragma once
 #include "../common.h"
 #include "ASTDefs.h"
 #include <initializer_list>
