@@ -8,6 +8,7 @@
 using std::unordered_set;
 using std::unordered_map;
 using namespace preprocessing;
+using namespace errorHandler;
 
 
 // Helper functions for preprocessor and macros
@@ -18,69 +19,55 @@ TokenType getTypeAt(const vector<Token>& tokens, const int pos) {
 	return tokens[pos].type;
 }
 
-// Gets arguments of form (x, y, z...) and move given index to end of arguments
-vector<vector<Token>> getArguments(const vector<Token>& value, int& i) {
+// Takes iterator to function-like macros name, retrieves arguments (if they exist)
+vector<vector<Token>> getArguments(vector<Token> source, int& i) {
+	Token macroName = source[i];
+
 	int bracketBalance = 0;
 	vector<vector<Token>> args = { {} };
 
-	auto getTokenType = [&](int i) {
-		if (i < 0 || value.size() <= i) return TokenType::TOKEN_EOF;
-		return value[i].type;
-	};
+	// Move to '('
+	i++;
+	if (getTypeAt(source, i) == TokenType::WHITESPACE) i++;
 
+	
+	if (getTypeAt(source, i) != TokenType::LEFT_PAREN) {
+		// Expected arguments after function-like macro
+	}
+
+	// Retrieve arguments
 	do {
-		switch (getTokenType(i)) {
-		case TokenType::LEFT_PAREN:
-			if (bracketBalance > 0) args.back().push_back(value[i]);
-			bracketBalance++;
-			break;
-		case TokenType::RIGHT_PAREN:
-			bracketBalance--;
-			if (bracketBalance > 0) args.back().push_back(value[i]);
-			break;
-		case TokenType::COMMA:
-			// Check if comma is splitting macro arguments
-			if (bracketBalance == 1) { args.push_back(vector<Token>()); }
-			else args.back().push_back(value[i]);
-			break;
-		case TokenType::WHITESPACE:
-			break;
-		default:
-			args.back().push_back(value[i]);
-			break;
+		switch (getTypeAt(source, i)) {
+			case TokenType::LEFT_PAREN:
+				if (bracketBalance > 0) args.back().push_back(source[i]);
+				bracketBalance++;
+				break;
+			case TokenType::RIGHT_PAREN:
+				bracketBalance--;
+				if (bracketBalance > 0) args.back().push_back(source[i]);
+				break;
+			case TokenType::COMMA:
+				// Check if comma is splitting macro arguments
+				if (bracketBalance == 1) { args.push_back(vector<Token>()); }
+				else args.back().push_back(source[i]);
+				break;
+			case TokenType::WHITESPACE:
+				break;
+			default:
+				args.back().push_back(source[i]);
+				break;
 		}
 		i++;
-	} while (getTokenType(i) != TokenType::TOKEN_EOF && getTokenType(i) != TokenType::NEWLINE && bracketBalance > 0);
+	} while (getTypeAt(source, i) != TokenType::TOKEN_EOF && bracketBalance > 0);
+	
 	// Make sure i is at the ending bracket
 	i--;
 
 	if (bracketBalance != 0) {
-		// Throw "we didn't find a regular bracket sequence for this macros arguments" error
+		addCompileError("Unterminated argument sequence invoking macro.", macroName);
 	}
 
 	return args;
-}
-
-// Takes a macro that starts at position source[i], fully expands it and appends it to destination, whilst moving i to the end of the macro
-// Ignores elements of ignoredMacros (to prevent infinite recursion)
-void processMacro(unordered_map<string, unique_ptr<Macro>>& macros, unordered_set<string>& ignoredMacros, vector<Token>& destination, const vector<Token>& source, int& i) {
-	string macroName = source[i].getLexeme();
-
-	if (getTypeAt(source, i + 1) == TokenType::WHITESPACE) i++;
-	vector<Token> expanded;
-
-	// Function-like macro
-	if (getTypeAt(source, i + 1) == TokenType::LEFT_PAREN) {
-		i++;
-		vector<vector<Token>> args = getArguments(source, i);
-		expanded = macros[macroName]->expand(macros, args, ignoredMacros);
-	}
-	// Object-like macro
-	else {
-		expanded = macros[macroName]->expand(macros, ignoredMacros);
-	}
-
-	destination.insert(destination.end(), expanded.begin(), expanded.end());
 }
 
 // Fully macro expands given tokenized expression
@@ -92,8 +79,10 @@ vector<Token> macroExpandExpression(unordered_map<string, unique_ptr<Macro>>& ma
 		string lexeme = token.getLexeme();
 		// Expand found macros (ignoring already expanded macros to prevent infinite expansion)
 		if (macros.contains(lexeme) && !ignoredMacros.contains(lexeme)) {
-			processMacro(macros, ignoredMacros, result, expression, i);
+			vector<Token> expandedMacro = macros[lexeme]->expand(macros, ignoredMacros, expression, i);
+			result.insert(result.end(), expandedMacro.begin(), expandedMacro.end());
 		}
+		// Non-macro identifier
 		else {
 			result.push_back(token);
 		}
@@ -103,19 +92,14 @@ vector<Token> macroExpandExpression(unordered_map<string, unique_ptr<Macro>>& ma
 
 ObjectMacro::ObjectMacro(Token _name) { name = _name; }
 
-vector<Token> ObjectMacro::expand(unordered_map<string, unique_ptr<Macro>>& macros, unordered_set<string>& ignoredMacros) {
+vector<Token> ObjectMacro::expand(unordered_map<string, unique_ptr<Macro>>& macros, unordered_set<string>& ignoredMacros, vector<Token>& source, int& i) {
 	ignoredMacros.insert(name.getLexeme());
 
 	vector<Token> expanded = macroExpandExpression(macros, ignoredMacros, value);
 
 	ignoredMacros.erase(name.getLexeme());
-	
-	return expanded;
-}
 
-vector<Token> ObjectMacro::expand(unordered_map<string, unique_ptr<Macro>>& macros, vector<vector<Token>>& args, unordered_set<string>& ignoredMacros) {
-	// Throw an error
-	return vector<Token>();
+	return expanded;
 }
 
 FunctionMacro::FunctionMacro(Token _name, unordered_map<string, int> _argumentToIndex) {
@@ -123,16 +107,17 @@ FunctionMacro::FunctionMacro(Token _name, unordered_map<string, int> _argumentTo
 	argumentToIndex = _argumentToIndex;
 }
 
-vector<Token> FunctionMacro::expand(unordered_map<string, unique_ptr<Macro>>& macros, unordered_set<string>& ignoredMacros) {
-	// Throw an error
-	return vector<Token>();
-}
-
 // Expands a function-like macro. First fully expands the arguments, then substitutes them into the macro body, and finally it expands the whole macro body again.
-vector<Token> FunctionMacro::expand(unordered_map<string, unique_ptr<Macro>>& macros, vector<vector<Token>>& args, unordered_set<string>& ignoredMacros) {
+vector<Token> FunctionMacro::expand(unordered_map<string, unique_ptr<Macro>>& macros, unordered_set<string>& ignoredMacros, vector<Token>& source, int& i) {
+	Token macroName = source[i];
+	
+	// Retrieve arguments for macro
+	vector<vector<Token>> args = getArguments(source, i);
+	
 	// Check for correct number of arguments provided
 	if (args.size() != argumentToIndex.size()) {
-		// Throw error wrong number of args
+		addCompileError(std::format("Macro requires {} arguments, but was provided with {}.", argumentToIndex.size(), args.size()), macroName);
+		return vector<Token>();
 	}
 	
 	vector<Token> substitutedExpression;
@@ -209,7 +194,7 @@ CSLModule* Preprocessor::scanFile(string moduleName) {
 		if (allUnits.count(depName) > 0) {
 			//if we detect a cyclical import we still continue parsing other files to detect as many errors as possible
 			if (!allUnits[depName]->resolvedDeps) {
-				error(dep, "Cyclical importing detected.");
+				addCompileError("Cyclical importing detected.", dep);
 				continue;
 			}
 			unit->deps.push_back(allUnits[depName]);
@@ -220,7 +205,7 @@ CSLModule* Preprocessor::scanFile(string moduleName) {
 			unit->deps.push_back(scanFile(depName));
 		}
 		else {
-			error(dep, "File " + depName + " doesn't exist.");
+			addCompileError("File " + depName + " doesn't exist.", dep);
 		}
 	}
 	unit->resolvedDeps = true;
@@ -257,33 +242,27 @@ vector<Token> Preprocessor::processDirectivesAndMacros(CSLModule* unit) {
 		// Add a macro
 		if (token.type == TokenType::ADDMACRO) {
 			// Move to macro name (skip a whitespace)
-			if (getTypeAt(tokens, ++i) != TokenType::WHITESPACE) { error(tokens[i], "Expected whitespace."); continue; }
-			if (getTypeAt(tokens, ++i) != TokenType::IDENTIFIER) { error(tokens[i], "Expected macro name."); continue; }
+			if (getTypeAt(tokens, ++i) != TokenType::WHITESPACE) { addCompileError("Expected whitespace.", tokens[i]); continue; }
+			if (getTypeAt(tokens, ++i) != TokenType::IDENTIFIER) { addCompileError("Expected macro name.", tokens[i]); continue; }
 
 			Token macroName = tokens[i];
 			
-			// Check if already declared
-			if (macros.contains(macroName.getLexeme())) {
-				error(macroName, "Macro redefinition not allowed.");
-				continue;
-			}
+			// Check if the macro was already declared
+			if (macros.contains(macroName.getLexeme())) { addCompileError("Macro redefinition not allowed.", macroName); continue; }
 
 			// Function-like macro
 			if (getTypeAt(tokens, i+1) == TokenType::LEFT_PAREN) {
-				// Move to opening bracket
-				i += 1;
-
 				// Parse arguments
 				unordered_map<string, int> argumentToIndex;
 
 				vector<vector<Token>> args = getArguments(tokens, i);
 
 				for (int j = 0; j < (int)args.size(); j++) {
-					if (args[j].size() != 1) { error(macroName, "Each macro argument should contain exactly 1 token."); break; }
+					if (args[j].size() != 1 || args[j][0].type != TokenType::IDENTIFIER) { addCompileError("Each macro argument should be a single identifier token.", macroName); break; }
 
 					string argName = args[j][0].getLexeme();
 
-					if (argumentToIndex.contains(argName)) { error(args[j][0], "Cannot have 2 or more arguments of the same name."); break; }
+					if (argumentToIndex.contains(argName)) { addCompileError("Cannot have 2 or more arguments of the same name.", args[j][0]); break; }
 					
 					argumentToIndex[argName] = j;
 				}
@@ -295,7 +274,7 @@ vector<Token> Preprocessor::processDirectivesAndMacros(CSLModule* unit) {
 				macros[macroName.getLexeme()] = std::make_unique<ObjectMacro>(macroName);
 			}
 
-			if (getTypeAt(tokens, i + 1) != TokenType::WHITESPACE) { error(tokens[i + 1], "Expected whitespace."); continue; }
+			if (getTypeAt(tokens, i + 1) != TokenType::WHITESPACE) { addCompileError("Expected whitespace.", tokens[i + 1]); continue; }
 
 			// Move to macro value
 			i += 2;
@@ -310,11 +289,11 @@ vector<Token> Preprocessor::processDirectivesAndMacros(CSLModule* unit) {
 		// Remove a macro
 		else if (token.type == TokenType::REMOVEMACRO) {
 			// Move to macro name (skip a whitespace)
-			if (getTypeAt(tokens, ++i) != TokenType::WHITESPACE) { error(tokens[i], "Expected whitespace."); continue; }
-			if (getTypeAt(tokens, ++i) != TokenType::IDENTIFIER) { error(tokens[i], "Expected macro name."); continue; }
+			if (getTypeAt(tokens, ++i) != TokenType::WHITESPACE) { addCompileError("Expected whitespace.", tokens[i]); continue; }
+			if (getTypeAt(tokens, ++i) != TokenType::IDENTIFIER) { addCompileError("Expected macro name.", tokens[i]); continue; }
 
 			Token macroName = tokens[i];
-			if (!macros.contains(macroName.getLexeme())) { error(macroName, "Macro wasn't defined yet."); continue; }
+			if (!macros.contains(macroName.getLexeme())) { addCompileError("Cannot remove a macro that wasn't declared yet.", macroName); continue; }
 
 			// Remove the macro
 			macros.erase(macroName.getLexeme());
@@ -324,7 +303,7 @@ vector<Token> Preprocessor::processDirectivesAndMacros(CSLModule* unit) {
 			// Move to dependency name
 			i += 2;
 
-			if (getTypeAt(tokens, i) != TokenType::STRING) error(tokens[i], "Expected a module name.");
+			if (getTypeAt(tokens, i) != TokenType::STRING) addCompileError("Expected a module name.", tokens[i]);
 
 			// Add dependency to list of dependencies
 			Token dependencyName = tokens[i];
@@ -332,10 +311,12 @@ vector<Token> Preprocessor::processDirectivesAndMacros(CSLModule* unit) {
 			importTokens.push_back(dependencyName);
 		}
 		else if (token.type == TokenType::IDENTIFIER) {
+			string lexeme = token.getLexeme();
 			// Process macro
-			if (macros.contains(token.getLexeme())) {
+			if (macros.contains(lexeme)) {
 				unordered_set<string> ignoredMacros;
-				processMacro(macros, ignoredMacros, resultTokens, tokens, i);
+				vector<Token> expanded = macros[lexeme]->expand(macros, ignoredMacros, tokens, i);
+				resultTokens.insert(resultTokens.end(), expanded.begin(), expanded.end());
 			}
 			// Non-macro identifier
 			else {
@@ -350,9 +331,4 @@ vector<Token> Preprocessor::processDirectivesAndMacros(CSLModule* unit) {
 	unit->tokens = resultTokens;
 
 	return importTokens;
-}
-
-void Preprocessor::error(Token token, string msg) {
-	errorHandler::hadError = true;
-	errorHandler::addCompileError(msg, token);
 }

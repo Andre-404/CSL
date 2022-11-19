@@ -283,15 +283,12 @@ namespace AST {
 			current = 0;
 			loopDepth = 0;
 			switchDepth = 0;
-			if (curUnit->src->tokens.empty()) errorHandler::hadError = true;
-			else {
-				while (!isAtEnd()) {
-					try {
-						unit->stmts.push_back(exportDirective());
-					}
-					catch (ParserException e) {
-						sync();
-					}
+			while (!isAtEnd()) {
+				try {
+					unit->stmts.push_back(exportDirective());
+				}
+				catch (ParserException e) {
+					sync();
 				}
 			}
 		}
@@ -616,7 +613,6 @@ namespace AST {
 
 	ParserException Parser::error(Token token, string msg) {
 		errorHandler::addCompileError(msg, token);
-		errorHandler::hadError = true;
 		return ParserException();
 	}
 

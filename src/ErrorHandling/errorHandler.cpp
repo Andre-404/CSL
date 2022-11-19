@@ -46,7 +46,6 @@ void report(File* src, Token& token, string msg) {
 }
 
 namespace errorHandler {
-	bool hadError = false;
 	namespace {
 		struct SystemError {
 			string errorText;
@@ -109,5 +108,9 @@ namespace errorHandler {
 	}
 	void addSystemError(string msg) {
 		systemErrors.push_back(SystemError(msg));
+	}
+
+	bool hasErrors() {
+		return !compileErrors.empty() || !runtimeErrors.empty() || !systemErrors.empty();
 	}
 }
