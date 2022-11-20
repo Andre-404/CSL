@@ -13,7 +13,6 @@ namespace AST {
 	class CallExpr;
 	class FieldAccessExpr;
 	class GroupingExpr;
-	class UnaryVarAlterExpr;
 	class StructLiteral;
 	class LiteralExpr;
 	class SuperExpr;
@@ -42,7 +41,6 @@ namespace AST {
 		virtual void visitConditionalExpr(ConditionalExpr* expr) = 0;
 		virtual void visitBinaryExpr(BinaryExpr* expr) = 0;
 		virtual void visitUnaryExpr(UnaryExpr* expr) = 0;
-		virtual void visitUnaryVarAlterExpr(UnaryVarAlterExpr* expr) = 0;
 		virtual void visitCallExpr(CallExpr* expr) = 0;
 		virtual void visitFieldAccessExpr(FieldAccessExpr* expr) = 0;
 		virtual void visitGroupingExpr(GroupingExpr* expr) = 0;
@@ -122,7 +120,7 @@ namespace AST {
 		shared_ptr<ASTNode> elseBranch;
 
 		ConditionalExpr(shared_ptr<ASTNode> _condition, shared_ptr<ASTNode> _thenBranch, shared_ptr<ASTNode> _elseBranch) {
-			condition = condition;
+			condition = _condition;
 			thenBranch = _thenBranch;
 			elseBranch = _elseBranch;
 		}
@@ -154,8 +152,8 @@ namespace AST {
 		bool isPrefix;
 
 		UnaryExpr(Token _op, shared_ptr<ASTNode> _right, bool _isPrefix) {
-			op = op;
-			right = right;
+			op = _op;
+			right = _right;
 			isPrefix = _isPrefix;
 		}
 		void accept(visitor* vis) {
@@ -389,10 +387,10 @@ namespace AST {
 	class SwitchStmt : public ASTNode {
 	public:
 		shared_ptr<ASTNode> expr;
-		vector<shared_ptr<ASTNode>> cases;
+		vector<shared_ptr<CaseStmt>> cases;
 		bool hasDefault;
 
-		SwitchStmt(shared_ptr<ASTNode> _expr, vector<shared_ptr<ASTNode>> _cases, bool _hasDefault) {
+		SwitchStmt(shared_ptr<ASTNode> _expr, vector<shared_ptr<CaseStmt>> _cases, bool _hasDefault) {
 			expr = _expr;
 			cases = _cases;
 			hasDefault = _hasDefault;

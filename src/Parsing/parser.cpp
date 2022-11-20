@@ -1,9 +1,11 @@
 #include "parser.h"
 #include "../ErrorHandling/errorHandler.h"
+#include "ASTPrinter.h"
 
 using std::make_shared;
 using namespace AST;
 
+//have to define this in the AST namespace because c++ friend classes
 namespace AST {
 #pragma region Parselets
 	//!, -, ~, ++a and --a
@@ -139,8 +141,7 @@ namespace AST {
 	//a++, a--
 	class unaryPostfixExpr : public InfixParselet {
 		ASTNodePtr parse(ASTNodePtr var, Token op, int surroundingPrec) {
-			ASTNodePtr expr = cur->expression(prec);
-			return make_shared<UnaryExpr>(op, expr, false);
+			return make_shared<UnaryExpr>(op, var, false);
 		}
 	};
 
@@ -191,7 +192,6 @@ namespace AST {
 		}
 	};
 #pragma endregion
-
 }
 
 Parser::Parser() {
@@ -276,26 +276,33 @@ Parser::Parser() {
 
 vector<TranslationUnit*> Parser::parse(vector<CSLModule*> modules) {
 	vector<TranslationUnit*> processedUnits;
+	#ifdef AST_DEBUG
+	ASTPrinter printer;
+	#endif
 	//modules are already sorted using topsort
 	for (CSLModule* pUnit : modules) {
 		TranslationUnit* unit = new TranslationUnit(pUnit);
 		processedUnits.push_back(unit);
 		curUnit = unit;
 
-			current = 0;
-			loopDepth = 0;
-			switchDepth = 0;
-			while (!isAtEnd()) {
-				try {
-					unit->stmts.push_back(exportDirective());
-				}
-				catch (ParserException e) {
-					sync();
-				}
+		current = 0;
+		loopDepth = 0;
+		switchDepth = 0;
+		while (!isAtEnd()) {
+			try {
+				unit->stmts.push_back(exportDirective());
+				#ifdef AST_DEBUG
+				unit->stmts[unit->stmts.size() - 1]->accept(&printer);
+				#endif
+			}
+			catch (ParserException e) {
+				sync();
 			}
 		}
-		return processedUnits;
+
 	}
+	return processedUnits;
+}
 
 ASTNodePtr Parser::expression(int prec) {
 	Token token = advance();
@@ -303,7 +310,7 @@ ASTNodePtr Parser::expression(int prec) {
 	if (prefixParselets.count(token.type) == 0) {
 		throw error(token, "Expected expression.");
 	}
-	const unique_ptr<PrefixParselet>& prefix = prefixParselets[token.type];
+	unique_ptr<PrefixParselet>& prefix = prefixParselets[token.type];
 	shared_ptr<ASTNode> left = prefix->parse(token);
 
 	//only compiles if the next token has a higher associativity than the current one
@@ -314,7 +321,7 @@ ASTNodePtr Parser::expression(int prec) {
 		if (infixParselets.count(token.type) == 0) {
 			throw error(token, "Expected expression.");
 		}
-		const unique_ptr<InfixParselet>& infix = infixParselets[token.type];
+		unique_ptr<InfixParselet>& infix = infixParselets[token.type];
 		left = infix->parse(left, token, prec);
 	}
 	return left;
@@ -403,7 +410,7 @@ shared_ptr<ASTDecl> Parser::classDecl() {
 		methods.push_back(funcDecl());
 	}
 	consume(TokenType::RIGHT_BRACE, "Expect '}' after class body.");
-	return make_shared<ClassDecl>(name, methods, inherited, inherited.type != TokenType::LEFT_BRACE);
+	return make_shared<ClassDecl>(name, methods, inherited, inherited.type != TokenType::LEFT_PAREN);
 }
 
 ASTNodePtr Parser::statement() {
@@ -487,7 +494,7 @@ ASTNodePtr Parser::forStmt() {
 
 	ASTNodePtr condition = nullptr;
 	//we don't want to use exprStmt() because it emits OP_POP, and we'll need the value to determine whether to jump
-	if (!match(TokenType::SEMICOLON)) condition = expression();
+	if (!check(TokenType::SEMICOLON)) condition = expression();
 	consume(TokenType::SEMICOLON, "Expect ';' after loop condition");
 
 	ASTNodePtr increment = nullptr;
@@ -518,7 +525,7 @@ ASTNodePtr Parser::switchStmt() {
 	consume(TokenType::RIGHT_PAREN, "Expect ')' after expression.");
 	consume(TokenType::LEFT_BRACE, "Expect '{' after switch expression.");
 	switchDepth++;
-	vector<ASTNodePtr> cases;
+	vector<shared_ptr<CaseStmt>> cases;
 	bool hasDefault = false;
 
 	while (!check(TokenType::RIGHT_BRACE) && match({ TokenType::CASE, TokenType::DEFAULT })) {

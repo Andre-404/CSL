@@ -7,6 +7,7 @@
     <ClCompile Include="src\Preprocessing\preprocessor.cpp" />
     <ClCompile Include="src\ErrorHandling\errorHandler.cpp" />
     <ClCompile Include="src\Parsing\parser.cpp" />
+    <ClCompile Include="src\Parsing\ASTPrinter.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Preprocessing\scanner.h" />
@@ -17,5 +18,6 @@
     <ClInclude Include="src\modulesDefs.h" />
     <ClInclude Include="src\Parsing\ASTDefs.h" />
     <ClInclude Include="src\Parsing\parser.h" />
+    <ClInclude Include="src\Parsing\ASTPrinter.h" />
   </ItemGroup>
 </Project>
