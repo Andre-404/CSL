@@ -292,6 +292,7 @@ vector<TranslationUnit*> Parser::parse(vector<CSLModule*> modules) {
 			try {
 				unit->stmts.push_back(exportDirective());
 				#ifdef AST_DEBUG
+				//prints statement
 				unit->stmts[unit->stmts.size() - 1]->accept(&printer);
 				#endif
 			}
@@ -313,8 +314,8 @@ ASTNodePtr Parser::expression(int prec) {
 	unique_ptr<PrefixParselet>& prefix = prefixParselets[token.type];
 	shared_ptr<ASTNode> left = prefix->parse(token);
 
-	//only compiles if the next token has a higher associativity than the current one
-	//eg. 1 + 2 compiles because the base precedence is 0, and '+' has a precedence of  9
+	//advances only if the next token has a higher associativity than the current one
+	//eg. 1 + 2 compiles because the base precedence is 0, and '+' has a precedence of 11
 	//loop runs as long as the next operator has a higher precedence than the one that called this function
 	while (prec < getPrec()) {
 		token = advance();
@@ -410,7 +411,7 @@ shared_ptr<ASTDecl> Parser::classDecl() {
 		methods.push_back(funcDecl());
 	}
 	consume(TokenType::RIGHT_BRACE, "Expect '}' after class body.");
-	return make_shared<ClassDecl>(name, methods, inherited, inherited.type != TokenType::LEFT_PAREN);
+	return make_shared<ClassDecl>(name, methods, inherited, inherited.type == TokenType::IDENTIFIER);
 }
 
 ASTNodePtr Parser::statement() {
@@ -470,8 +471,8 @@ ASTNodePtr Parser::ifStmt() {
 	return make_shared<IfStmt>(thenBranch, elseBranch, condition);
 }
 
-ASTNodePtr Parser::whileStmt() {
-	//loop depth is used 
+ASTNodePtr Parser::whileStmt() { 
+	//loopDepth is used to see if a 'continue' or 'break' statement is allowed within the body
 	loopDepth++;
 	consume(TokenType::LEFT_PAREN, "Expect '(' after 'while'.");
 	ASTNodePtr condition = expression();
@@ -520,6 +521,10 @@ ASTNodePtr Parser::continueStmt() {
 }
 
 ASTNodePtr Parser::switchStmt() {
+	//structure:
+	//switch(<expression>){
+	//case <expression>: <statements>
+	//}
 	consume(TokenType::LEFT_PAREN, "Expect '(' after 'switch'.");
 	ASTNodePtr expr = expression();
 	consume(TokenType::RIGHT_PAREN, "Expect ')' after expression.");
@@ -545,6 +550,7 @@ ASTNodePtr Parser::switchStmt() {
 
 shared_ptr<CaseStmt> Parser::caseStmt() {
 	ASTNodePtr matchExpr = nullptr;
+	//default cases don't have a match expression
 	if (previous().type != TokenType::DEFAULT) {
 		matchExpr = expression((int)precedence::PRIMARY);
 
@@ -558,7 +564,7 @@ shared_ptr<CaseStmt> Parser::caseStmt() {
 	return make_shared<CaseStmt>(matchExpr, stmts);
 }
 
-shared_ptr<ASTNode> Parser::returnStmt() {
+ASTNodePtr Parser::returnStmt() {
 	ASTNodePtr expr = nullptr;
 	Token keyword = previous();
 	if (!match(TokenType::SEMICOLON)) {
@@ -571,6 +577,7 @@ shared_ptr<ASTNode> Parser::returnStmt() {
 #pragma endregion
 
 #pragma region Helpers
+//if the current token type matches any of the provided tokenTypes it's consumed, if not false is returned
 bool Parser::match(const std::initializer_list<TokenType>& tokenTypes) {
 	for (TokenType type : tokenTypes) {
 		if (check(type)) {
@@ -594,16 +601,19 @@ bool Parser::check(TokenType type) {
 	return peek().type == type;
 }
 
+//returns current token and increments to the next one
 Token Parser::advance() {
 	if (!isAtEnd()) current++;
 	return previous();
 }
 
+//gets current token
 Token Parser::peek() {
 	if (curUnit->src->tokens.size() < current) throw error(curUnit->src->tokens[current - 1], "Expected token.");
 	return curUnit->src->tokens[current];
 }
 
+//gets next token
 Token Parser::peekNext() {
 	if (curUnit->src->tokens.size() < current + 1) throw error(curUnit->src->tokens[current], "Expected token.");
 	return curUnit->src->tokens[current + 1];
@@ -614,18 +624,19 @@ Token Parser::previous() {
 	return curUnit->src->tokens[current - 1];
 }
 
+//if the current token is of the correct type, it's consumed, if not an error is thrown
 Token Parser::consume(TokenType type, string msg) {
 	if (check(type)) return advance();
 
 	throw error(peek(), msg);
 }
 
-	ParserException Parser::error(Token token, string msg) {
+ParserException Parser::error(Token token, string msg) {
 		errorHandler::addCompileError(msg, token);
 		return ParserException();
 	}
 
-//syncs when we find a ';' or one of the reserved words
+//syncs when we find a ';' or one of the keywords
 void Parser::sync() {
 	advance();
 
@@ -665,6 +676,7 @@ void Parser::addInfix(TokenType type, InfixParselet* parselet, precedence prec) 
 	infixParselets.insert_or_assign(type, unique_ptr<InfixParselet>(parselet));
 }
 
+//checks if the current token has any infix parselet associated with it, and if so the precedence of that operation is returned
 int Parser::getPrec() {
 	Token token = peek();
 	if (infixParselets.count(token.type) == 0) {

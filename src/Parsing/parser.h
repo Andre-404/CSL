@@ -81,6 +81,7 @@ namespace AST {
 		ASTNodePtr expression(int prec);
 		ASTNodePtr expression();
 
+		//parselets that need to have access to private methods of parser
 		friend class fieldAccessExpr;
 		friend class callExpr;
 		friend class binaryExpr;

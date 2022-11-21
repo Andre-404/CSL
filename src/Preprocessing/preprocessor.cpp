@@ -349,8 +349,6 @@ vector<Token> Preprocessor::processDirectivesAndMacros(CSLModule* unit) {
 		}
 	}
 
-	addCompileError("Test", resultTokens[0]);
-
 	unit->tokens = resultTokens;
 
 	return importTokens;

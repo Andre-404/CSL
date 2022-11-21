@@ -93,6 +93,7 @@ namespace AST {
 		}
 	};
 
+	//used for assigning values to struct, class and array fields
 	class SetExpr : public ASTNode {
 	public:
 		shared_ptr<ASTNode> callee;
@@ -187,6 +188,7 @@ namespace AST {
 		}
 	};
 
+	//getting values from compound types using '.' or '[]'
 	class FieldAccessExpr : public ASTNode {
 	public:
 		shared_ptr<ASTNode> callee;
@@ -261,6 +263,7 @@ namespace AST {
 
 #pragma region Statements
 
+	//temporary, will replace with a native function
 	class PrintStmt : public ASTNode {
 	public:
 		shared_ptr<ASTNode> expr;

@@ -190,7 +190,7 @@ void ASTPrinter::visitContinueStmt(ContinueStmt* stmt) {
 }
 
 void ASTPrinter::visitSwitchStmt(SwitchStmt* stmt) {
-	cout << "match (";
+	cout << "switch (";
 	stmt->expr->accept(this);
 	cout << ") {" << endl;
 	for (shared_ptr<CaseStmt> _case : stmt->cases) {

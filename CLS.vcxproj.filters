@@ -8,6 +8,7 @@
     <ClCompile Include="src\ErrorHandling\errorHandler.cpp" />
     <ClCompile Include="src\Parsing\parser.cpp" />
     <ClCompile Include="src\Parsing\ASTPrinter.cpp" />
+    <ClCompile Include="src\MemoryManagment\heapObject.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Preprocessing\scanner.h" />
@@ -19,5 +20,6 @@
     <ClInclude Include="src\Parsing\ASTDefs.h" />
     <ClInclude Include="src\Parsing\parser.h" />
     <ClInclude Include="src\Parsing\ASTPrinter.h" />
+    <ClInclude Include="src\MemoryManagment\heapObject.h" />
   </ItemGroup>
 </Project>

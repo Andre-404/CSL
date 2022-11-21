@@ -155,6 +155,7 @@
     <ClCompile Include="src\ErrorHandling\errorHandler.cpp" />
     <ClCompile Include="src\files.cpp" />
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\MemoryManagment\heapObject.cpp" />
     <ClCompile Include="src\Parsing\ASTPrinter.cpp" />
     <ClCompile Include="src\Parsing\parser.cpp" />
     <ClCompile Include="src\Preprocessing\preprocessor.cpp" />
@@ -164,6 +165,7 @@
     <ClInclude Include="src\common.h" />
     <ClInclude Include="src\ErrorHandling\errorHandler.h" />
     <ClInclude Include="src\files.h" />
+    <ClInclude Include="src\MemoryManagment\heapObject.h" />
     <ClInclude Include="src\modulesDefs.h" />
     <ClInclude Include="src\Parsing\ASTDefs.h" />
     <ClInclude Include="src\Parsing\ASTPrinter.h" />

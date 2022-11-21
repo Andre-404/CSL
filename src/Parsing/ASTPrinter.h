@@ -2,6 +2,7 @@
 #include "ASTDefs.h"
 
 namespace AST {
+	//used for debugging, controlled with AST_DEBUG in common.h
 	class ASTPrinter : public visitor {
 		void visitAssignmentExpr(AssignmentExpr* expr);
 		void visitSetExpr(SetExpr* expr);
