@@ -12,23 +12,40 @@ const string black = "\u001b[0m";
 const string red = "\u001b[38;5;196m";
 const string yellow = "\u001b[38;5;220m";
 
-void underlineSymbol(Span symbol) {
-	File* src = symbol.sourceFile;
-	uInt64 lineStart = src->lines[symbol.line - 1];
-	uInt64 lineEnd = 0;
+// Highlights a token
+void highlightToken(Token token) {
+	File* src = token.str.sourceFile;
 
-	if (src->lines.size() - 1 == symbol.line - 1) lineEnd = src->sourceFile.size();
-	else lineEnd = src->lines[symbol.line];
-
-	string line = std::to_string(symbol.line);
-	std::cout << yellow + src->name + black + ":" + cyan + line + " | " + black;
-	std::cout << src->sourceFile.substr(lineStart, lineEnd - lineStart) << std::endl;
+	string lineNumber = std::to_string(token.str.line + 1);
+	std::cout << yellow << src->name << black << ":" << cyan << lineNumber << " | " << black;
+	std::cout << token.str.getLine() << std::endl;
 
 	string highlight;
-	highlight.insert(highlight.end(), src->name.length() + line.length() + 4 + symbol.column, ' ');
-	highlight.insert(highlight.end(), symbol.length, '^');
+	highlight.insert(highlight.end(), src->name.length() + lineNumber.length() + 4 + token.str.column, ' ');
+	highlight.insert(highlight.end(), token.str.length, '^');
 
-	std::cout << red + highlight + black + "\n";
+	std::cout << red << highlight << black << "\n";
+}
+
+// Reports the origin of a token (climbs the expansion chain the given token took during preprocessing)
+void logExpansionPath(Token token) {
+	if (!token.macroPtr) return;
+
+	Token macroToken = *token.macroPtr;
+	std::cout << red << "Note: " << black << "in expansion of macro '" << yellow << macroToken.getLexeme() << black << "'" << std::endl;
+	highlightToken(macroToken);
+	logExpansionPath(macroToken);
+}
+
+// Used for tokens which appear in macro arguments. Reports the argument substitution path used during preprocessing.
+void logDefinitionPath(Token token) {
+	if (!token.parentPtr || token.parentPtr == token.macroPtr) return;
+
+	Token parentToken = *token.parentPtr;
+	Token macroToken = *token.macroPtr;
+	std::cout << red << "Note: " << black << "in definition of macro '" << yellow << macroToken.getLexeme() << black << "'" << std::endl;
+	highlightToken(parentToken);
+	logDefinitionPath(macroToken);
 }
 
 void report(File* src, Token& token, string msg) {
@@ -39,7 +56,9 @@ void report(File* src, Token& token, string msg) {
 	string name = "\u001b[38;5;220m" + src->name + black;
 	std::cout << red + "error: " + black + msg + "\n";
 
-	underlineSymbol(token.str);
+	highlightToken(token);
+	logDefinitionPath(token);
+	logExpansionPath(token);
 	std::cout << "\n";
 }
 

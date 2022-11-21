@@ -32,7 +32,7 @@ vector<vector<Token>> getArguments(vector<Token> source, int& i) {
 
 	
 	if (getTypeAt(source, i) != TokenType::LEFT_PAREN) {
-		// Expected arguments after function-like macro
+		addCompileError("Expected '(' after call to function-like macro.", source[i]);
 	}
 
 	// Retrieve arguments
@@ -71,12 +71,16 @@ vector<vector<Token>> getArguments(vector<Token> source, int& i) {
 }
 
 // Fully macro expands given tokenized expression
-vector<Token> macroExpandExpression(unordered_map<string, unique_ptr<Macro>>& macros, unordered_set<string>& ignoredMacros, vector<Token>& expression) {
+vector<Token> macroExpandExpression(unordered_map<string, unique_ptr<Macro>>& macros, unordered_set<string>& ignoredMacros, vector<Token>& expression, std::shared_ptr<Token> parentToken) {
 	vector<Token> result;
 	for (int i = 0; i < (int)expression.size(); i++) {
 		Token& token = expression[i];
+		
+		if (parentToken) token.setOriginPointers(parentToken);
+
 		if (token.type != TokenType::IDENTIFIER) { result.push_back(token); continue; }
 		string lexeme = token.getLexeme();
+		
 		// Expand found macros (ignoring already expanded macros to prevent infinite expansion)
 		if (macros.contains(lexeme) && !ignoredMacros.contains(lexeme)) {
 			vector<Token> expandedMacro = macros[lexeme]->expand(macros, ignoredMacros, expression, i);
@@ -93,13 +97,17 @@ vector<Token> macroExpandExpression(unordered_map<string, unique_ptr<Macro>>& ma
 ObjectMacro::ObjectMacro(Token _name) { name = _name; }
 
 vector<Token> ObjectMacro::expand(unordered_map<string, unique_ptr<Macro>>& macros, unordered_set<string>& ignoredMacros, vector<Token>& source, int& i) {
+	Token macroToken = source[i];
+	// All tokens in the expansion of this macro will have this "macroToken" as their parent token
+	std::shared_ptr<Token> macroTokenPtr = std::make_shared<Token>(macroToken);
+
 	ignoredMacros.insert(name.getLexeme());
 
-	vector<Token> expanded = macroExpandExpression(macros, ignoredMacros, value);
-
+	vector<Token> expandedExpression = macroExpandExpression(macros, ignoredMacros, value, macroTokenPtr);
+	
 	ignoredMacros.erase(name.getLexeme());
 
-	return expanded;
+	return expandedExpression;
 }
 
 FunctionMacro::FunctionMacro(Token _name, unordered_map<string, int> _argumentToIndex) {
@@ -109,14 +117,19 @@ FunctionMacro::FunctionMacro(Token _name, unordered_map<string, int> _argumentTo
 
 // Expands a function-like macro. First fully expands the arguments, then substitutes them into the macro body, and finally it expands the whole macro body again.
 vector<Token> FunctionMacro::expand(unordered_map<string, unique_ptr<Macro>>& macros, unordered_set<string>& ignoredMacros, vector<Token>& source, int& i) {
-	Token macroName = source[i];
+	// Call this macro only if provided with arguments
+	if (getTypeAt(source, i + 1) != TokenType::LEFT_PAREN && !(getTypeAt(source, i + 1) == TokenType::WHITESPACE && getTypeAt(source, i + 2) == TokenType::LEFT_PAREN)) return { source[i] };
+	
+	Token macroToken = source[i];
+	// All tokens in the expansion of this macro will have this "macroToken" as their parent token
+	std::shared_ptr<Token> macroTokenPtr = std::make_shared<Token>(macroToken);
 	
 	// Retrieve arguments for macro
 	vector<vector<Token>> args = getArguments(source, i);
 	
 	// Check for correct number of arguments provided
 	if (args.size() != argumentToIndex.size()) {
-		addCompileError(std::format("Macro requires {} arguments, but was provided with {}.", argumentToIndex.size(), args.size()), macroName);
+		addCompileError(std::format("Macro requires {} arguments, but was provided with {}.", argumentToIndex.size(), args.size()), macroToken);
 		return vector<Token>();
 	}
 	
@@ -124,17 +137,25 @@ vector<Token> FunctionMacro::expand(unordered_map<string, unique_ptr<Macro>>& ma
 
 	// Expand arguments
 	for (int i = 0; i < (int)args.size(); i++) {
-		args[i] = macroExpandExpression(macros, ignoredMacros, args[i]);
+		args[i] = macroExpandExpression(macros, ignoredMacros, args[i], nullptr);
 	}
 
 	// Substitute arguments into macro body
 	for (int i = 0; i < (int)value.size(); i++) {
 		Token& token = value[i];
+
+		token.setOriginPointers(macroTokenPtr);
+
 		if (token.type != TokenType::IDENTIFIER) { substitutedExpression.push_back(token); continue; }
-		// Expand variables
+		// Expand arguments
 		if (argumentToIndex.contains(token.getLexeme())) {
+			std::shared_ptr<Token> argTokenPtr = std::make_shared<Token>(token);
 			int argIndex = argumentToIndex[token.getLexeme()];
 			substitutedExpression.insert(substitutedExpression.end(), args[argIndex].begin(), args[argIndex].end());
+
+			for (Token& subToken : substitutedExpression) {
+				subToken.setOriginPointers(argTokenPtr, macroTokenPtr);
+			}
 		}
 		// Non-macro identifier
 		else {
@@ -144,7 +165,7 @@ vector<Token> FunctionMacro::expand(unordered_map<string, unique_ptr<Macro>>& ma
 
 	ignoredMacros.insert(name.getLexeme());
 
-	vector<Token> expandedExpression = macroExpandExpression(macros, ignoredMacros, substitutedExpression);
+	vector<Token> expandedExpression = macroExpandExpression(macros, ignoredMacros, substitutedExpression, nullptr);
 
 	ignoredMacros.erase(name.getLexeme());
 
@@ -327,6 +348,8 @@ vector<Token> Preprocessor::processDirectivesAndMacros(CSLModule* unit) {
 			resultTokens.push_back(token);
 		}
 	}
+
+	addCompileError("Test", resultTokens[0]);
 
 	unit->tokens = resultTokens;
 

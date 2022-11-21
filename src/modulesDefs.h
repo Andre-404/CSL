@@ -48,21 +48,33 @@ struct File {
 //span of characters in a source file of code
 struct Span {
 	//sourceFile.lines[line - 1] + column is the start of the string
-	uInt64 line;
-	uInt64 column;
-	uInt64 length;
+	int line = 0;
+	int column = 0;
+	int length = 0;
 
-	File* sourceFile;
-	Span() {
-		line = 0;
-		column = 0;
-		length = 0;
-		sourceFile = nullptr;
-	}
-	Span(uInt64 _line, uInt64 _column, uInt64 _len, File* _src) : line(_line), column(_column), length(_len), sourceFile(_src) {};
+	File* sourceFile = nullptr;
+	
+	Span() {};
+	Span(int _line, int _column, int _len, File* _src) : line(_line), column(_column), length(_len), sourceFile(_src) {};
+	
+	// Get string corresponding to this Span
 	string getStr() const {
-		uInt64 start = sourceFile->lines[line - 1] + column;
+		int start = sourceFile->lines[line] + column;
 		return sourceFile->sourceFile.substr(start, length);
+	}
+
+	// Get the entire line this span is in.
+	string getLine() const {
+		int start = sourceFile->lines[line];
+		// If this Span is located on the last line of the file, then the line ends at the end of the file.
+		int end = (line + 1 >= sourceFile->lines.size()) ? sourceFile->sourceFile.size() : sourceFile->lines[line + 1];
+		
+		string line = sourceFile->sourceFile.substr(start, end - start);
+		
+		// Remove the '\n' at the end of the line.
+		if (line.back() == '\n') line.pop_back();
+		
+		return line;
 	}
 };
 
@@ -72,23 +84,24 @@ struct Token {
 
 	//for things like synthetic tokens and expanded macros
 	bool isSynthetic;
-	std::shared_ptr<Token> ptr;
+	std::shared_ptr<Token> parentPtr; // Pointer to the token this token originated from
+	std::shared_ptr<Token> macroPtr; // Pointer to the macro this token originated from
 	//default constructor
 	Token() {
 		isSynthetic = false;
-		ptr = nullptr;
+		parentPtr = nullptr;
 		type = TokenType::LEFT_PAREN;
 	}
 	//construct a token from source file string data
 	Token(Span _str, TokenType _type) {
 		isSynthetic = false;
-		ptr = nullptr;
+		parentPtr = nullptr;
 		str = _str;
 		type = _type;
 	}
 	//construct a token which doesn't appear in the source file(eg. splitting a += b into a = a + b, where '+' is synthetic)
 	Token(TokenType _type, Token parentToken) {
-		ptr = std::shared_ptr<Token>(new Token(parentToken));
+		parentPtr = std::make_shared<Token>(parentToken);
 		isSynthetic = true;
 		type = _type;
 	}
@@ -97,9 +110,18 @@ struct Token {
 		return str.getStr();
 	}
 
-	void addParentToken(Token token) {
-		ptr = std::shared_ptr<Token>(new Token(token));
+	// Expanded from macro arguments
+	void setOriginPointers(std::shared_ptr<Token> _parentPtr, std::shared_ptr<Token> _macroPtr) {
+		parentPtr = _parentPtr;
+		macroPtr = _macroPtr;
 	}
+
+	// Expanded from macro body
+	void setOriginPointers(std::shared_ptr<Token> _macroPtr) {
+		parentPtr = _macroPtr;
+		macroPtr = _macroPtr;
+	}
+
 };
 
 struct CSLModule {

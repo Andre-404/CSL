@@ -44,7 +44,7 @@ Scanner::Scanner() {
 vector<Token> Scanner::tokenizeSource(string source, string sourceName) {
 	// Setup
 	curFile = new File(source, sourceName);
-	line = 1;
+	line = 0;
 	start = 0;
 	current = start;
 	curFile->lines.push_back(0);
