@@ -155,6 +155,7 @@
     <ClCompile Include="src\ErrorHandling\errorHandler.cpp" />
     <ClCompile Include="src\files.cpp" />
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\Parsing\ASTPrinter.cpp" />
     <ClCompile Include="src\Parsing\parser.cpp" />
     <ClCompile Include="src\Preprocessing\preprocessor.cpp" />
     <ClCompile Include="src\Preprocessing\scanner.cpp" />
@@ -165,6 +166,7 @@
     <ClInclude Include="src\files.h" />
     <ClInclude Include="src\modulesDefs.h" />
     <ClInclude Include="src\Parsing\ASTDefs.h" />
+    <ClInclude Include="src\Parsing\ASTPrinter.h" />
     <ClInclude Include="src\Parsing\parser.h" />
     <ClInclude Include="src\Preprocessing\preprocessor.h" />
     <ClInclude Include="src\Preprocessing\scanner.h" />
