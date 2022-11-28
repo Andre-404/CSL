@@ -1,6 +1,6 @@
 #pragma once
 #include "gcArray.h"
-#include "../codegenDefs.h"
+#include "../Codegen/codegenDefs.h"
 
 namespace object {
 	class CSLString;

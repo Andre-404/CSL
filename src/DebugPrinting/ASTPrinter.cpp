@@ -91,6 +91,10 @@ void ASTPrinter::visitSuperExpr(SuperExpr* expr) {
 	cout << "super." << expr->methodName.getLexeme();
 }
 
+void ASTPrinter::visitModuleAccessExpr(ModuleAccessExpr* expr) {
+	cout << expr->moduleName.getLexeme() << "::" << expr->ident.getLexeme();
+}
+
 
 
 void ASTPrinter::visitVarDecl(VarDecl* decl) {

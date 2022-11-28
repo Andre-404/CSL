@@ -1,5 +1,5 @@
 #pragma once
-#include "ASTDefs.h"
+#include "../Parsing/ASTDefs.h"
 
 namespace AST {
 	//used for debugging, controlled with AST_DEBUG in common.h
@@ -16,6 +16,7 @@ namespace AST {
 		void visitStructLiteralExpr(StructLiteral* expr);
 		void visitLiteralExpr(LiteralExpr* expr);
 		void visitSuperExpr(SuperExpr* expr);
+		void visitModuleAccessExpr(ModuleAccessExpr* expr);
 
 		void visitVarDecl(VarDecl* decl);
 		void visitFuncDecl(FuncDecl* decl);

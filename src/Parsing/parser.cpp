@@ -1,6 +1,6 @@
 #include "parser.h"
 #include "../ErrorHandling/errorHandler.h"
-#include "ASTPrinter.h"
+#include "../DebugPrinting/ASTPrinter.h"
 
 using std::make_shared;
 using namespace AST;
@@ -32,7 +32,7 @@ namespace AST {
 				cur->consume(TokenType::RIGHT_PAREN, "Expected ')' at the end of grouping expression.");
 				return make_shared<GroupingExpr>(expr);
 			}
-									  //Array literal
+			//Array literal
 			case TokenType::LEFT_BRACKET: {
 				vector<ASTNodePtr> members;
 				if (!(cur->peek().type == TokenType::RIGHT_BRACKET)) {
@@ -43,7 +43,7 @@ namespace AST {
 				cur->consume(TokenType::RIGHT_BRACKET, "Expect ']' at the end of an array literal.");
 				return make_shared<ArrayLiteralExpr>(members);
 			}
-										//Struct literal
+			//Struct literal
 			case TokenType::LEFT_BRACE: {
 				vector<structEntry> entries;
 				if (!(cur->peek().type == TokenType::RIGHT_BRACE)) {
@@ -58,7 +58,7 @@ namespace AST {
 				cur->consume(TokenType::RIGHT_BRACE, "Expect '}' after struct literal.");
 				return make_shared<StructLiteral>(entries);
 			}
-									  //number, string, boolean or nil
+			//number, string, boolean or nil
 			default:
 				return make_shared<LiteralExpr>(token);
 			}
@@ -130,9 +130,18 @@ namespace AST {
 		}
 	};
 
-	//any binary operation
+	//any binary operation + module alias access operator(::)
 	class binaryExpr : public InfixParselet {
 		ASTNodePtr parse(ASTNodePtr left, Token token, int surroundingPrec) {
+			if (token.type == TokenType::DOUBLE_COLON) {
+				//dynamic cast B2D is dumb but its the best solution for this outlier
+				if (dynamic_cast<LiteralExpr*>(left.get())) {
+					LiteralExpr* expr = dynamic_cast<LiteralExpr*>(left.get());
+					Token ident = cur->consume(TokenType::IDENTIFIER, "Expected variable name.");
+					make_shared<ModuleAccessExpr>(expr->token, ident);
+				}
+				else cur->error(token, "Expected module name identifier.");
+			}
 			ASTNodePtr right = cur->expression(prec);
 			return make_shared<BinaryExpr>(left, token, right);
 		}

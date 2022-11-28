@@ -28,7 +28,6 @@ CSLString* CSLString::createString(char* from, uInt64 length) {
 	return str;
 }
 
-
 void CSLString::move(byte* newAddress) {
 	memmove(newAddress, this, getSize());
 }

@@ -7,11 +7,12 @@
     <ClCompile Include="src\Preprocessing\preprocessor.cpp" />
     <ClCompile Include="src\ErrorHandling\errorHandler.cpp" />
     <ClCompile Include="src\Parsing\parser.cpp" />
-    <ClCompile Include="src\Parsing\ASTPrinter.cpp" />
+    <ClCompile Include="src\DebugPrinting\ASTPrinter.cpp" />
     <ClCompile Include="src\MemoryManagment\heapObject.cpp" />
     <ClCompile Include="src\MemoryManagment\garbageCollector.cpp" />
     <ClCompile Include="src\DataStructures\hashMap.cpp" />
     <ClCompile Include="src\Objects\objects.cpp" />
+    <ClCompile Include="src\Codegen\codegenDefs.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Preprocessing\scanner.h" />
@@ -22,12 +23,12 @@
     <ClInclude Include="src\modulesDefs.h" />
     <ClInclude Include="src\Parsing\ASTDefs.h" />
     <ClInclude Include="src\Parsing\parser.h" />
-    <ClInclude Include="src\Parsing\ASTPrinter.h" />
+    <ClInclude Include="src\DebugPrinting\ASTPrinter.h" />
     <ClInclude Include="src\MemoryManagment\heapObject.h" />
     <ClInclude Include="src\MemoryManagment\garbageCollector.h" />
     <ClInclude Include="src\Objects\objects.h" />
     <ClInclude Include="src\DataStructures\gcArray.h" />
     <ClInclude Include="src\DataStructures\hashMap.h" />
-    <ClInclude Include="src\codegenDefs.h" />
+    <ClInclude Include="src\Codegen\codegenDefs.h" />
   </ItemGroup>
 </Project>

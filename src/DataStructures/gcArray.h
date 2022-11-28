@@ -64,7 +64,7 @@ public:
 	}
 
 	void remove(uInt64 index) {
-		//removes the item and slides all items above it down by 1 position
+		//removes the item and slides all items above index down by 1 position
 		if (index >= count) {
 			std::cout << std::format("Tried deleting item at index {}, array size is {}.", index, count);
 			exit(64);
@@ -74,12 +74,14 @@ public:
 		count--;
 	}
 
+	//appends contents from one other at the end of this
 	void addAll(ManagedArray<T>& other) {
 		checkSize(count + other.count);
-
+		
 		T* from = reinterpret_cast<T*>(other.header->getPtr());
 		T* to = reinterpret_cast<T*>(header->getPtr()) + count;
 		memcpy(to, from, other.count * sizeof(T));
+		count = count + other.count;
 	}
 
 	void insert(T item, uInt64 index) {
@@ -88,7 +90,7 @@ public:
 			exit(64);
 		}
 		checkSize(count + 1);
-
+		//moves everything above index one place above, then inserts item at index
 		T* from = reinterpret_cast<T*>(header->getPtr()) + index;
 		T* to = reinterpret_cast<T*>(header->getPtr()) + index + 1;
 		memmove(to, from, (count - index) * sizeof(T));

@@ -39,7 +39,7 @@ namespace memory {
 				block = new byte[size];
 			}
 			catch (const std::bad_alloc& e) {
-				errorHandler::addSystemError(std::format("Failed allocation, tried to allocate {}", size));
+				errorHandler::addSystemError(std::format("Failed allocation, tried to allocate {} bytes", size));
 				throw errorHandler::SystemException();
 			}
 			//this is fine to do since we won't be accessing 'block' ptr until after the object is initialized

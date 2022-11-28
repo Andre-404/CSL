@@ -1,9 +1,21 @@
 #pragma once
 #include "../MemoryManagment/heapObject.h"
+#include "../Codegen/codegenDefs.h"
+#include "../DataStructures/hashMap.h"
 namespace object {
 
 	enum class ObjType {
-		STRING
+		STRING,
+		FUNC,
+		NATIVE,
+		ARRAY,
+		CLOSURE,
+		UPVALUE,
+		CLASS,
+		INSTANCE,
+		BOUND_METHOD,
+		THREAD,
+		FILE
 	};
 
 	class Obj : public memory::HeapObject{

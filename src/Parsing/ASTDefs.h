@@ -16,6 +16,7 @@ namespace AST {
 	class StructLiteral;
 	class LiteralExpr;
 	class SuperExpr;
+	class ModuleAccessExpr;
 
 	class VarDecl;
 	class FuncDecl;
@@ -48,6 +49,7 @@ namespace AST {
 		virtual void visitStructLiteralExpr(StructLiteral* expr) = 0;
 		virtual void visitLiteralExpr(LiteralExpr* expr) = 0;
 		virtual void visitSuperExpr(SuperExpr* expr) = 0;
+		virtual void visitModuleAccessExpr(ModuleAccessExpr* expr) = 0;
 
 		virtual void visitVarDecl(VarDecl* decl) = 0;
 		virtual void visitFuncDecl(FuncDecl* decl) = 0;
@@ -256,6 +258,21 @@ namespace AST {
 		}
 		void accept(visitor* vis) {
 			vis->visitStructLiteralExpr(this);
+		}
+	};
+
+	class ModuleAccessExpr : public ASTNode {
+	public:
+		Token moduleName;
+		Token ident;
+
+		ModuleAccessExpr(Token _moduleName, Token _ident) {
+			moduleName = _moduleName;
+			ident = _ident;
+		}
+
+		void accept(visitor* vis) {
+			vis->visitModuleAccessExpr(this);
 		}
 	};
 
