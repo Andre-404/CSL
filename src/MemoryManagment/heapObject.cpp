@@ -3,7 +3,7 @@
 
 
 namespace memory {
-	void* __allocObj(size_t size) {
+	void* __allocObj(uInt64 size) {
 		return gc.alloc(size);
 	}
 }

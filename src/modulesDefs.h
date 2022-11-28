@@ -30,9 +30,9 @@ enum class TokenType {
 	CLASS, THIS, SUPER,
 	SWITCH, CASE, DEFAULT,
 	PRINT, VAR,
-	IMPORT, ADDMACRO, REMOVEMACRO, EXPORT,
+	IMPORT, ADDMACRO, REMOVEMACRO, EXPORT, AS,
 
-	WHITESPACE, NEWLINE, ERROR, TOKEN_EOF
+	WHITESPACE, NEWLINE, ERROR, TOKEN_EOF, NONE
 };
 
 struct File {
@@ -90,7 +90,7 @@ struct Token {
 	Token() {
 		isSynthetic = false;
 		parentPtr = nullptr;
-		type = TokenType::LEFT_PAREN;
+		type = TokenType::NONE;
 	}
 	//construct a token from source file string data
 	Token(Span _str, TokenType _type) {
@@ -125,10 +125,19 @@ struct Token {
 
 };
 
+struct CSLModule;
+
+struct Dependency {
+	Token alias;
+	CSLModule* module;
+
+	Dependency(Token _alias, CSLModule* _module) : alias(_alias), module(_module) {};
+};
+
 struct CSLModule {
 	File* file;
 	vector<Token> tokens;
-	vector<CSLModule*> deps;
+	vector<Dependency> deps;
 	//whether the dependency tree of this module has been resolved, if it hasn't and we try to parse
 	//this module again we have a circular dependency and an error will be thrown
 	bool resolvedDeps;

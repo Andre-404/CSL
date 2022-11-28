@@ -173,9 +173,6 @@ namespace AST {
 				Token fieldName = cur->consume(TokenType::IDENTIFIER, "Expected a field identifier.");
 				field = make_shared<LiteralExpr>(fieldName);
 			}
-			else {
-				//throw error
-			}
 			//if we have something like arr[0] = 1 or struct.field = 1 we can't parse it with the assignment expr
 			//this handles that case and produces a special set expr
 			//we also check the precedence level of the surrounding expression, so "a + b.c = 3" doesn't get parsed
@@ -290,7 +287,7 @@ vector<TranslationUnit*> Parser::parse(vector<CSLModule*> modules) {
 		switchDepth = 0;
 		while (!isAtEnd()) {
 			try {
-				unit->stmts.push_back(exportDirective());
+				unit->stmts.push_back(topLevelDeclaration());
 				#ifdef AST_DEBUG
 				//prints statement
 				unit->stmts[unit->stmts.size() - 1]->accept(&printer);
@@ -333,7 +330,8 @@ ASTNodePtr Parser::expression() {
 }
 
 #pragma region Statements and declarations
-ASTNodePtr Parser::exportDirective() {
+//module level variables are put in a list to help with error reporting in compiler
+ASTNodePtr Parser::topLevelDeclaration() {
 	//export is only allowed in global scope
 	if (match(TokenType::EXPORT)) {
 		//after export only keywords allowed are: var, class, func
@@ -343,10 +341,21 @@ ASTNodePtr Parser::exportDirective() {
 		else if (match(TokenType::FUNC)) node = funcDecl();
 
 		curUnit->exports.push_back(node->getName());
+		curUnit->topDeclarations.push_back(node->getName());
 
 		return node;
 
 		throw error(peek(), "Expected variable, class or function declaration");
+	}
+	else {
+		shared_ptr<ASTDecl> node = nullptr;
+		if (match(TokenType::VAR)) node = varDecl();
+		else if (match(TokenType::CLASS)) node = classDecl();
+		else if (match(TokenType::FUNC)) node = funcDecl();
+		if (node != nullptr) {
+			curUnit->topDeclarations.push_back(node->getName());
+			return node;
+		}
 	}
 	return declaration();
 }

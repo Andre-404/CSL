@@ -4,11 +4,13 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <memory>
+#include <tuple>
 
 namespace preprocessing {
 	using std::unordered_set;
 	using std::unordered_map;
 	using std::unique_ptr;
+	using std::tuple;
 
 	class Macro {
 	public:
@@ -51,8 +53,8 @@ namespace preprocessing {
 
 		unordered_map<string, CSLModule*> allUnits;
 		vector<CSLModule*> sortedUnits;
-
-		vector<Token> processDirectivesAndMacros(CSLModule* unit);
+		
+		vector<tuple<Token, Token>> processDirectivesAndMacros(CSLModule* unit);
 
 		CSLModule* scanFile(string unitName);
 		void topsort(CSLModule* unit);

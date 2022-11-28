@@ -49,6 +49,8 @@ namespace AST {
 		CSLModule* src;
 		//exported declarations
 		vector<Token> exports;
+		//used by the compiler to look up if a global variable exists since globals are runtime bound
+		vector<Token> topDeclarations;
 
 		TranslationUnit(CSLModule* pUnit) {
 			src = pUnit;
@@ -93,7 +95,7 @@ namespace AST {
 #pragma endregion
 
 #pragma region Statements
-		ASTNodePtr exportDirective();
+		ASTNodePtr topLevelDeclaration();
 		ASTNodePtr declaration();
 		shared_ptr<ASTDecl> varDecl();
 		shared_ptr<ASTDecl> funcDecl();
