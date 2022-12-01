@@ -18,6 +18,7 @@ namespace memory {
 		void* alloc(uInt64 size);
 		void collect(runtime::VM* vm);
 		void collect(compileTools::Compiler* compiler);
+		void markObj(HeapObject* obj);
 		GarbageCollector();
 	private:
 		std::unique_ptr<byte> memoryBlock;
@@ -25,21 +26,24 @@ namespace memory {
 		uInt64 memoryBlockSize;
 
 		bool shouldCompact;
+		//reset after each heap collection, calculated in 'markObj'
+		//used before 'computeCompactedAddress' to allocated a new heap
+		uInt64 shrinkedHeapSize;
 
 		vector<HeapObject*> tempAllocs;
 
 		vector<HeapObject*> markStack;
 
-		uInt64 mark();
-		uInt64 markRoots(runtime::VM* vm);
-		uInt64 markRoots(compileTools::Compiler* compiler);
+		void mark();
+		void markRoots(runtime::VM* vm);
+		void markRoots(compileTools::Compiler* compiler);
 		void computeCompactedAddress(byte* start);
 		void updatePtrs();
 		void updateRootPtrs(runtime::VM* vm);
 		void updateRootPtrs(compileTools::Compiler* compiler);
 		void compact(byte* start);
 
-		uInt64 traceObj(HeapObject* obj);
+		void traceObj(HeapObject* obj);
 	};
 
 	extern GarbageCollector gc;

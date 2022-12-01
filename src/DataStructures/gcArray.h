@@ -1,5 +1,6 @@
 #pragma once
 #include "../MemoryManagment/heapObject.h"
+#include "../MemoryManagment/garbageCollector.h"
 #include <immintrin.h>
 #include "../ErrorHandling/errorHandler.h"
 #include <iostream>
@@ -21,15 +22,15 @@ class ArrHeader : public memory::HeapObject {
 		void move(byte* newAddress) {
 			memmove(newAddress, this, getSize());
 		}
-		void updateInteralPointers() {
+		void updateInternalPointers() {
 			//nothing to update
 		}
 		uInt64 getSize() {
 			//+1 for terminator byte
 			return sizeof(ArrHeader) + size * sizeOfType;
 		}
-		void mark(vector<HeapObject*>& stack) {
-			moveTo = this;
+		void mark() {
+			memory::gc.markObj(this);
 		}
 		byte* getPtr() {
 			return reinterpret_cast<byte*>(this) + sizeof(ArrHeader);
@@ -54,6 +55,14 @@ public:
 		resize(size);
 		T* arr = reinterpret_cast<T*>(header->getPtr());
 		for (int i = 0; i < size; i++) arr[i] = T();
+	}
+
+	ManagedArray(uInt64 size, T val) {
+		count = size;
+		header = nullptr;
+		resize(size);
+		T* arr = reinterpret_cast<T*>(header->getPtr());
+		for (int i = 0; i < size; i++) arr[i] = val;
 	}
 
 	void push(T item) {
@@ -115,7 +124,7 @@ public:
 		return *(reinterpret_cast<T*>(header->getPtr()) + index);
 	}
 
-	ManagedArray<T>& operator=(ManagedArray<T>& other) {
+	ManagedArray<T>& operator=(ManagedArray<T> other) {
 		if (this == &other) return *this;
 
 		header = std::exchange(other.header, nullptr);
@@ -125,6 +134,14 @@ public:
 
 	uInt64 size() {
 		return count;
+	}
+
+	void mark() {
+		header->mark();
+	}
+
+	void updateInternalPtr() {
+		header = reinterpret_cast<ArrHeader*>(header->moveTo);
 	}
 private:
 	ArrHeader* header;

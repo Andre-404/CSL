@@ -1,7 +1,9 @@
 #include "hashMap.h"
 #include "../Objects/objects.h"
+#include "../MemoryManagment/heapObject.h"
+#include "../MemoryManagment/garbageCollector.h"
 
-#define TOMBSTONE (CSLString*)0x000001
+#define TOMBSTONE (ObjString*)0x000001
 #define TABLE_LOAD_FACTOR 0.65//arbitrary, test and see what's best
 
 using namespace object;
@@ -11,7 +13,7 @@ HashMap::HashMap() {
 }
 
 //returns true if 'key' wasn't already present in the hash table
-bool HashMap::set(CSLString* key, Value val) {
+bool HashMap::set(ObjString* key, Value val) {
 	//adjust array size based on load factor, array size should be power of 2 for best performance
 	if (count + 1 >= entries.size() * TABLE_LOAD_FACTOR) {
 		//arbitrary value, should be tested and changed
@@ -28,7 +30,7 @@ bool HashMap::set(CSLString* key, Value val) {
 }
 
 //returns true if we managed to find the entry and puts the value of the entry in 'val'
-bool HashMap::get(CSLString* key, Value* val) {
+bool HashMap::get(ObjString* key, Value* val) {
 	if (count == 0) return false;
 
 	HashEntry* entry = findEntry(entries, key);
@@ -39,7 +41,7 @@ bool HashMap::get(CSLString* key, Value* val) {
 }
 
 //O(n) but we rarely use it so it's fine
-CSLString* HashMap::getKey(Value val) {
+ObjString* HashMap::getKey(Value val) {
 	for (int i = 0; i < entries.size(); i++) {
 		Value& toCompare = entries[i].val;
 		if (val.equals(toCompare)) return entries[i].key;
@@ -48,7 +50,7 @@ CSLString* HashMap::getKey(Value val) {
 }
 
 //returns true if deletion was succesful, and false otherwise
-bool HashMap::del(CSLString* key) {
+bool HashMap::del(ObjString* key) {
 	if (count == 0) return false;
 
 	// Find the entry.
@@ -89,7 +91,7 @@ void HashMap::resize(uInt64 newCapacity) {
 	entries = newEntries;
 }
 
-HashEntry* HashMap::findEntry(ManagedArray<HashEntry>& _entries, CSLString* key) {
+HashEntry* HashMap::findEntry(ManagedArray<HashEntry>& _entries, ObjString* key) {
 	//instead of using modulo operator, we take the remainder of the division of the hash and table capacity
 	//by &, this will always work because _entries.size() is a power of 2
 	uInt64 bitMask = _entries.size() - 1;
@@ -116,7 +118,7 @@ HashEntry* HashMap::findEntry(ManagedArray<HashEntry>& _entries, CSLString* key)
 
 //both the compiler and VM have a HashMap with created strings, this ensures no duplicate strings are ever created
 //when a new string is created we first run it through this function and if the same string exists in the HashMap 'newStrnig' is discarded
-CSLString* findInternedString(HashMap* table, CSLString* newString) {
+ObjString* findInternedString(HashMap* table, ObjString* newString) {
 	if (table->count == 0) return nullptr;
 	uInt64 hash = newString->hash;
 
@@ -135,4 +137,26 @@ CSLString* findInternedString(HashMap* table, CSLString* newString) {
 		//make sure to loop back to the start of the array if we exceed the array length
 		index = (index + 1) & bitMask;
 	}
+}
+
+void HashMap::mark() {
+	for (int i = 0; i < entries.size(); i++) {
+		HashEntry* entry = &entries[i];
+		if (entry->key && entry->key != TOMBSTONE) {
+			memory::gc.markObj(entry->key);
+			entry->val.mark();
+		}
+	}
+	entries.mark();
+}
+
+void HashMap::updateInternalPtrs() {
+	for (int i = 0; i < entries.size(); i++) {
+		HashEntry* entry = &entries[i];
+		if (entry->key && entry->key != TOMBSTONE) {
+			entry->key = reinterpret_cast<ObjString*>(entry->key->moveTo);
+			entry->val.updatePtr();
+		}
+	}
+	entries.updateInternalPtr();
 }

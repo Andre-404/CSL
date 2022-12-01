@@ -3,6 +3,28 @@
 
 namespace object {
 	class Obj;
+
+	class ObjString;
+
+	class ObjArray;
+
+	class ObjFunc;
+
+	class ObjNativeFunc;
+
+	class ObjUpval;
+
+	class ObjClosure;
+
+	class ObjClass;
+
+	class ObjBoundMethod;
+
+	class ObjInstance;
+
+	class ObjThread;
+
+	class ObjFile;
 }
 
 enum class ValueType {
@@ -46,6 +68,42 @@ struct Value {
 	bool equals(Value other) {
 		return false;
 	}
+
+	#pragma region Helpers
+	bool isBool() { return type == ValueType::BOOL; };
+	bool isNumber() { return type == ValueType::NUM; };
+	bool isNil() { return type == ValueType::NIL; };
+	bool isObj() { return type == ValueType::OBJ; };
+
+	bool asBool() { return as.boolean; }
+	double asNum() { return as.number; }
+	object::Obj* asObj() { return as.object; }
+
+	bool isString();
+	bool isFunction();
+	bool isNativeFn();
+	bool isArray();
+	bool isClosure();
+	bool isClass();
+	bool isInstance();
+	bool isBoundMethod();
+	bool isThread();
+	bool isFile();
+
+	object::ObjString* asString();
+	object::ObjFunc* asFunction();
+	object::ObjNativeFunc* asNativeFn();
+	object::ObjArray* asArray();
+	object::ObjClosure* asClosure();
+	object::ObjClass* asClass();
+	object::ObjInstance* asInstance();
+	object::ObjBoundMethod* asBoundMethod();
+	object::ObjThread* asThread();
+	object::ObjFile* asFile();
+
+	void mark();
+	void updatePtr();
+	#pragma endregion
 };
 
 enum class OpCode {
@@ -162,7 +220,7 @@ public:
 
 	ManagedArray<uint8_t> code;
 	ManagedArray<Value> constants;
-	Chunk() {};
+	Chunk();
 	void writeData(uint8_t opCode, uInt line, string& name);
 	codeLine getLine(uInt offset);
 	void disassemble(string name);

@@ -50,14 +50,13 @@ namespace memory {
 	}
 
 	void GarbageCollector::collect(runtime::VM* vm) {
-		uInt64 newSize = 0;
-		newSize += markRoots(vm);
-		newSize += mark();
+		markRoots(vm);
+		mark();
 
 		unique_ptr<byte> ptr = nullptr;
-		if (newSize > memoryBlockSize * 0.9) {
+		if (shrinkedHeapSize > memoryBlockSize * 0.9) {
 			//Amortized size to reduce the number of future resizes
-			memoryBlockSize = (1ll << (64 - _lzcnt_u64(newSize - 1)));
+			memoryBlockSize = (1ll << (64 - _lzcnt_u64(shrinkedHeapSize - 1)));
 
 			ptr = unique_ptr<byte>(new byte[memoryBlockSize]);
 		}
@@ -76,17 +75,17 @@ namespace memory {
 			delete obj;
 		}
 		tempAllocs.clear();
+		shrinkedHeapSize = 0;
 	}
 
 	void GarbageCollector::collect(compileTools::Compiler* compiler) {
-		uInt64 newSize = 0;
-		newSize += markRoots(compiler);
-		newSize += mark();
+		markRoots(compiler);
+		mark();
 
 		unique_ptr<byte> ptr = nullptr;
-		if (newSize > memoryBlockSize * 0.9) {
+		if (shrinkedHeapSize > memoryBlockSize * 0.9) {
 			//Amortized size to reduce the number of future resizes
-			memoryBlockSize = (1ll << (64 - _lzcnt_u64(newSize - 1)));
+			memoryBlockSize = (1ll << (64 - _lzcnt_u64(shrinkedHeapSize - 1)));
 
 			ptr = unique_ptr<byte>(new byte[memoryBlockSize]);
 		}
@@ -100,25 +99,28 @@ namespace memory {
 		//if we allocated a new memory block, we give the ownership of that ptr to 'memoryBlock'
 		//the old memory block is put into 'ptr' and released as soon as this funciton finishes executing
 		if (ptr.get() != nullptr) std::swap(memoryBlock, ptr);
+
+		for (HeapObject* obj : tempAllocs) {
+			delete obj;
+		}
+		tempAllocs.clear();
+		shrinkedHeapSize = 0;
 	}
 
-	uInt64 GarbageCollector::mark() {
-		uInt64 size = 0;
+	void GarbageCollector::mark() {
 		//we use a stack to avoid going into a deep recursion(which might fail)
 		while (markStack.size() != 0) {
 			HeapObject* ptr = markStack.back();
 			markStack.pop_back();
-			size += traceObj(ptr);
 		}
-		return size;
 	}
 
-	uInt64 GarbageCollector::markRoots(runtime::VM* vm) {
-		return 0;
+	void GarbageCollector::markRoots(runtime::VM* vm) {
+
 	}
 
-	uInt64 GarbageCollector::markRoots(compileTools::Compiler* compiler) {
-		return 0;
+	void GarbageCollector::markRoots(compileTools::Compiler* compiler) {
+		
 	}
 
 	void GarbageCollector::computeCompactedAddress(byte* start) {
@@ -146,14 +148,14 @@ namespace memory {
 		while (current < heapTop) {
 			HeapObject* temp = reinterpret_cast<HeapObject*>(current);
 			if (temp->moveTo) {
-				temp->updateInteralPointers();
+				temp->updateInternalPointers();
 			}
 			current += temp->getSize();
 		}
 
 		for (HeapObject* curObject : tempAllocs) {
 			if (curObject->moveTo) {
-				curObject->updateInteralPointers();
+				curObject->updateInternalPointers();
 			}
 		}
 	}
@@ -203,10 +205,16 @@ namespace memory {
 		heapTop = newStackTop;
 	}
 
-	uInt64 GarbageCollector::traceObj(HeapObject* obj) {
-		if (!obj || obj->moveTo != nullptr) return 0;
+	void GarbageCollector::traceObj(HeapObject* obj) {
+		if (!obj || obj->moveTo != nullptr) return;
 		obj->moveTo = obj;
-		obj->mark(markStack);
-		return obj->getSize();
+		obj->mark();
+	}
+
+	void GarbageCollector::markObj(HeapObject* ptr) {
+		if (!ptr) return;
+		if (ptr->moveTo != nullptr) return;
+		shrinkedHeapSize += ptr->getSize();
+		markStack.push_back(ptr);
 	}
 }
