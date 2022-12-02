@@ -5,6 +5,10 @@
 #include "../DataStructures/gcArray.h"
 #include <fstream>
 
+namespace runtime {
+	class VM;
+}
+
 namespace object {
 
 	enum class ObjType {
@@ -36,7 +40,7 @@ namespace object {
 	class ObjString : public Obj {
 	public:
 		uInt64 size;
-		uInt64 hash;
+		uInt64 hash;//only computed on string creation
 
 		ObjString(uInt64 length);
 
@@ -117,7 +121,6 @@ namespace object {
 	public:
 		ObjFunc* func;
 		ManagedArray<ObjUpval*> upvals;
-		ObjThread* stackOrigin;
 		ObjClosure(ObjFunc* _func);
 
 		void move(byte* to);
@@ -166,31 +169,24 @@ namespace object {
 		void mark();
 	};
 
-	enum class fileType {
-		READONLY,
-		WRITEONLY,
-		READ_AND_WRITE,
-	};
-
-	class ObjFile : public Obj {
-	public:
-		std::fstream file;
-		fileType type;
-
-		ObjFile(fileType _type) : type(_type) {};
-
-		void move(byte* to) {}
-		size_t getSize() { return sizeof(ObjFile); }
-		void updateInternalPointers() {};
-		void mark() {}
-	};
-
 	class ObjThread : public Obj {
 	public:
-		void move(byte* to) {}
+		Value stack[STACK_MAX];
+		Value* stackTop;
+		ManagedArray<ObjUpval*> openUpvals;
+		CallFrame frames[FRAMES_MAX];
+		int frameCount;
+		ObjClosure* codeBlock;
+		 
+		//execution stuff stuff
+		runtime::VM* vm;
+		ThreadState state;
+		ObjThread* prevThread;
+
+		void move(byte* to);
 		size_t getSize() { return sizeof(ObjThread); }
-		void updateInternalPointers() {};
-		void mark() {}
+		void updateInternalPointers();
+		void mark();
 	};
 
 }

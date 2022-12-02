@@ -79,7 +79,7 @@ namespace AST {
 		virtual Token getName() = 0;
 	};
 
-#pragma region Expressions
+	#pragma region Expressions
 
 	class AssignmentExpr : public ASTNode {
 	public:
@@ -278,7 +278,7 @@ namespace AST {
 
 #pragma endregion
 
-#pragma region Statements
+	#pragma region Statements
 
 	//temporary, will replace with a native function
 	class PrintStmt : public ASTNode {

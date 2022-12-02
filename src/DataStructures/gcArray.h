@@ -30,7 +30,7 @@ class ArrHeader : public memory::HeapObject {
 			return sizeof(ArrHeader) + size * sizeOfType;
 		}
 		void mark() {
-			memory::gc.markObj(this);
+			//none
 		}
 		byte* getPtr() {
 			return reinterpret_cast<byte*>(this) + sizeof(ArrHeader);
@@ -83,7 +83,7 @@ public:
 		count--;
 	}
 
-	//appends contents from one other at the end of this
+	//appends contents from 'other' to the end of 'this'
 	void addAll(ManagedArray<T>& other) {
 		checkSize(count + other.count);
 		
@@ -137,7 +137,7 @@ public:
 	}
 
 	void mark() {
-		header->mark();
+		memory::gc.markObj(header);
 	}
 
 	void updateInternalPtr() {

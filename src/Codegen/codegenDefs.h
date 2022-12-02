@@ -226,3 +226,6 @@ public:
 	void disassemble(string name);
 	uInt addConstant(Value val);
 };
+
+#define FRAMES_MAX 256
+#define STACK_MAX (FRAMES_MAX * 256)

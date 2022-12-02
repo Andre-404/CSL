@@ -6,6 +6,7 @@ using namespace memory;
 
 #define TOMBSTONE (ObjString*)0x000001
 
+#pragma region ObjString
 //FNV-1a hash
 static uInt64 hashString(char* str, uInt length) {
 	uInt64 hash = 14695981039346656037u;
@@ -32,6 +33,13 @@ ObjString* ObjString::createString(char* from, uInt64 length) {
 	return str;
 }
 
+ObjString* createEmptyString(uInt64 length) {
+	//+1 for null terminator
+	void* ptr = memory::__allocObj(sizeof(ObjString) + length + 1);
+	ObjString* str = new(ptr) ObjString(length);
+	return str;
+}
+
 void ObjString::move(byte* newAddress) {
 	memmove(newAddress, this, getSize());
 }
@@ -43,7 +51,7 @@ uInt64 ObjString::getSize() {
 	return sizeof(ObjString) + size + 1;
 }
 void ObjString::mark() {
-	gc.markObj(this);
+	//nothing to mark
 }
 
 char* ObjString::getString() {
@@ -62,8 +70,7 @@ bool ObjString::compare(string other) {
 
 ObjString* ObjString::concat(ObjString* other) {
 	uInt64 len = other->size + size + 1;
-	char temp[1] = "";
-	ObjString* finalStr = createString(temp, len);
+	ObjString* finalStr = createEmptyString(len);
 	memcpy(finalStr->getString(), getString(), size);
 	//+1 for null terminator
 	memcpy(finalStr->getString() + size, other->getString(), other->size + 1);
@@ -72,7 +79,7 @@ ObjString* ObjString::concat(ObjString* other) {
 
 	return finalStr;
 }
-
+#pragma endregion
 
 #pragma region ObjFunction
 ObjFunc::ObjFunc() {
@@ -124,11 +131,11 @@ void ObjNativeFunc::move(byte* to) {
 }
 
 void ObjNativeFunc::updateInternalPointers() {
-	//none
+	//nothing
 }
 
 void ObjNativeFunc::mark() {
-	gc.markObj(this);
+	//nothing
 }
 #pragma endregion
 
@@ -151,6 +158,7 @@ void ObjClosure::updateInternalPointers() {
 	for (int i = 0; i < size; i++) {
 		if (upvals[i] != nullptr) upvals[i] = (ObjUpval*)upvals[i]->moveTo;
 	}
+	upvals.updateInternalPtr();
 }
 
 void ObjClosure::mark() {
@@ -175,6 +183,8 @@ void ObjUpval::move(byte* to) {
 	memmove(to, this, sizeof(ObjUpval));
 }
 
+//only updates if the upvalue is closed, no need to update an open upvalue since the value struct it points to gets
+//marked by ObjThread
 void ObjUpval::mark() {
 	if (!isOpen) closed.mark();
 }
@@ -202,20 +212,26 @@ void ObjArray::move(byte* to) {
 	memmove(to, this, sizeof(ObjArray));
 }
 
+//small optimization: if numOfHeapPtrs is 0 then we don't even scan the array for objects
+//and if there are objects we only scan until we find all objects
 void ObjArray::mark() {
-	if (numOfHeapPtr > 0) {
-		for (int i = 0; i < values.size(); i++) {
-			values[i].mark();
-		}
+	int temp = 0;
+	int i = 0;
+	uInt64 arrSize = values.size();
+	while (i < arrSize && temp < numOfHeapPtr) {
+		values[i].mark();
+		if(values[i].isObj()) temp++;
 	}
 	values.mark();
 }
 
 void ObjArray::updateInternalPointers() {
-	if (numOfHeapPtr > 0) {
-		for (int i = 0; i < values.size(); i++) {
-			values[i].updatePtr();
-		}
+	int temp = 0;
+	int i = 0;
+	uInt64 arrSize = values.size();
+	while (i < arrSize && temp < numOfHeapPtr) {
+		values[i].updatePtr();
+		if (values[i].isObj()) temp++;
 	}
 	values.updateInternalPtr();
 }
@@ -233,12 +249,12 @@ void ObjClass::move(byte* to) {
 }
 
 void ObjClass::mark() {
-	name->moveTo = name;
+	gc.markObj(name);
 	methods.mark();
 }
 
 void ObjClass::updateInternalPointers() {
-	name = (ObjString*)name->moveTo;
+	name = reinterpret_cast<ObjString*>(name->moveTo);
 	methods.updateInternalPtrs();
 }
 #pragma endregion
@@ -289,6 +305,48 @@ void ObjBoundMethod::updateInternalPointers() {
 }
 #pragma endregion
 
-#pragma region objFile
+#pragma region ObjThread
+void ObjThread::move(byte* to) {
+	memmove(to, this, sizeof(ObjThread));
+}
 
+void ObjThread::updateInternalPointers() {
+	for (int i = 0; i < openUpvals.size(); i++) {
+		ObjUpval* upval = openUpvals[i];
+		//since position of stack changes, every open upvals 'location' must be updated to new stack position
+		//we take the diff between current and next memory location, and then add the diff to 'location' field
+		uInt64 diff = moveTo - this;
+		upval->location += diff;
+		if (upval != nullptr) openUpvals[i] = reinterpret_cast<ObjUpval*>(upval->moveTo);
+
+	}
+	//update pointers for all values on stack
+	for (Value* i = stack; i < stackTop; i++) {
+		(*i).updatePtr();
+	}
+	for (int i = 0; i < frameCount; i++) {
+		CallFrame* frame = &frames[i];
+		frame->closure = reinterpret_cast<ObjClosure*>(frame->closure->moveTo);
+	}
+	codeBlock = reinterpret_cast<ObjClosure*>(codeBlock->moveTo);
+	prevThread = reinterpret_cast<ObjThread*>(prevThread->moveTo);
+	openUpvals.updateInternalPtr();
+}
+
+void ObjThread::mark() {
+	for (Value* i = stack; i < stackTop; i++) {
+		(*i).mark();
+	}
+	//no need to mark the values in open upvalues since they are on the stack and get marked before
+	for (int i = 0; i < openUpvals.size(); i++) {
+		gc.markObj(openUpvals[i]);
+	}
+	for (int i = 0; i < frameCount; i++) {
+		CallFrame* frame = &frames[i];
+		gc.markObj(frame->closure);
+	}
+	gc.markObj(codeBlock);
+	gc.markObj(prevThread);
+	openUpvals.mark();
+}
 #pragma endregion

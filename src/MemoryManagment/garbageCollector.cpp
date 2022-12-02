@@ -54,7 +54,7 @@ namespace memory {
 		mark();
 
 		unique_ptr<byte> ptr = nullptr;
-		if (shrinkedHeapSize > memoryBlockSize * 0.9) {
+		if (shrinkedHeapSize > memoryBlockSize * 0.9 || shrinkedHeapSize < memoryBlockSize * 0.4) {
 			//Amortized size to reduce the number of future resizes
 			memoryBlockSize = (1ll << (64 - _lzcnt_u64(shrinkedHeapSize - 1)));
 
@@ -68,7 +68,7 @@ namespace memory {
 
 		compact(newMemoryBlock);
 		//if we allocated a new memory block, we give the ownership of that ptr to 'memoryBlock'
-		//the old memory block is put into 'ptr' and released as soon as this funciton finishes executing
+		//the old memory block is put into 'ptr' and released as soon as this function finishes executing
 		if (ptr.get() != nullptr) std::swap(memoryBlock, ptr);
 
 		for (HeapObject* obj : tempAllocs) {

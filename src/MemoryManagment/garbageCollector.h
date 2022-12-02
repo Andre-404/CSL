@@ -29,7 +29,7 @@ namespace memory {
 		//reset after each heap collection, calculated in 'markObj'
 		//used before 'computeCompactedAddress' to allocated a new heap
 		uInt64 shrinkedHeapSize;
-
+		//static allocations that get transfered to heap at next 'collect'
 		vector<HeapObject*> tempAllocs;
 
 		vector<HeapObject*> markStack;

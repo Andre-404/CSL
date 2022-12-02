@@ -5,9 +5,8 @@
 using std::make_shared;
 using namespace AST;
 
-//have to define this in the AST namespace because c++ friend classes
+//have to define this in the AST namespace because parselets are c++ friend classes
 namespace AST {
-#pragma region Parselets
 	//!, -, ~, ++a and --a
 	class unaryPrefixExpr : public PrefixParselet {
 		ASTNodePtr parse(Token token) {
@@ -140,7 +139,7 @@ namespace AST {
 					Token ident = cur->consume(TokenType::IDENTIFIER, "Expected variable name.");
 					make_shared<ModuleAccessExpr>(expr->token, ident);
 				}
-				else cur->error(token, "Expected module name identifier.");
+				else throw cur->error(token, "Expected module name identifier.");
 			}
 			ASTNodePtr right = cur->expression(prec);
 			return make_shared<BinaryExpr>(left, token, right);
@@ -197,7 +196,6 @@ namespace AST {
 			return make_shared<FieldAccessExpr>(left, token, field);
 		}
 	};
-#pragma endregion
 }
 
 Parser::Parser() {
@@ -206,7 +204,7 @@ Parser::Parser() {
 	switchDepth = 0;
 	curUnit = nullptr;
 
-#pragma region Parselets
+	#pragma region Parselets
 	//Prefix
 	addPrefix(TokenType::THIS, new literalExpr, precedence::NONE);
 
@@ -556,6 +554,7 @@ ASTNodePtr Parser::switchStmt() {
 		shared_ptr<CaseStmt> curCase = caseStmt();
 		curCase->caseType = prev;
 		if (prev.type == TokenType::DEFAULT) {
+			//don't throw, it isn't a breaking error
 			if (hasDefault) error(prev, "Only 1 default case is allowed inside a switch statement.");
 			hasDefault = true;
 		}

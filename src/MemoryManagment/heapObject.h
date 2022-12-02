@@ -10,6 +10,7 @@ namespace memory {
 		HeapObject* moveTo;
 
 		virtual void move(byte* newAddress) = 0;
+		//only updates ptr references in this object
 		virtual void updateInternalPointers() = 0;
 		virtual uInt64 getSize() = 0;
 		virtual void mark() = 0;
