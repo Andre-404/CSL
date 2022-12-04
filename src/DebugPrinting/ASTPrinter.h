@@ -12,9 +12,11 @@ namespace AST {
 		void visitCallExpr(CallExpr* expr);
 		void visitFieldAccessExpr(FieldAccessExpr* expr);
 		void visitGroupingExpr(GroupingExpr* expr);
+		void visitAwaitExpr(AwaitExpr* expr);
 		void visitArrayDeclExpr(ArrayLiteralExpr* expr);
 		void visitStructLiteralExpr(StructLiteral* expr);
 		void visitLiteralExpr(LiteralExpr* expr);
+		void visitFuncLiteral(FuncLiteral* expr);
 		void visitSuperExpr(SuperExpr* expr);
 		void visitModuleAccessExpr(ModuleAccessExpr* expr);
 

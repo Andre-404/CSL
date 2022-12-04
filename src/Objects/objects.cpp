@@ -24,12 +24,16 @@ ObjString::ObjString(uInt64 length) {
 	type = ObjType::STRING;
 }
 
-ObjString* ObjString::createString(char* from, uInt64 length) {
+ObjString* ObjString::createString(char* from, uInt64 length, HashMap& interned) {
+	//first we check if a interned string already exists, and if it does we return its pointer
+	uInt64 hash = hashString(from, length);
+	ObjString* possibleInterned = findInternedString(interned, from, length, hash);
+	if (possibleInterned != nullptr) return possibleInterned;
 	//+1 for null terminator
 	void* ptr = memory::__allocObj(sizeof(ObjString) + length + 1);
 	ObjString* str = new(ptr) ObjString(length);
 	memcpy(reinterpret_cast<byte*>(ptr) + sizeof(ObjString), from, length + 1);
-	str->hash = hashString(from, length);
+	str->hash = hash;
 	return str;
 }
 
@@ -68,15 +72,18 @@ bool ObjString::compare(string other) {
 	return memcmp(getString(), other.c_str(), size) == 0;
 }
 
-ObjString* ObjString::concat(ObjString* other) {
+ObjString* ObjString::concat(ObjString* other, HashMap& interned) {
 	uInt64 len = other->size + size + 1;
 	ObjString* finalStr = createEmptyString(len);
 	memcpy(finalStr->getString(), getString(), size);
 	//+1 for null terminator
 	memcpy(finalStr->getString() + size, other->getString(), other->size + 1);
 	//compute hash from concated strings
-	finalStr->hash = hashString(finalStr->getString(), len);
-
+	finalStr->hash = hashString(finalStr->getString(), len - 1);
+	//a bit inefficient, but we need to have the whole string in order to check if it already exists or not
+	//this is faster than doing new char[] and then deleteing it if we find the interned string
+	ObjString* possibleInterned = findInternedString(interned, finalStr->getString(), finalStr->size, finalStr->hash);
+	if (possibleInterned != nullptr) return possibleInterned;
 	return finalStr;
 }
 #pragma endregion
@@ -96,7 +103,8 @@ void ObjFunc::move(byte* to) {
 
 void ObjFunc::mark() {
 	gc.markObj(name);
-	for (int i = 0; i < body.constants.size(); i++) {
+	int size = body.constants.size();
+	for (int i = 0; i < size; i++) {
 		Value& val = body.constants[i];
 		val.mark();
 	}
@@ -116,7 +124,6 @@ void ObjFunc::updateInternalPointers() {
 	body.lines.updateInternalPtr();
 }
 #pragma endregion
-
 
 #pragma region objNativeFn
 ObjNativeFunc::ObjNativeFunc(NativeFn _func, byte _arity) {
@@ -139,7 +146,6 @@ void ObjNativeFunc::mark() {
 }
 #pragma endregion
 
-
 #pragma region objClosure
 ObjClosure::ObjClosure(ObjFunc* _func) {
 	func = _func;
@@ -155,8 +161,9 @@ void ObjClosure::move(byte* to) {
 void ObjClosure::updateInternalPointers() {
 	func = (ObjFunc*)func->moveTo;
 	long size = upvals.size();
+	//upvalues mark the values they refer to
 	for (int i = 0; i < size; i++) {
-		if (upvals[i] != nullptr) upvals[i] = (ObjUpval*)upvals[i]->moveTo;
+		if (upvals[i] != nullptr) upvals[i] = reinterpret_cast<ObjUpval*>(upvals[i]->moveTo);
 	}
 	upvals.updateInternalPtr();
 }
@@ -184,7 +191,7 @@ void ObjUpval::move(byte* to) {
 }
 
 //only updates if the upvalue is closed, no need to update an open upvalue since the value struct it points to gets
-//marked by ObjThread
+//marked and updated by ObjThread
 void ObjUpval::mark() {
 	if (!isOpen) closed.mark();
 }
@@ -277,6 +284,7 @@ void ObjInstance::mark() {
 }
 
 void ObjInstance::updateInternalPointers() {
+	//if klass is null then this is a struct and not an instance
 	if (klass != nullptr) klass = reinterpret_cast<ObjClass*>(klass->moveTo);
 	fields.updateInternalPtrs();
 }
@@ -306,23 +314,30 @@ void ObjBoundMethod::updateInternalPointers() {
 #pragma endregion
 
 #pragma region ObjThread
+ObjThread::ObjThread(ObjClosure* _codeBlock) {
+	codeBlock = _codeBlock;
+}
+
 void ObjThread::move(byte* to) {
 	memmove(to, this, sizeof(ObjThread));
 }
 
 void ObjThread::updateInternalPointers() {
+	//only open upvalues, closed upvalues are handled by closures that contain them
 	for (int i = 0; i < openUpvals.size(); i++) {
 		ObjUpval* upval = openUpvals[i];
-		//since position of stack changes, every open upvals 'location' must be updated to new stack position
+		//since position of the stack is bound to the position of ObjThread everytime the thread is moved, so is the stack
+		//every open upvals 'location' must be updated to new stack position
 		//we take the diff between current and next memory location, and then add the diff to 'location' field
 		uInt64 diff = moveTo - this;
 		upval->location += diff;
+		//updates the ptr to upvalues
 		if (upval != nullptr) openUpvals[i] = reinterpret_cast<ObjUpval*>(upval->moveTo);
 
 	}
 	//update pointers for all values on stack
 	for (Value* i = stack; i < stackTop; i++) {
-		(*i).updatePtr();
+		i->updatePtr();
 	}
 	for (int i = 0; i < frameCount; i++) {
 		CallFrame* frame = &frames[i];
@@ -346,7 +361,6 @@ void ObjThread::mark() {
 		gc.markObj(frame->closure);
 	}
 	gc.markObj(codeBlock);
-	gc.markObj(prevThread);
 	openUpvals.mark();
 }
 #pragma endregion

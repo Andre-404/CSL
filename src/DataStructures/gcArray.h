@@ -145,6 +145,7 @@ public:
 	}
 private:
 	ArrHeader* header;
+	//this isn't the maximum array size, just how much is in use
 	uInt64 count;
 
 	//allocates new array and copies the contents of the previous one

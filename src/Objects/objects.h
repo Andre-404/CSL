@@ -44,7 +44,7 @@ namespace object {
 
 		ObjString(uInt64 length);
 
-		static ObjString* createString(char* from, uInt64 length);
+		static ObjString* createString(char* from, uInt64 length, HashMap& interned);
 
 		void move(byte* newAddress);
 		void updateInternalPointers();
@@ -57,7 +57,7 @@ namespace object {
 
 		bool compare(string other);
 
-		ObjString* concat(ObjString* other);
+		ObjString* concat(ObjString* other, HashMap& interned);
 	};
 
 	class ObjArray : public Obj {
@@ -178,10 +178,14 @@ namespace object {
 		int frameCount;
 		ObjClosure* codeBlock;
 		 
-		//execution stuff stuff
-		runtime::VM* vm;
+		//execution stuff
 		ThreadState state;
-		ObjThread* prevThread;
+		//this thread is blocked until blocker has completed
+		ObjThread* blocker;
+		//thread priority 1-10
+		int priority;
+
+		ObjThread(ObjClosure* _codeBlock);
 
 		void move(byte* to);
 		size_t getSize() { return sizeof(ObjThread); }

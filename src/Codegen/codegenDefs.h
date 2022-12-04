@@ -109,10 +109,10 @@ struct Value {
 enum class OpCode {
 	//Helpers
 	POP,
-	POPN,
+	POPN,//arg: 8-bit num
 	//constants
-	CONSTANT,
-	CONSTANT_LONG,
+	CONSTANT,//arg: 8-bit constant index
+	CONSTANT_LONG,//arg: 8-bit constant index
 	NIL,
 	TRUE,
 	FALSE,
@@ -131,8 +131,12 @@ enum class OpCode {
 	MOD,
 	BITSHIFT_LEFT,
 	BITSHIFT_RIGHT,
-	ADD_1,
-	SUBTRACT_1,
+	//optimizations, if the rhs of one of these binary ops is a integer thats smaller than 256
+	//it's directly inserted into the bytecode instead of having a new constant
+	ADD_INT,//arg: 8-bit num
+	SUBTRACT_INT,//arg: 8-bit num
+	DIVIDE_INT,//arg: 8-bit num
+	MULTIPLY_INT,//arg: 8-bit num
 	//comparisons and equality
 	EQUAL,
 	NOT_EQUAL,
@@ -140,61 +144,63 @@ enum class OpCode {
 	GREATER_EQUAL,
 	LESS,
 	LESS_EQUAL,
-	//Statements
+	//temporary
 	PRINT,
-	TO_STRING,
 	//Variables
-	DEFINE_GLOBAL,
-	DEFINE_GLOBAL_LONG,
-	GET_GLOBAL,
-	GET_GLOBAL_LONG,
-	SET_GLOBAL,
-	SET_GLOBAL_LONG,
-	GET_LOCAL,
-	SET_LOCAL,
-	GET_UPVALUE,
-	SET_UPVALUE,
+	//all module level variables(including class and function declarations) are treated as global variables
+	//compiler adds <module name>:: to the front of the variable name to make it distinct
+	DEFINE_GLOBAL,//arg: 8-bit constant index
+	DEFINE_GLOBAL_LONG,//arg: 16-bit constant index
+	GET_GLOBAL,//arg: 8-bit constant index
+	GET_GLOBAL_LONG,//arg: 16-bit constant index
+	SET_GLOBAL,//arg: 8-bit constant index
+	SET_GLOBAL_LONG,//arg: 16-bit constant index
+
+	GET_LOCAL,//arg: 8-bit stack position
+	SET_LOCAL,//arg: 8-bit stack position
+	GET_UPVALUE,//arg: 8-bit upval position
+	SET_UPVALUE,//arg: 8-bit upval position
 	CLOSE_UPVALUE,
 	//Arrays
-	CREATE_ARRAY,
+	CREATE_ARRAY,//arg: 8-bit array size
+	//get and set is used by both arrays and instances/structs, since struct.field is just syntax sugar for struct["field"] that
+	//gets optimized to use GET_PROPERTY
 	GET,
 	SET,
 	//control flow
-	JUMP,
-	JUMP_IF_FALSE,
-	JUMP_IF_TRUE,
-	JUMP_IF_FALSE_POP,
-	LOOP,
-	JUMP_POPN,
-	SWITCH,
+	JUMP,//arg: 16-bit jump offset
+	JUMP_IF_FALSE,//arg: 16-bit jump offset
+	JUMP_IF_TRUE,//arg: 16-bit jump offset
+	JUMP_IF_FALSE_POP,//arg: 16-bit jump offset
+	LOOP,//arg: 16-bit jump offset(gets negated)
+	JUMP_POPN, //arg: 16-bit jump offset
 
 	//Functions
-	CALL,
+	CALL,//arg: 8-bit argument count
 	RETURN,
-	CLOSURE,
-	CLOSURE_LONG,
+	CLOSURE,//arg: 8-bit ObjFunction constant index
+	CLOSURE_LONG,//arg: 16-bit ObjFunction constant index
 
 	//OOP
-	CLASS,
-	GET_PROPERTY,
-	GET_PROPERTY_LONG,
-	SET_PROPERTY,
-	SET_PROPERTY_LONG,
-	CREATE_STRUCT,
-	CREATE_STRUCT_LONG,
-	METHOD,
-	INVOKE,
-	INVOKE_LONG,
+	CLASS,//arg: 16-bit ObjString constant index
+	GET_PROPERTY,//arg: 8-bit ObjString constant index
+	GET_PROPERTY_LONG,//arg: 16-bit ObjString constant index
+	SET_PROPERTY,//arg: 8-bit ObjString constant index
+	SET_PROPERTY_LONG,//arg: 16-bit ObjString constant index
+	CREATE_STRUCT,//arg: 8-bit number of fields
+	CREATE_STRUCT_LONG,//arg: 8-bit number of fields
+	METHOD,//arg: 16-bit ObjString constant index
+	INVOKE,//arg: 8-bit ObjString constant index, 8-bit argument count
+	INVOKE_LONG,//arg: 16-bit ObjString constant index, 8-bit argument count
 	INHERIT,
-	GET_SUPER,
-	GET_SUPER_LONG,
-	SUPER_INVOKE,
-	SUPER_INVOKE_LONG,
+	GET_SUPER,//arg: 8-bit ObjString constant index
+	GET_SUPER_LONG,//arg: 16-bit ObjString constant index
+	SUPER_INVOKE,//arg: 8-bit ObjString constant index, 8-bit argument count
+	SUPER_INVOKE_LONG,//arg: 16-bit ObjString constant index, 8-bit argument count
 
 	//fibers
-	FIBER_CREATE,
-	FIBER_RUN,
-	FIBER_YIELD,
+	THREAD_RUN,
+	THREAD_YIELD,
 };
 
 
@@ -229,3 +235,23 @@ public:
 
 #define FRAMES_MAX 256
 #define STACK_MAX (FRAMES_MAX * 256)
+
+struct CallFrame {
+	object::ObjClosure* closure;
+	uInt64 ip;
+	Value* slots;
+	CallFrame() : closure(nullptr), ip(0), slots(nullptr) {};
+};
+
+enum class RuntimeResult {
+	OK,
+	RUNTIME_ERROR,
+	PAUSED,
+};
+
+enum class ThreadState {
+	NOT_STARTED,
+	RUNNING,
+	PAUSED,
+	FINSIHED
+};

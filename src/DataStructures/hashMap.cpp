@@ -117,20 +117,20 @@ HashEntry* HashMap::findEntry(ManagedArray<HashEntry>& _entries, ObjString* key)
 }
 
 //both the compiler and VM have a HashMap with created strings, this ensures no duplicate strings are ever created
-//when a new string is created we first run it through this function and if the same string exists in the HashMap 'newStrnig' is discarded
-ObjString* findInternedString(HashMap* table, ObjString* newString) {
-	if (table->count == 0) return nullptr;
-	uInt64 hash = newString->hash;
+//before we create a new ObjString we run its char ptr through this function to see if the same function already exists
+//one exception: string concating, where a ObjString if creates and then checked
+ObjString* findInternedString(HashMap& table, char* str, uInt length, uInt64 hash) {
+	if (table.count == 0) return nullptr;
 
-	size_t bitMask = table->entries.size() - 1;
+	size_t bitMask = table.entries.size() - 1;
 	uInt64 index = hash & bitMask;
 	while (true) {
-		HashEntry* entry = &table->entries[index];
+		HashEntry* entry = &table.entries[index];
 		if (entry->key == nullptr) {
 			// Stop if we find an empty non-tombstone entry.
 			return nullptr;
 		}
-		else if (entry->key != TOMBSTONE && entry->key->hash == hash && entry->key->compare(newString)) {
+		else if (entry->key != TOMBSTONE && entry->key->hash == hash && memcmp(entry->key->getString(), str, length) == 0) {
 			// We found it.
 			return entry->key;
 		}

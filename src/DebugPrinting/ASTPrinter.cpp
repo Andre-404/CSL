@@ -64,6 +64,11 @@ void ASTPrinter::visitGroupingExpr(GroupingExpr* expr) {
 	cout << ")";
 }
 
+void ASTPrinter::visitAwaitExpr(AwaitExpr* expr) {
+	cout << "await ";
+	expr->expr->accept(this);
+}
+
 void ASTPrinter::visitArrayDeclExpr(ArrayLiteralExpr* expr) {
 	cout << "[ ";
 	for (shared_ptr<ASTNode> node : expr->members) {
@@ -85,6 +90,16 @@ void ASTPrinter::visitStructLiteralExpr(StructLiteral* expr) {
 
 void ASTPrinter::visitLiteralExpr(LiteralExpr* expr) {
 	cout << expr->token.getLexeme();
+}
+
+void ASTPrinter::visitFuncLiteral(FuncLiteral* expr) {
+	cout << "func literal ( ";
+	for (Token arg : expr->args) {
+		cout << arg.getLexeme() << ", ";
+	}
+	cout << ") ";
+	expr->body->accept(this);
+	cout << endl;
 }
 
 void ASTPrinter::visitSuperExpr(SuperExpr* expr) {

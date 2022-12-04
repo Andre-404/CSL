@@ -15,7 +15,7 @@ namespace AST {
 		}
 	};
 
-	//numbers, string, boolean, nil, array and struct literals, grouping as well as super calls
+	//numbers, string, boolean, nil, array and struct literals, grouping as well as super calls and anonymous functions
 	class literalExpr : public PrefixParselet {
 		ASTNodePtr parse(Token token) {
 			switch (token.type) {
@@ -56,6 +56,39 @@ namespace AST {
 				}
 				cur->consume(TokenType::RIGHT_BRACE, "Expect '}' after struct literal.");
 				return make_shared<StructLiteral>(entries);
+			}
+			//function literal
+			case TokenType::FUNC: {
+				//the depths are used for throwing errors for switch and loops stmts, 
+				//and since a function can be declared inside a loop we need to account for that
+				int tempLoopDepth = cur->loopDepth;
+				int tempSwitchDepth = cur->switchDepth;
+				cur->loopDepth = 0;
+				cur->switchDepth = 0;
+
+				cur->consume(TokenType::LEFT_PAREN, "Expect '(' for arguments.");
+				vector<Token> args;
+				//parse args
+				if (!cur->check(TokenType::RIGHT_PAREN)) {
+					do {
+						Token arg = cur->consume(TokenType::IDENTIFIER, "Expect argument name");
+						args.push_back(arg);
+						if (args.size() > 255) {
+							throw cur->error(arg, "Functions can't have more than 255 arguments");
+						}
+					} while (cur->match(TokenType::COMMA));
+				}
+				cur->consume(TokenType::RIGHT_PAREN, "Expect ')' after arguments");
+				cur->consume(TokenType::LEFT_BRACE, "Expect '{' after arguments.");
+				ASTNodePtr body = cur->blockStmt();
+
+				cur->loopDepth = tempLoopDepth;
+				cur->switchDepth = tempSwitchDepth;
+				return make_shared<FuncLiteral>(args, body);
+			}
+			case TokenType::AWAIT: {
+				ASTNodePtr expr = cur->expression();
+				return make_shared<AwaitExpr>(expr);
 			}
 			//number, string, boolean or nil
 			default:
@@ -184,7 +217,7 @@ namespace AST {
 			//if we have something like arr[0] = 1 or struct.field = 1 we can't parse it with the assignment expr
 			//this handles that case and produces a special set expr
 			//we also check the precedence level of the surrounding expression, so "a + b.c = 3" doesn't get parsed
-			//the huge match() covers every possible type of assignment
+			//the match() covers every possible type of assignment
 			if (surroundingPrec <= (int)precedence::ASSIGNMENT
 				&& cur->match({ TokenType::EQUAL, TokenType::PLUS_EQUAL, TokenType::MINUS_EQUAL, TokenType::SLASH_EQUAL,
 					TokenType::STAR_EQUAL, TokenType::BITWISE_XOR_EQUAL, TokenType::BITWISE_AND_EQUAL,
@@ -226,6 +259,7 @@ Parser::Parser() {
 	addPrefix(TokenType::LEFT_BRACKET, new literalExpr, precedence::PRIMARY);
 	addPrefix(TokenType::LEFT_BRACE, new literalExpr, precedence::PRIMARY);
 	addPrefix(TokenType::SUPER, new literalExpr, precedence::PRIMARY);
+	addPrefix(TokenType::FUNC, new literalExpr, precedence::PRIMARY);
 
 	//Infix
 	addInfix(TokenType::EQUAL, new assignmentExpr, precedence::ASSIGNMENT);
@@ -649,9 +683,9 @@ Token Parser::consume(TokenType type, string msg) {
 }
 
 ParserException Parser::error(Token token, string msg) {
-		errorHandler::addCompileError(msg, token);
-		return ParserException();
-	}
+	errorHandler::addCompileError(msg, token);
+	return ParserException();
+}
 
 //syncs when we find a ';' or one of the keywords
 void Parser::sync() {

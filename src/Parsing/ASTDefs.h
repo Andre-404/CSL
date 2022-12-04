@@ -13,9 +13,11 @@ namespace AST {
 	class CallExpr;
 	class FieldAccessExpr;
 	class GroupingExpr;
+	class AwaitExpr;
 	class StructLiteral;
 	class LiteralExpr;
 	class SuperExpr;
+	class FuncLiteral;
 	class ModuleAccessExpr;
 
 	class VarDecl;
@@ -45,10 +47,12 @@ namespace AST {
 		virtual void visitCallExpr(CallExpr* expr) = 0;
 		virtual void visitFieldAccessExpr(FieldAccessExpr* expr) = 0;
 		virtual void visitGroupingExpr(GroupingExpr* expr) = 0;
+		virtual void visitAwaitExpr(AwaitExpr* expr) = 0;
 		virtual void visitArrayDeclExpr(ArrayLiteralExpr* expr) = 0;
 		virtual void visitStructLiteralExpr(StructLiteral* expr) = 0;
 		virtual void visitLiteralExpr(LiteralExpr* expr) = 0;
 		virtual void visitSuperExpr(SuperExpr* expr) = 0;
+		virtual void visitFuncLiteral(FuncLiteral* expr) = 0;
 		virtual void visitModuleAccessExpr(ModuleAccessExpr* expr) = 0;
 
 		virtual void visitVarDecl(VarDecl* decl) = 0;
@@ -231,6 +235,18 @@ namespace AST {
 		}
 	};
 
+	class AwaitExpr : public ASTNode {
+	public:
+		shared_ptr<ASTNode> expr;
+
+		AwaitExpr(shared_ptr<ASTNode> _expr) {
+			expr = _expr;
+		}
+		void accept(visitor* vis) {
+			vis->visitAwaitExpr(this);
+		}
+	};
+
 	class LiteralExpr : public ASTNode {
 	public:
 		Token token;
@@ -258,6 +274,22 @@ namespace AST {
 		}
 		void accept(visitor* vis) {
 			vis->visitStructLiteralExpr(this);
+		}
+	};
+
+	class FuncLiteral : public ASTNode {
+	public:
+		vector<Token> args;
+		int arity;
+		shared_ptr<ASTNode> body;
+
+		FuncLiteral(vector<Token> _args, shared_ptr<ASTNode> _body) {
+			args = _args;
+			arity = _args.size();
+			body = _body;
+		}
+		void accept(visitor* vis) {
+			vis->visitFuncLiteral(this);
 		}
 	};
 

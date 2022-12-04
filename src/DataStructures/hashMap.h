@@ -30,7 +30,7 @@ public:
 	bool del(object::ObjString* key);
 	void tableAddAll(HashMap* other);
 
-	friend object::ObjString* findInternedString(HashMap* table, object::ObjString* newString);
+	friend object::ObjString* findInternedString(HashMap& table, char* str, uInt length, uInt64 hash);
 
 	void mark();
 	void updateInternalPtrs();

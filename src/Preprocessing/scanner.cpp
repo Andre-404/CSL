@@ -28,7 +28,8 @@ std::unordered_map<string, TokenType> keywordToTokenType = {
 	{"func", TokenType::FUNC},
 	{"this", TokenType::THIS},
 	{"true", TokenType::TRUE},
-	{"as", TokenType::AS}
+	{"as", TokenType::AS},
+	{"await", TokenType::AWAIT}
 };
 
 using namespace preprocessing;
