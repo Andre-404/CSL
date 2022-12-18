@@ -85,8 +85,8 @@ struct Token {
 
 	//for things like synthetic tokens and expanded macros
 	bool isSynthetic;
+	string syntheticStr;
 	std::shared_ptr<Token> parentPtr; // Pointer to the token this token originated from
-	std::shared_ptr<Token> macroPtr; // Pointer to the macro this token originated from
 	//default constructor
 	Token() {
 		isSynthetic = false;
@@ -106,24 +106,17 @@ struct Token {
 		isSynthetic = true;
 		type = _type;
 	}
+	Token(TokenType _type, string str) {
+		isSynthetic = true;
+		parentPtr = nullptr;
+		type = _type;
+		syntheticStr = str;
+	}
 	string getLexeme() const {
 		if (type == TokenType::ERROR) return "Unexpected character.";
-		else if (isSynthetic) return "synthetic token";
+		else if (isSynthetic) return syntheticStr;
 		return str.getStr();
 	}
-
-	// Expanded from macro arguments
-	void setOriginPointers(std::shared_ptr<Token> _parentPtr, std::shared_ptr<Token> _macroPtr) {
-		parentPtr = _parentPtr;
-		macroPtr = _macroPtr;
-	}
-
-	// Expanded from macro body
-	void setOriginPointers(std::shared_ptr<Token> _macroPtr) {
-		parentPtr = _macroPtr;
-		macroPtr = _macroPtr;
-	}
-
 };
 
 struct CSLModule;

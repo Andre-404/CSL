@@ -37,7 +37,7 @@ namespace AST {
 	class ReturnStmt;
 
 	//visitor pattern
-	class visitor {
+	class Visitor {
 	public:
 		virtual void visitAssignmentExpr(AssignmentExpr* expr) = 0;
 		virtual void visitSetExpr(SetExpr* expr) = 0;
@@ -75,7 +75,7 @@ namespace AST {
 	class ASTNode {
 	public:
 		virtual ~ASTNode() {};
-		virtual void accept(visitor* vis) = 0;
+		virtual void accept(Visitor* vis) = 0;
 	};
 
 	class ASTDecl : public ASTNode {
@@ -94,7 +94,7 @@ namespace AST {
 			name = _name;
 			value = _value;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitAssignmentExpr(this);
 		}
 	};
@@ -115,7 +115,7 @@ namespace AST {
 			value = _val;
 			op = _op;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitSetExpr(this);
 		}
 	};
@@ -131,7 +131,7 @@ namespace AST {
 			thenBranch = _thenBranch;
 			elseBranch = _elseBranch;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitConditionalExpr(this);
 		}
 	};
@@ -147,7 +147,7 @@ namespace AST {
 			op = _op;
 			right = _right;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitBinaryExpr(this);
 		}
 	};
@@ -163,7 +163,7 @@ namespace AST {
 			right = _right;
 			isPrefix = _isPrefix;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitUnaryExpr(this);
 		}
 	};
@@ -175,7 +175,7 @@ namespace AST {
 		ArrayLiteralExpr(vector<shared_ptr<ASTNode>>& _members) {
 			members = _members;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitArrayDeclExpr(this);
 		}
 	};
@@ -189,7 +189,7 @@ namespace AST {
 			callee = _callee;
 			args = _args;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitCallExpr(this);
 		}
 	};
@@ -206,7 +206,7 @@ namespace AST {
 			accessor = _accessor;
 			field = _field;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitFieldAccessExpr(this);
 		}
 	};
@@ -218,7 +218,7 @@ namespace AST {
 		SuperExpr(Token _methodName) {
 			methodName = _methodName;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitSuperExpr(this);
 		}
 	};
@@ -230,7 +230,7 @@ namespace AST {
 		GroupingExpr(shared_ptr<ASTNode> _expr) {
 			expr = _expr;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitGroupingExpr(this);
 		}
 	};
@@ -242,7 +242,7 @@ namespace AST {
 		AwaitExpr(shared_ptr<ASTNode> _expr) {
 			expr = _expr;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitAwaitExpr(this);
 		}
 	};
@@ -254,25 +254,25 @@ namespace AST {
 		LiteralExpr(Token _token) {
 			token = _token;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitLiteralExpr(this);
 		}
 	};
 
-	struct structEntry {
+	struct StructEntry {
 		shared_ptr<ASTNode> expr;
 		Token name;
-		structEntry(Token _name, shared_ptr<ASTNode> _expr) : expr(_expr), name(_name) {};
+		StructEntry(Token _name, shared_ptr<ASTNode> _expr) : expr(_expr), name(_name) {};
 	};
 
 	class StructLiteral : public ASTNode {
 	public:
-		vector<structEntry> fields;
+		vector<StructEntry> fields;
 
-		StructLiteral(vector<structEntry> _fields) {
+		StructLiteral(vector<StructEntry> _fields) {
 			fields = _fields;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitStructLiteralExpr(this);
 		}
 	};
@@ -288,7 +288,7 @@ namespace AST {
 			arity = _args.size();
 			body = _body;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitFuncLiteral(this);
 		}
 	};
@@ -303,7 +303,7 @@ namespace AST {
 			ident = _ident;
 		}
 
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitModuleAccessExpr(this);
 		}
 	};
@@ -320,7 +320,7 @@ namespace AST {
 		PrintStmt(shared_ptr<ASTNode> _expr) {
 			expr = _expr;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitPrintStmt(this);
 		}
 	};
@@ -332,7 +332,7 @@ namespace AST {
 		ExprStmt(shared_ptr<ASTNode> _expr) {
 			expr = _expr;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitExprStmt(this);
 		}
 	};
@@ -346,7 +346,7 @@ namespace AST {
 			name = _name;
 			value = _value;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitVarDecl(this);
 		}
 		Token getName() { return name; }
@@ -359,7 +359,7 @@ namespace AST {
 		BlockStmt(vector<shared_ptr<ASTNode>> _statements) {
 			statements = _statements;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitBlockStmt(this);
 		}
 	};
@@ -375,7 +375,7 @@ namespace AST {
 			thenBranch = _then;
 			elseBranch = _else;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitIfStmt(this);
 		}
 	};
@@ -389,7 +389,7 @@ namespace AST {
 			body = _body;
 			condition = _condition;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitWhileStmt(this);
 		}
 	};
@@ -407,7 +407,7 @@ namespace AST {
 			increment = _increment;
 			body = _body;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitForStmt(this);
 		}
 	};
@@ -419,7 +419,7 @@ namespace AST {
 		BreakStmt(Token _token) {
 			token = _token;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitBreakStmt(this);
 		}
 	};
@@ -431,7 +431,7 @@ namespace AST {
 		ContinueStmt(Token _token) {
 			token = _token;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitContinueStmt(this);
 		}
 	};
@@ -447,7 +447,7 @@ namespace AST {
 			cases = _cases;
 			hasDefault = _hasDefault;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitSwitchStmt(this);
 		}
 	};
@@ -462,7 +462,7 @@ namespace AST {
 			expr = _expr;
 			stmts = _stmts;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitCaseStmt(this);
 		}
 	};
@@ -480,7 +480,7 @@ namespace AST {
 			arity = _args.size();
 			body = _body;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitFuncDecl(this);
 		}
 		Token getName() { return name; }
@@ -496,7 +496,7 @@ namespace AST {
 			expr = _expr;
 			keyword = _keyword;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitReturnStmt(this);
 		}
 	};
@@ -514,7 +514,7 @@ namespace AST {
 			inheritedClass = _inheritedClass;
 			inherits = _inherits;
 		}
-		void accept(visitor* vis) {
+		void accept(Visitor* vis) {
 			vis->visitClassDecl(this);
 		}
 		Token getName() { return name; }

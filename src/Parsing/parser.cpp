@@ -44,7 +44,7 @@ namespace AST {
 			}
 			//Struct literal
 			case TokenType::LEFT_BRACE: {
-				vector<structEntry> entries;
+				vector<StructEntry> entries;
 				if (!(cur->peek().type == TokenType::RIGHT_BRACE)) {
 					//a struct literal looks like this: {var1 : expr1, var2 : expr2}
 					do {

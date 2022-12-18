@@ -78,7 +78,7 @@ namespace memory {
 		shrinkedHeapSize = 0;
 	}
 
-	void GarbageCollector::collect(compileTools::Compiler* compiler) {
+	void GarbageCollector::collect(compileCore::Compiler* compiler) {
 		markRoots(compiler);
 		mark();
 
@@ -119,7 +119,7 @@ namespace memory {
 
 	}
 
-	void GarbageCollector::markRoots(compileTools::Compiler* compiler) {
+	void GarbageCollector::markRoots(compileCore::Compiler* compiler) {
 		
 	}
 
@@ -164,7 +164,7 @@ namespace memory {
 
 	}
 
-	void GarbageCollector::updateRootPtrs(compileTools::Compiler* compiler) {
+	void GarbageCollector::updateRootPtrs(compileCore::Compiler* compiler) {
 
 	}
 

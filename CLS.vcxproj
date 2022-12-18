@@ -153,6 +153,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\Codegen\codegenDefs.cpp" />
+    <ClCompile Include="src\Codegen\compiler.cpp" />
     <ClCompile Include="src\DataStructures\hashMap.cpp" />
     <ClCompile Include="src\ErrorHandling\errorHandler.cpp" />
     <ClCompile Include="src\files.cpp" />
@@ -167,6 +168,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Codegen\codegenDefs.h" />
+    <ClInclude Include="src\Codegen\compiler.h" />
     <ClInclude Include="src\common.h" />
     <ClInclude Include="src\DataStructures\hashMap.h" />
     <ClInclude Include="src\ErrorHandling\errorHandler.h" />

@@ -6,7 +6,7 @@ namespace runtime {
 	class VM;
 }
 
-namespace compileTools {
+namespace compileCore {
 	class Compiler;
 }
 
@@ -17,7 +17,7 @@ namespace memory {
 	public:
 		void* alloc(uInt64 size);
 		void collect(runtime::VM* vm);
-		void collect(compileTools::Compiler* compiler);
+		void collect(compileCore::Compiler* compiler);
 		void markObj(HeapObject* obj);
 		GarbageCollector();
 	private:
@@ -36,11 +36,11 @@ namespace memory {
 
 		void mark();
 		void markRoots(runtime::VM* vm);
-		void markRoots(compileTools::Compiler* compiler);
+		void markRoots(compileCore::Compiler* compiler);
 		void computeCompactedAddress(byte* start);
 		void updatePtrs();
 		void updateRootPtrs(runtime::VM* vm);
-		void updateRootPtrs(compileTools::Compiler* compiler);
+		void updateRootPtrs(compileCore::Compiler* compiler);
 		void compact(byte* start);
 
 		void traceObj(HeapObject* obj);

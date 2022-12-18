@@ -188,7 +188,7 @@ enum class OpCode {
 	SET_PROPERTY,//arg: 8-bit ObjString constant index
 	SET_PROPERTY_LONG,//arg: 16-bit ObjString constant index
 	CREATE_STRUCT,//arg: 8-bit number of fields
-	CREATE_STRUCT_LONG,//arg: 8-bit number of fields
+	CREATE_STRUCT_LONG,//arg: 16-bit number of fields
 	METHOD,//arg: 16-bit ObjString constant index
 	INVOKE,//arg: 8-bit ObjString constant index, 8-bit argument count
 	INVOKE_LONG,//arg: 16-bit ObjString constant index, 8-bit argument count
@@ -202,6 +202,8 @@ enum class OpCode {
 	THREAD_RUN,
 	THREAD_YIELD,
 };
+//conversion from enum to 1 byte number
+inline constexpr unsigned operator+ (OpCode const val) { return static_cast<byte>(val); }
 
 
 struct codeLine {
@@ -223,7 +225,7 @@ struct codeLine {
 class Chunk {
 public:
 	ManagedArray<codeLine> lines;
-
+	File* file;
 	ManagedArray<uint8_t> code;
 	ManagedArray<Value> constants;
 	Chunk();

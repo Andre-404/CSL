@@ -3,7 +3,7 @@
 
 namespace AST {
 	//used for debugging, controlled with AST_DEBUG in common.h
-	class ASTPrinter : public visitor {
+	class ASTPrinter : public Visitor {
 		void visitAssignmentExpr(AssignmentExpr* expr);
 		void visitSetExpr(SetExpr* expr);
 		void visitConditionalExpr(ConditionalExpr* expr);
