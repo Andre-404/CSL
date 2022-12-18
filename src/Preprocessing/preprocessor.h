@@ -12,33 +12,6 @@ namespace preprocessing {
 	using std::unique_ptr;
 	using std::tuple;
 
-	class Macro {
-	public:
-		bool isExpanded = false;
-		Token name;
-		std::vector<Token> value;
-		// Expand macro into destination
-		virtual vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, unordered_set<string>& ignoredMacros, vector<Token>& source, int& i) = 0;
-	};
-
-	class ObjectMacro : public Macro {
-	public:
-		ObjectMacro() {};
-		ObjectMacro(Token _name);
-
-		vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, unordered_set<string>& ignoredMacros, vector<Token>& source, int& i);
-	};
-
-	class FunctionMacro : public Macro {
-	public:
-		unordered_map<string, int> argumentToIndex;
-
-		FunctionMacro() {};
-		FunctionMacro(Token _name, unordered_map<string, int> _argumentToIndex);
-
-		vector<Token> expand(unordered_map<string, unique_ptr<Macro>>& macros, unordered_set<string>& ignoredMacros, vector<Token>& source, int& i);
-	};
-
 	class Preprocessor {
 	public:
 		Preprocessor();

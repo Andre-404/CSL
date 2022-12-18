@@ -55,6 +55,10 @@ namespace AST {
 		TranslationUnit(CSLModule* pUnit) {
 			src = pUnit;
 		}
+
+		~TranslationUnit() {
+			delete src;
+		}
 	};
 
 	class ParserException {
