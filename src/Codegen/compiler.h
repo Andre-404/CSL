@@ -36,6 +36,15 @@ namespace compileCore {
 		int varNum = 0;
 		ScopeJumpInfo(int _d, int _o, int _varNum) : depth(_d), offset(_o), varNum(_varNum) {}
 	};
+
+	enum class ScopeJumpType {
+		BREAK,
+		CONTINUE
+	};
+	//conversion from enum to 1 byte number
+	inline constexpr unsigned operator+ (ScopeJumpType const val) { return static_cast<byte>(val); }
+
+
 	//information about the current code chunk we're compiling, contains a reference to the enclosing code chunk which created this one
 	struct CurrentChunkInfo {
 		//for closures
@@ -46,6 +55,8 @@ namespace compileCore {
 		bool hasReturnStmt;
 
 		uInt line;
+		//information about unpatched 'continue' and 'break' statements
+		vector<uInt> scopeJumps;
 		//keeps track of every break and continue statement that has been encountered
 		vector<ScopeJumpInfo> breakStmts;
 		vector<ScopeJumpInfo> continueStmts;
@@ -77,7 +88,7 @@ namespace compileCore {
 		vector<File*> sourceFiles;
 		//interned strings
 		HashMap internedStrings;
-		Compiler(vector<AST::TranslationUnit*>& units);
+		Compiler(vector<CSLModule*>& units);
 		Chunk* getChunk();
 		object::ObjFunc* endFuncDecl();
 
@@ -115,7 +126,9 @@ namespace compileCore {
 		void visitReturnStmt(AST::ReturnStmt* stmt);
 		#pragma endregion 
 	private:
-		AST::TranslationUnit* curUnit;
+		CSLModule* curUnit;
+		int curUnitIndex;
+		vector<CSLModule*> units;
 
 		#pragma region Helpers
 		//emitters
@@ -129,16 +142,17 @@ namespace compileCore {
 		int emitJump(uint8_t jumpType);
 		void patchJump(int offset);
 		void emitLoop(int start);
+		void patchScopeJumps(ScopeJumpType type);
 		uInt16 makeConstant(Value value);
 		//variables
 		uInt16 identifierConstant(Token name);
 		void defineVar(uInt16 name);
 		void namedVar(Token name, bool canAssign);
 		uInt16 parseVar(Token name);
-		void emitGlobalVar(string name, bool canAssign);
+		void emitGlobalVar(Token name, bool canAssign);
 		//locals
-		void declareVar(Token name);
-		void addLocal(string name);
+		void declareVar(Token& name);
+		void addLocal(Token name);
 		int resolveLocal(Token name);
 		int resolveLocal(CurrentChunkInfo* func, Token name);
 		int resolveUpvalue(CurrentChunkInfo* func, Token name);
@@ -149,11 +163,15 @@ namespace compileCore {
 		//classes and methods
 		void method(AST::FuncDecl* _method, Token className);
 		bool invoke(AST::CallExpr* expr);
-		Token syntheticToken(const char* str);
+		Token syntheticToken(string str);
 		//misc
 		void updateLine(Token token);
 		void error(Token token, string msg);
 		void error(string message);
+		//checks all imports to see if the symbol 'token' is imported
+		int checkSymbol(Token token);
+		//given a token and whether the operation is assigning or reading a variable, determines the correct symbol to use
+		string resolveGlobal(Token token, bool canAssign);
 		#pragma endregion
 	};
 }

@@ -312,15 +312,12 @@ Parser::Parser() {
 #pragma endregion
 }
 
-vector<TranslationUnit*> Parser::parse(vector<CSLModule*> modules) {
-	vector<TranslationUnit*> processedUnits;
+void Parser::parse(vector<CSLModule*> modules) {
 	#ifdef AST_DEBUG
 	ASTPrinter printer;
 	#endif
 	//modules are already sorted using topsort
-	for (CSLModule* pUnit : modules) {
-		TranslationUnit* unit = new TranslationUnit(pUnit);
-		processedUnits.push_back(unit);
+	for (CSLModule* unit : modules) {
 		curUnit = unit;
 
 		current = 0;
@@ -340,7 +337,6 @@ vector<TranslationUnit*> Parser::parse(vector<CSLModule*> modules) {
 		}
 
 	}
-	return processedUnits;
 }
 
 ASTNodePtr Parser::expression(int prec) {
@@ -660,19 +656,19 @@ Token Parser::advance() {
 
 //gets current token
 Token Parser::peek() {
-	if (curUnit->src->tokens.size() < current) throw error(curUnit->src->tokens[current - 1], "Expected token.");
-	return curUnit->src->tokens[current];
+	if (curUnit->tokens.size() < current) throw error(curUnit->tokens[current - 1], "Expected token.");
+	return curUnit->tokens[current];
 }
 
 //gets next token
 Token Parser::peekNext() {
-	if (curUnit->src->tokens.size() < current + 1) throw error(curUnit->src->tokens[current], "Expected token.");
-	return curUnit->src->tokens[current + 1];
+	if (curUnit->tokens.size() < current + 1) throw error(curUnit->tokens[current], "Expected token.");
+	return curUnit->tokens[current + 1];
 }
 
 Token Parser::previous() {
-	if (current - 1 < 0) throw error(curUnit->src->tokens[current], "Expected token.");
-	return curUnit->src->tokens[current - 1];
+	if (current - 1 < 0) throw error(curUnit->tokens[current], "Expected token.");
+	return curUnit->tokens[current - 1];
 }
 
 //if the current token is of the correct type, it's consumed, if not an error is thrown

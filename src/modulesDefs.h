@@ -30,7 +30,7 @@ enum class TokenType {
 	CLASS, THIS, SUPER,
 	SWITCH, CASE, DEFAULT,
 	PRINT, VAR,
-	IMPORT, ADDMACRO, REMOVEMACRO, EXPORT, AS,
+	IMPORT, EXPORT, AS,
 	AWAIT,
 
 	WHITESPACE, NEWLINE, ERROR, TOKEN_EOF, NONE
@@ -117,9 +117,16 @@ struct Token {
 		else if (isSynthetic) return syntheticStr;
 		return str.getStr();
 	}
+
+	bool compare(Token token) {
+		return getLexeme().compare(token.getLexeme()) == 0 && type == token.type;
+	}
 };
 
 struct CSLModule;
+namespace AST {
+	class ASTNode;
+}
 
 struct Dependency {
 	Token alias;
@@ -138,10 +145,18 @@ struct CSLModule {
 	//used for topsort once we have resolved all dependencies 
 	bool traversed;
 
+	//AST of this file
+	vector<std::shared_ptr<AST::ASTNode>> stmts;
+	//exported declarations
+	vector<Token> exports;
+	//used by the compiler to look up if a global variable exists since globals are late bound
+	vector<Token> topDeclarations;
+
 	CSLModule(vector<Token> _tokens, File* _file) {
 		tokens = _tokens;
 		file = _file;
 		resolvedDeps = false;
 		traversed = false;
 	};
+
 };

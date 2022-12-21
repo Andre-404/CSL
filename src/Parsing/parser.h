@@ -44,23 +44,6 @@ namespace AST {
 		int prec;
 	};
 
-	struct TranslationUnit {
-		vector<shared_ptr<ASTNode>> stmts;
-		CSLModule* src;
-		//exported declarations
-		vector<Token> exports;
-		//used by the compiler to look up if a global variable exists since globals are runtime bound
-		vector<Token> topDeclarations;
-
-		TranslationUnit(CSLModule* pUnit) {
-			src = pUnit;
-		}
-
-		~TranslationUnit() {
-			delete src;
-		}
-	};
-
 	class ParserException {
 
 	};
@@ -68,10 +51,10 @@ namespace AST {
 	class Parser {
 	public:
 		Parser();
-		vector<TranslationUnit*> parse(vector<CSLModule*> modules);
+		void parse(vector<CSLModule*> modules);
 
 	private:
-		TranslationUnit* curUnit;
+		CSLModule* curUnit;
 		uInt64 current;
 
 		int loopDepth;

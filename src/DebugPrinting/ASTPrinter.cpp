@@ -80,7 +80,7 @@ void ASTPrinter::visitArrayDeclExpr(ArrayLiteralExpr* expr) {
 
 void ASTPrinter::visitStructLiteralExpr(StructLiteral* expr) {
 	cout << "{ ";
-	for (structEntry entry : expr->fields) {
+	for (StructEntry entry : expr->fields) {
 		cout << entry.name.getLexeme() << " : ";
 		entry.expr->accept(this);
 		cout << ", ";

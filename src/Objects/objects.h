@@ -193,4 +193,8 @@ namespace object {
 		void mark();
 	};
 
+	class ObjFile {
+
+	};
+
 }

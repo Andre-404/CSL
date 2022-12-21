@@ -26,7 +26,7 @@ void highlightToken(Token token) {
 
 	std::cout << red << highlight << black << "\n";
 }
-
+/*
 // Reports the origin of a token (climbs the expansion chain the given token took during preprocessing)
 void logExpansionPath(Token token) {
 	if (!token.macroPtr) return;
@@ -47,7 +47,7 @@ void logDefinitionPath(Token token) {
 	highlightToken(parentToken);
 	logDefinitionPath(macroToken);
 }
-
+*/
 void report(File* src, Token& token, string msg) {
 	if (token.type == TokenType::TOKEN_EOF) {
 		std::cout << "End of file. \n" << msg;
@@ -57,8 +57,8 @@ void report(File* src, Token& token, string msg) {
 	std::cout << red + "error: " + black + msg + "\n";
 
 	highlightToken(token);
-	logDefinitionPath(token);
-	logExpansionPath(token);
+	//logDefinitionPath(token);
+	//logExpansionPath(token);
 	std::cout << "\n";
 }
 

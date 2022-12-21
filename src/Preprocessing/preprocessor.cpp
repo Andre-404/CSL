@@ -136,6 +136,7 @@ vector<tuple<Token, Token>> Preprocessor::processDirectivesAndMacros(CSLModule* 
 
 			importTokens.push_back(std::make_tuple(dependencyName, alias));
 		}
+		else resultTokens.push_back(token);
 	}
 
 	unit->tokens = resultTokens;

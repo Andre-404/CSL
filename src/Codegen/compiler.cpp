@@ -1,6 +1,7 @@
 #include "compiler.h"
 #include "../MemoryManagment/garbageCollector.h"
 #include "../ErrorHandling/errorHandler.h"
+#include <unordered_set>
 
 using namespace compileCore;
 using namespace object;
@@ -25,14 +26,16 @@ CurrentChunkInfo::CurrentChunkInfo(CurrentChunkInfo* _enclosing, funcType _type)
 }
 
 
-Compiler::Compiler(vector<AST::TranslationUnit*>& units) {
+Compiler::Compiler(vector<CSLModule*>& _units) {
 	current = new CurrentChunkInfo(nullptr, funcType::TYPE_SCRIPT);
 	currentClass = nullptr;
 	vector<File*> sourceFiles;
+	curUnitIndex = 0;
+	units = _units;
 
-	for (AST::TranslationUnit* unit : units) {
+	for (CSLModule* unit : units) {
 		curUnit = unit;
-		sourceFiles.push_back(unit->src->file);
+		sourceFiles.push_back(unit->file);
 		for (int i = 0; i < unit->stmts.size(); i++) {
 			//doing this here so that even if a error is detected, we go on and possibly catch other(valid) errors
 			try {
@@ -42,8 +45,9 @@ Compiler::Compiler(vector<AST::TranslationUnit*>& units) {
 				
 			}
 		}
+		curUnitIndex++;
 	}
-	for (AST::TranslationUnit* unit : units) delete unit;
+	for (CSLModule* unit : units) delete unit;
 }
 
 
@@ -270,10 +274,56 @@ void Compiler::visitLiteralExpr(AST::LiteralExpr* expr) {
 	}
 }
 
-void Compiler::visitFuncLiteral(AST::FuncLiteral* expr) {
+void Compiler::visitFuncLiteral(AST::FuncLiteral* expr) {;
+	//creating a new compilerInfo sets us up with a clean slate for writing bytecode, the enclosing functions info
+	//is stored in current->enclosing
+	current = new CurrentChunkInfo(current, funcType::TYPE_FUNC);
+	//current->func = new objFunc();
+	//no need for a endScope, since returning from the function discards the entire callstack
+	beginScope();
+	//we define the args as locals, when the function is called, the args will be sitting on the stack in order
+	//we just assign those positions to each arg
+	for (Token& var : expr->args) {
+		updateLine(var);
+		uint8_t constant = parseVar(var);
+		defineVar(constant);
+	}
+	expr->body->accept(this);
+	current->func->arity = expr->args.size();
+	char str[] = "Anonymous function";
+	current->func->name = ObjString::createString(str, strlen(str), internedStrings);
+	//have to do this here since endFuncDecl() deletes the compilerInfo
+	std::array<Upvalue, UPVAL_MAX> upvals = current->upvalues;
 
+	ObjFunc* func = endFuncDecl();
+	if (func->upvalueCount == 0) {
+		ObjClosure* closure = new ObjClosure(dynamic_cast<ObjFunc*>(func));
+		emitConstant(Value(closure));
+		return;
+	}
+
+	uInt16 constant = makeConstant(Value(func));
+	if (constant < UINT8_MAX) emitBytes(+OpCode::CLOSURE, constant);
+	else emitByteAnd16Bit(+OpCode::CLOSURE_LONG, constant);
+	//if this function does capture any upvalues, we emit the code for getting them, 
+	//when we execute "OP_CLOSURE" we will check to see how many upvalues the function captures by going directly to the func->upvalueCount
+	for (int i = 0; i < func->upvalueCount; i++) {
+		emitByte(upvals[i].isLocal ? 1 : 0);
+		emitByte(upvals[i].index);
+	}
 }
+
 void Compiler::visitModuleAccessExpr(AST::ModuleAccessExpr* expr) {
+	bool containsDepAlias = false;
+	for (Dependency dep : curUnit->deps) {
+		if (dep.alias.compare(expr->moduleName)) {
+			containsDepAlias = true;
+			break;
+		}
+	}
+}
+
+void Compiler::visitAwaitExpr(AST::AwaitExpr* expr) {
 
 }
 
@@ -311,27 +361,25 @@ void Compiler::visitFuncDecl(AST::FuncDecl* decl) {
 		uint8_t constant = parseVar(var);
 		defineVar(constant);
 	}
-	decl->getBody()->accept(this);
-	current->func->arity = decl->getArgs().size();
+	decl->body->accept(this);
+	current->func->arity = decl->args.size();
 	//could get away with using string instead of objString?
 	string str = decl->getName().getLexeme();
-	current->func->name = copyString((char*)str.c_str(), str.length());
+	current->func->name = ObjString::createString((char*)str.c_str(), str.length(), internedStrings);
 	//have to do this here since endFuncDecl() deletes the compilerInfo
-	std::array<upvalue, UPVAL_MAX> upvals = current->upvalues;
-
-	objFunc* func = endFuncDecl();
+	std::array<Upvalue, UPVAL_MAX> upvals = current->upvalues;
+	
+	ObjFunc* func = endFuncDecl();
 	if (func->upvalueCount == 0) {
-		gc.cachePtr(func);
-		objClosure* closure = new objClosure(dynamic_cast<objFunc*>(gc.getCachedPtr()));
-		emitConstant(OBJ_VAL(closure));
+		ObjClosure* closure = new ObjClosure(dynamic_cast<ObjFunc*>(func));
+		emitConstant(Value(closure));
 		defineVar(name);
 		return;
 	}
 
-	uInt16 constant = makeConstant(OBJ_VAL(func));
-
-	if (constant < UINT8_MAX) emitBytes(OP_CLOSURE, constant);
-	else emitByteAnd16Bit(OP_CLOSURE_LONG, constant);
+	uInt16 constant = makeConstant(Value(func));
+	if (constant < UINT8_MAX) emitBytes(+OpCode::CLOSURE, constant);
+	else emitByteAnd16Bit(+OpCode::CLOSURE_LONG, constant);
 	//if this function does capture any upvalues, we emit the code for getting them, 
 	//when we execute "OP_CLOSURE" we will check to see how many upvalues the function captures by going directly to the func->upvalueCount
 	for (int i = 0; i < func->upvalueCount; i++) {
@@ -341,42 +389,42 @@ void Compiler::visitFuncDecl(AST::FuncDecl* decl) {
 	defineVar(name);
 }
 
-void compiler::visitClassDecl(ASTClass* decl) {
+void Compiler::visitClassDecl(AST::ClassDecl* decl) {
 	Token className = decl->getName();
 	uInt16 constant = identifierConstant(className);
 	declareVar(className);
 
-	emitByteAnd16Bit(OP_CLASS, constant);
+	emitByteAnd16Bit(+OpCode::CLASS, constant);
 
 	//define the class here, so that we can use it inside it's own methods
 	defineVar(constant);
 
-	classCompilerInfo temp(currentClass, false);
+	ClassChunkInfo temp(currentClass, false);
 	currentClass = &temp;
 
-	if (decl->inherits()) {
+	if (decl->inherits) {
 		//if the class does inherit from some other class, we load the parent class and declare 'super' as a local variable
 		//which holds said class
-		namedVar(decl->getInherited(), false);
-		if (identifiersEqual(className.getLexeme(), decl->getInherited().getLexeme())) {
-			error(decl->getInherited(), "A class can't inherit from itself.");
+		namedVar(decl->inheritedClass, false);
+		if (className.getLexeme().compare(decl->inheritedClass.getLexeme()) == 0) {
+			error(decl->inheritedClass, "A class can't inherit from itself.");
 		}
 		beginScope();
 		addLocal(syntheticToken("super"));
 		defineVar(0);
 
 		namedVar(className, false);
-		emitByte(OP_INHERIT);
+		emitByte(+OpCode::INHERIT);
 		currentClass->hasSuperclass = true;
 	}
 	//we need to load the class onto the top of the stack so that 'this' keyword can work correctly inside of methods
 	//the class that 'this' refers to is captured as a upvalue inside of methods
-	if (!decl->inherits()) namedVar(className, false);
-	for (ASTNode* _method : decl->getMethods()) {
-		method((ASTFunc*)_method, className);
+	if (!decl->inherits) namedVar(className, false);
+	for (AST::ASTNodePtr _method : decl->methods) {
+		method(dynamic_cast<AST::FuncDecl*>(_method.get()), className);
 	}
-	//popping the current class
-	emitByte(OP_POP);
+	//pop the current class
+	emitByte(+OpCode::POP);
 
 	if (currentClass->hasSuperclass) {
 		endScope();
@@ -386,154 +434,110 @@ void compiler::visitClassDecl(ASTClass* decl) {
 
 
 
-void compiler::visitPrintStmt(ASTPrintStmt* stmt) {
-	stmt->getExpr()->accept(this);
+void Compiler::visitPrintStmt(AST::PrintStmt* stmt) {
+	stmt->expr->accept(this);
 	//OP_TO_STRING is emitted first to handle the case of a instance whose class defines a toString method
-	emitBytes(OP_TO_STRING, OP_PRINT);
+	emitByte(+OpCode::PRINT);
 }
 
-void compiler::visitExprStmt(ASTExprStmt* stmt) {
-	stmt->getExpr()->accept(this);
-	emitByte(OP_POP);
+void Compiler::visitExprStmt(AST::ExprStmt* stmt) {
+	stmt->expr->accept(this);
+	emitByte(+OpCode::POP);
 }
 
-void compiler::visitBlockStmt(ASTBlockStmt* stmt) {
+void Compiler::visitBlockStmt(AST::BlockStmt* stmt) {
 	beginScope();
-	vector<ASTNode*> stmts = stmt->getStmts();
-	for (ASTNode* node : stmts) {
+	for (AST::ASTNodePtr node : stmt->statements) {
 		node->accept(this);
 	}
 	endScope();
 }
 
-void compiler::visitIfStmt(ASTIfStmt* stmt) {
+void Compiler::visitIfStmt(AST::IfStmt* stmt) {
 	//compile condition and emit a jump over then branch if the condition is false
-	stmt->getCondition()->accept(this);
-	int thenJump = emitJump(OP_JUMP_IF_FALSE_POP);
-	stmt->getThen()->accept(this);
+	stmt->condition->accept(this);
+	int thenJump = emitJump(+OpCode::JUMP_IF_FALSE_POP);
+	stmt->thenBranch->accept(this);
 	//only compile if there is a else branch
-	if (stmt->getElse() != NULL) {
+	if (stmt->elseBranch != nullptr) {
 		//prevents fallthrough to else branch
-		int elseJump = emitJump(OP_JUMP);
+		int elseJump = emitJump(+OpCode::JUMP);
 		patchJump(thenJump);
 
-		stmt->getElse()->accept(this);
+		stmt->elseBranch->accept(this);
 		patchJump(elseJump);
 	}
 	else patchJump(thenJump);
 
 }
 
-void compiler::visitWhileStmt(ASTWhileStmt* stmt) {
+void Compiler::visitWhileStmt(AST::WhileStmt* stmt) {
 	//the bytecode for this is almost the same as if statement
 	//but at the end of the body, we loop back to the start of the condition
-	int loopStart = getChunk()->code.count();
-	stmt->getCondition()->accept(this);
-	int jump = emitJump(OP_JUMP_IF_FALSE_POP);
-	stmt->getBody()->accept(this);
-	patchContinue();
+	int loopStart = getChunk()->code.size();
+	stmt->condition->accept(this);
+	int jump = emitJump(+OpCode::JUMP_IF_FALSE_POP);
+	stmt->body->accept(this);
+	patchScopeJumps(ScopeJumpType::CONTINUE);
 	emitLoop(loopStart);
 	patchJump(jump);
-	patchBreak();
+	patchScopeJumps(ScopeJumpType::BREAK);
 }
 
-void compiler::visitForStmt(ASTForStmt* stmt) {
+void Compiler::visitForStmt(AST::ForStmt* stmt) {
 	//we wrap this in a scope so if there is a var declaration in the initialization it's scoped to the loop
 	beginScope();
-	if (stmt->getInit() != NULL) stmt->getInit()->accept(this);
-	int loopStart = getChunk()->code.count();
+	if (stmt->init != nullptr) stmt->init->accept(this);
+	int loopStart = getChunk()->code.size();
 	//only emit the exit jump code if there is a condition expression
 	int exitJump = -1;
-	if (stmt->getCondition() != NULL) {
-		stmt->getCondition()->accept(this);
-		exitJump = emitJump(OP_JUMP_IF_FALSE_POP);
+	if (stmt->condition != nullptr) {
+		stmt->condition->accept(this);
+		exitJump = emitJump(+OpCode::JUMP_IF_FALSE_POP);
 	}
 	//body is mandatory
-	stmt->getBody()->accept(this);
+	stmt->body->accept(this);
 	//patching continue here to increment if a variable for incrementing has been defined
-	patchContinue();
+	patchScopeJumps(ScopeJumpType::CONTINUE);
 	//if there is a increment expression, we compile it and emit a POP to get rid of the result
-	if (stmt->getIncrement() != NULL) {
-		stmt->getIncrement()->accept(this);
-		emitByte(OP_POP);
+	if (stmt->increment != nullptr) {
+		stmt->increment->accept(this);
+		emitByte(+OpCode::POP);
 	}
 	emitLoop(loopStart);
 	//exit jump still needs to handle scoping appropriately 
 	if (exitJump != -1) patchJump(exitJump);
 	endScope();
 	//patch breaks AFTER we close the for scope because breaks that are in current scope aren't patched
-	patchBreak();
+	patchScopeJumps(ScopeJumpType::BREAK);
 }
 
-void compiler::visitForeachStmt(ASTForeachStmt* stmt) {
-	beginScope();
-	//the name of the variable is starts with "0" because no user defined variable can start with a number,
-	//and we don't want the underlying code to clash with some user defined variables
-	Token iterator = syntheticToken("0iterable");
-	//get the iterator
-	stmt->getCollection()->accept(this);
-	uInt16 name = identifierConstant(syntheticToken("begin"));
-	emitByte(OP_INVOKE);
-	emitBytes(name, 0);
-	addLocal(iterator);
-	defineVar(0);
-	//Get the var ready
-	emitByte(OP_NIL);
-	addLocal(stmt->getVarName());
-	defineVar(0);
-
-	int loopStart = getChunk()->code.count();
-
-	//advancing
-	namedVar(iterator, false);
-	name = identifierConstant(syntheticToken("next"));
-	emitByte(OP_INVOKE);
-	emitBytes(name, 0);
-	int jump = emitJump(OP_JUMP_IF_FALSE_POP);
-
-	//get new variable
-	namedVar(iterator, false);
-	name = identifierConstant(syntheticToken("current"));
-	emitBytes(OP_GET_PROPERTY, name);
-	namedVar(stmt->getVarName(), true);
-	emitByte(OP_POP);
-
-	stmt->getBody()->accept(this);
-
-	//end of loop
-	patchContinue();
-	emitLoop(loopStart);
-	patchJump(jump);
-	endScope();
-	patchBreak();
-}
-
-void compiler::visitBreakStmt(ASTBreakStmt* stmt) {
-	//the amount of variables to pop and the amount of code to jump is determined in patchBreak()
+void Compiler::visitBreakStmt(AST::BreakStmt* stmt) {
+	//the amount of variables to pop and the amount of code to jump is determined in patchScopeJumps()
 	//which is called at the end of loops
-	updateLine(stmt->getToken());
-	emitByte(OP_JUMP_POPN);
-	int breakJump = getChunk()->code.count();
+	updateLine(stmt->token);
+	emitByte(+ScopeJumpType::BREAK);
+	int breakJump = getChunk()->code.size();
 	emitBytes(0xff, 0xff);
 	emitBytes(0xff, 0xff);
-	current->breakStmts.emplace_back(current->scopeDepth, breakJump, current->localCount);
+	current->scopeJumps.push_back(breakJump);
 }
 
-void compiler::visitContinueStmt(ASTContinueStmt* stmt) {
-	//the amount of variables to pop and the amount of code to jump is determined in patchContinue()
+void Compiler::visitContinueStmt(AST::ContinueStmt* stmt) {
+	//the amount of variables to pop and the amount of code to jump is determined in patchScopeJumps()
 	//which is called at the end of loops
-	updateLine(stmt->getToken());
-	emitByte(OP_JUMP_POPN);
-	int continueJump = getChunk()->code.count();
+	updateLine(stmt->token);
+	emitByte(+ScopeJumpType::CONTINUE);
+	int continueJump = getChunk()->code.size();
 	emitBytes(0xff, 0xff);
 	emitBytes(0xff, 0xff);
-	current->continueStmts.emplace_back(current->scopeDepth, continueJump, current->localCount);
+	current->scopeJumps.push_back(continueJump);
 }
 
-void compiler::visitSwitchStmt(ASTSwitchStmt* stmt) {
-	beginScope();
+void Compiler::visitSwitchStmt(AST::SwitchStmt* stmt) {
+	/*beginScope();
 	//compile the expression in ()
-	stmt->getExpr()->accept(this);
+	stmt->expr->accept(this);
 	//based on the switch stmt type(all num, all string or mixed) we create a new switch table struct and get it's pos
 	//passing in the size to call .reserve() on map/vector
 	switchType type = stmt->getType();
@@ -583,111 +587,106 @@ void compiler::visitSwitchStmt(ASTSwitchStmt* stmt) {
 	if (table.defaultJump == -1) table.defaultJump = getChunk()->code.count() - start;
 	//we use a scope and patch breaks AFTER ending the scope because breaks that are in the current scope aren't patched
 	endScope();
-	patchBreak();
+	patchBreak();*/
 }
 
-void compiler::visitCase(ASTCase* stmt) {
+void Compiler::visitCaseStmt(AST::CaseStmt* stmt) {
 	//compile every statement in the case
 	//user has to worry about fallthrough
-	for (ASTNode* stmt : stmt->getStmts()) {
+	for (AST::ASTNodePtr stmt : stmt->stmts) {
 		stmt->accept(this);
 	}
 }
 
-void compiler::visitReturnStmt(ASTReturn* stmt) {
-	updateLine(stmt->getKeyword());
+void Compiler::visitReturnStmt(AST::ReturnStmt* stmt) {
+	updateLine(stmt->keyword);
 	if (current->type == funcType::TYPE_SCRIPT) {
-		error(stmt->getKeyword(), "Can't return from top-level code.");
+		error(stmt->keyword, "Can't return from top-level code.");
 	}
 	else if (current->type == funcType::TYPE_CONSTRUCTOR) {
-		error(stmt->getKeyword(), "Can't return a value from a constructor.");
+		error(stmt->keyword, "Can't return a value from a constructor.");
 	}
-	else if (current->type == funcType::TYPE_FIBER) {
-		error(stmt->getKeyword(), "Use 'yield' to return value from a fiber and pause it's execution.");
-	}
-	if (stmt->getExpr() == NULL) {
+	if (stmt->expr == nullptr) {
 		emitReturn();
 		return;
 	}
-	stmt->getExpr()->accept(this);
-	emitByte(OP_RETURN);
-	current->hasReturn = true;
+	stmt->expr->accept(this);
+	emitByte(+OpCode::RETURN);
+	current->hasReturnStmt = true;
 }
 
 #pragma region helpers
 
 #pragma region Emitting bytes
 
-void compiler::emitByte(uint8_t byte) {
-	getChunk()->writeData(byte, current->line, curUnit->name);//line is incremented whenever we find a statement/expression that contains tokens
+void Compiler::emitByte(uint8_t byte) {
+	getChunk()->writeData(byte, current->line, curUnit->file->name);//line is incremented whenever we find a statement/expression that contains tokens
 }
 
-void compiler::emitBytes(uint8_t byte1, uint8_t byte2) {
+void Compiler::emitBytes(uint8_t byte1, uint8_t byte2) {
 	emitByte(byte1);
 	emitByte(byte2);
 }
 
-void compiler::emit16Bit(uInt16 number) {
-	//Little endian
+void Compiler::emit16Bit(uInt16 number) {
+	//Big endian
 	emitBytes((number >> 8) & 0xff, number & 0xff);
 }
 
-void compiler::emitByteAnd16Bit(uint8_t byte, uInt16 num) {
+void Compiler::emitByteAnd16Bit(uint8_t byte, uInt16 num) {
 	emitByte(byte);
 	emit16Bit(num);
 }
 
-uInt16 compiler::makeConstant(Value value) {
-	if (IS_OBJ(value)) gc.cachePtr(AS_OBJ(value));
+uInt16 Compiler::makeConstant(Value value) {
 	uInt16 constant = getChunk()->addConstant(value);
 	if (constant > UINT16_MAX) {
 		error("Too many constants in one chunk.");
 		return 0;
 	}
-	//since the pointer in value is now a cached ptr, it doesn't change if a resize/collection occurs, so we need to take care of that
-	if (IS_OBJ(value)) AS_OBJ(getChunk()->constants[constant]) = dynamic_cast<obj*>(gc.getCachedPtr());
 	return constant;
 }
 
-void compiler::emitConstant(Value value) {
+void Compiler::emitConstant(Value value) {
 	//shorthand for adding a constant to the chunk and emitting it
 	uInt16 constant = makeConstant(value);
-	if (constant < 256) emitBytes(OP_CONSTANT, constant);
-	else if (constant < 1 << 15) emitByteAnd16Bit(OP_CONSTANT_LONG, constant);
+	if (constant < 256) emitBytes(+OpCode::CONSTANT, constant);
+	else if (constant < UINT16_MAX) emitByteAnd16Bit(+OpCode::CONSTANT_LONG, constant);
+	else error("Constant overflow");
 }
 
-void compiler::emitGlobalVar(Token name, bool canAssign) {
-	uInt arg = identifierConstant(name);
-	uInt mod = makeConstant(OBJ_VAL(modules[modules.size() - 1]));
-	uint8_t getOp = OP_GET_GLOBAL;
-	uint8_t setOp = OP_SET_GLOBAL;
-	if (arg > UINT8_MAX || mod > UINT8_MAX) {
-		getOp = OP_GET_GLOBAL_LONG;
-		setOp = OP_SET_GLOBAL_LONG;
+void Compiler::emitGlobalVar(Token name, bool canAssign) {
+	//all global variables have a numerical prefix which indicates which source file they came from, used for scoping
+	string temp = resolveGlobal(name, canAssign);
+	uInt arg = makeConstant(Value(ObjString::createString((char*)temp.c_str(), temp.length(), internedStrings)));
+
+	uint8_t getOp = +OpCode::GET_GLOBAL;
+	uint8_t setOp = +OpCode::SET_GLOBAL;
+	if (arg > UINT8_MAX) {
+		getOp = +OpCode::GET_GLOBAL_LONG;
+		setOp = +OpCode::SET_GLOBAL_LONG;
 		emitByteAnd16Bit(canAssign ? setOp : getOp, arg);
-		emit16Bit(mod);
 		return;
 	}
 	emitByte(canAssign ? setOp : getOp);
-	emitBytes(arg, mod);
+	emitByte(arg);
 }
 
-
-void compiler::emitReturn() {
-	if (current->type == funcType::TYPE_CONSTRUCTOR) emitBytes(OP_GET_LOCAL, 0);
-	else emitByte(OP_NIL);
-	emitByte(OP_RETURN);
+void Compiler::emitReturn() {
+	if (current->type == funcType::TYPE_CONSTRUCTOR) emitBytes(+OpCode::GET_LOCAL, 0);
+	else emitByte(+OpCode::NIL);
+	emitByte(+OpCode::RETURN);
 }
 
-int compiler::emitJump(uint8_t jumpType) {
+int Compiler::emitJump(uint8_t jumpType) {
 	emitByte(jumpType);
 	emitBytes(0xff, 0xff);
-	return getChunk()->code.count() - 2;
+	return getChunk()->code.size() - 2;
 }
 
-void compiler::patchJump(int offset) {
+void Compiler::patchJump(int offset) {
 	// -2 to adjust for the bytecode for the jump offset itself.
-	int jump = getChunk()->code.count() - offset - 2;
+	int jump = getChunk()->code.size() - offset - 2;
 	//fix for future: insert 2 more bytes into the array, but make sure to do the same in lines array
 	if (jump > UINT16_MAX) {
 		error("Too much code to jump over.");
@@ -696,13 +695,44 @@ void compiler::patchJump(int offset) {
 	getChunk()->code[offset + 1] = jump & 0xff;
 }
 
-void compiler::emitLoop(int start) {
-	emitByte(OP_LOOP);
+void Compiler::emitLoop(int start) {
+	emitByte(+OpCode::LOOP);
 
-	int offset = getChunk()->code.count() - start + 2;
+	int offset = getChunk()->code.size() - start + 2;
 	if (offset > UINT16_MAX) error("Loop body too large.");
 
 	emit16Bit(offset);
+}
+
+void Compiler::patchScopeJumps(ScopeJumpType type) {
+	int curCode = getChunk()->code.size();
+	//most recent jumps are going to be on top
+	for (int i = current->scopeJumps.size() - 1; i >= 0; i--) {
+		uInt jumpPatchPos = current->scopeJumps[i];
+		byte jumpType = getChunk()->code[jumpPatchPos - 1];
+		uInt jumpDepth = (getChunk()->code[jumpPatchPos] << 8) | getChunk()->code[jumpPatchPos + 1];
+		uInt jumpVarNum = (getChunk()->code[jumpPatchPos + 2] << 8) | getChunk()->code[jumpPatchPos + 3];
+		//only break statements which are in a strictly deeper scope get patched, on the other hand
+		//continue statements which are in current or a deeper scope get patched
+		if ((jumpDepth > current->scopeDepth && type == ScopeJumpType::BREAK && +type == jumpType) ||
+			(jumpDepth >= current->scopeDepth && type == ScopeJumpType::CONTINUE && +type == jumpType)) {
+			int jumpLenght = curCode - jumpPatchPos - 4;
+			int toPop = jumpVarNum - current->localCount;
+			if (jumpLenght > UINT16_MAX) error("Too much code to jump over.");
+			if (toPop > UINT16_MAX) error("Too many variables to pop.");
+
+			getChunk()->code[jumpPatchPos - 1] = +OpCode::JUMP_POPN;
+			//variables declared by the time we hit the break whose depth is lower or equal to this break stmt
+			getChunk()->code[jumpPatchPos] = (toPop >> 8) & 0xff;
+			getChunk()->code[jumpPatchPos + 1] = toPop & 0xff;
+			//amount to jump
+			getChunk()->code[jumpPatchPos + 2] = (jumpLenght >> 8) & 0xff;
+			getChunk()->code[jumpPatchPos + 3] = jumpLenght & 0xff;
+
+			current->scopeJumps.erase(current->scopeJumps.begin() + i);
+		}
+		else break;
+	}
 }
 
 #pragma endregion
@@ -713,39 +743,36 @@ bool identifiersEqual(const string& a, const string& b) {
 	return (a.compare(b) == 0);
 }
 
-uInt16 compiler::identifierConstant(Token name) {
+uInt16 Compiler::identifierConstant(Token name) {
 	updateLine(name);
 	string temp = name.getLexeme();
-	//since str is a cached pointer(a collection may occur while resizing the chunk constants array, we need to treat it as a cached ptr
-	uInt16 index = makeConstant(OBJ_VAL(copyString((char*)temp.c_str(), temp.length())));
-
-	return index;
+	return makeConstant(Value(ObjString::createString((char*)temp.c_str(), temp.length(), internedStrings)));
 }
 
-void compiler::defineVar(uInt16 name) {
+void Compiler::defineVar(uInt16 name) {
 	//if this is a local var, mark it as ready and then bail out
 	if (current->scopeDepth > 0) {
 		markInit();
 		return;
 	}
-	if (name < UINT8_MAX) emitBytes(OP_DEFINE_GLOBAL, name);
+	if (name < UINT8_MAX) emitBytes(+OpCode::DEFINE_GLOBAL, name);
 	else {
-		emitByteAnd16Bit(OP_DEFINE_GLOBAL_LONG, name);
+		emitByteAnd16Bit(+OpCode::DEFINE_GLOBAL_LONG, name);
 	}
 }
 
-void compiler::namedVar(Token token, bool canAssign) {
+void Compiler::namedVar(Token token, bool canAssign) {
 	updateLine(token);
 	uint8_t getOp;
 	uint8_t setOp;
 	uInt arg = resolveLocal(token);
 	if (arg != -1) {
-		getOp = OP_GET_LOCAL;
-		setOp = OP_SET_LOCAL;
+		getOp = +OpCode::GET_LOCAL;
+		setOp = +OpCode::SET_LOCAL;
 	}
 	else if ((arg = resolveUpvalue(current, token)) != -1) {
-		getOp = OP_GET_UPVALUE;
-		setOp = OP_SET_UPVALUE;
+		getOp = +OpCode::GET_UPVALUE;
+		setOp = +OpCode::SET_UPVALUE;
 	}
 	else {
 		return emitGlobalVar(token, canAssign);
@@ -753,41 +780,50 @@ void compiler::namedVar(Token token, bool canAssign) {
 	emitBytes(canAssign ? setOp : getOp, arg);
 }
 
-uInt16 compiler::parseVar(Token name) {
+//if 'name' is a global variable it's parsed and a string constant is returned
+//otherwise, if 'name' is a local variable it's passed to declareVar()
+uInt16 Compiler::parseVar(Token name) {
 	updateLine(name);
 	declareVar(name);
 	if (current->scopeDepth > 0) return 0;
-	return identifierConstant(name);
+	//if this is a global variable, we tack on the index of this CSLModule at the start of the variable name(variable names can't start with numbers)
+	//used to differentiate variables of the same name from different souce files
+
+	//tacking on the current index since parseVar is only used for declaring a variable, which can only be done in the current source file
+	string temp = std::to_string(curUnitIndex) +  name.getLexeme();
+	return makeConstant(Value(ObjString::createString((char*)temp.c_str(), temp.length(), internedStrings)));
 }
 
-void compiler::declareVar(Token& name) {
+//makes sure the compiler is aware that a stack slot is occupied by this local variable
+void Compiler::declareVar(Token& name) {
 	updateLine(name);
+	//if we are currently in global scope, this has no use
 	if (current->scopeDepth == 0) return;
 	for (int i = current->localCount - 1; i >= 0; i--) {
-		local* _local = &current->locals[i];
-		if (_local->depth != -1 && _local->depth < current->scopeDepth) {
+		Local* local = &current->locals[i];
+		if (local->depth != -1 && local->depth < current->scopeDepth) {
 			break;
 		}
 		string str = name.getLexeme();
-		if (identifiersEqual(str, _local->name)) {
+		if (identifiersEqual(str, local->name)) {
 			error(name, "Already a variable with this name in this scope.");
 		}
 	}
 	addLocal(name);
 }
 
-void compiler::addLocal(Token name) {
+void Compiler::addLocal(Token name) {
 	updateLine(name);
 	if (current->localCount == LOCAL_MAX) {
 		error(name, "Too many local variables in function.");
 		return;
 	}
-	local* _local = &current->locals[current->localCount++];
-	_local->name = name.getLexeme();
-	_local->depth = -1;
+	Local* local = &current->locals[current->localCount++];
+	local->name = name.getLexeme();
+	local->depth = -1;
 }
 
-void compiler::endScope() {
+void Compiler::endScope() {
 	//Pop every variable that was declared in this scope
 	current->scopeDepth--;//first lower the scope, the check for every var that is deeper than the current scope
 	int toPop = 0;
@@ -795,25 +831,25 @@ void compiler::endScope() {
 		if (!current->hasCapturedLocals) toPop++;
 		else {
 			if (current->locals[current->localCount - 1].isCaptured) {
-				emitByte(OP_CLOSE_UPVALUE);
+				emitByte(+OpCode::CLOSE_UPVALUE);
 			}
 			else {
-				emitByte(OP_POP);
+				emitByte(+OpCode::POP);
 			}
 		}
 		current->localCount--;
 	}
-	if (toPop > 0 && !current->hasCapturedLocals) emitBytes(OP_POPN, toPop);
+	if (toPop > 0 && !current->hasCapturedLocals) emitBytes(+OpCode::POPN, toPop);
 }
 
-int compiler::resolveLocal(compilerInfo* func, Token& name) {
+int Compiler::resolveLocal(CurrentChunkInfo* func, Token name) {
 	//checks to see if there is a local variable with a provided name, if there is return the index of the stack slot of the var
 	updateLine(name);
 	for (int i = func->localCount - 1; i >= 0; i--) {
-		local* _local = &func->locals[i];
+		Local* local = &func->locals[i];
 		string str = name.getLexeme();
-		if (identifiersEqual(str, _local->name)) {
-			if (_local->depth == -1) {
+		if (identifiersEqual(str, local->name)) {
+			if (local->depth == -1) {
 				error(name, "Can't read local variable in its own initializer.");
 			}
 			return i;
@@ -823,11 +859,11 @@ int compiler::resolveLocal(compilerInfo* func, Token& name) {
 	return -1;
 }
 
-int compiler::resolveLocal(Token& name) {
+int Compiler::resolveLocal(Token name) {
 	return resolveLocal(current, name);
 }
 
-int compiler::resolveUpvalue(compilerInfo* func, Token& name) {
+int Compiler::resolveUpvalue(CurrentChunkInfo* func, Token name) {
 	if (func->enclosing == NULL) return -1;
 
 	int local = resolveLocal(func->enclosing, name);
@@ -836,7 +872,6 @@ int compiler::resolveUpvalue(compilerInfo* func, Token& name) {
 		func->enclosing->hasCapturedLocals = true;
 		return addUpvalue((uint8_t)local, true);
 	}
-	if (func->type == funcType::TYPE_FIBER) return -1;
 	int upvalue = resolveUpvalue(func->enclosing, name);
 	if (upvalue != -1) {
 		return addUpvalue((uint8_t)upvalue, false);
@@ -845,10 +880,10 @@ int compiler::resolveUpvalue(compilerInfo* func, Token& name) {
 	return -1;
 }
 
-int compiler::addUpvalue(uint8_t index, bool isLocal) {
+int Compiler::addUpvalue(uint8_t index, bool isLocal) {
 	int upvalueCount = current->func->upvalueCount;
 	for (int i = 0; i < upvalueCount; i++) {
-		upvalue* upval = &current->upvalues[i];
+		Upvalue* upval = &current->upvalues[i];
 		if (upval->index == index && upval->isLocal == isLocal) {
 			return i;
 		}
@@ -862,65 +897,20 @@ int compiler::addUpvalue(uint8_t index, bool isLocal) {
 	return current->func->upvalueCount++;
 }
 
-void compiler::markInit() {
+void Compiler::markInit() {
 	if (current->scopeDepth == 0) return;
 	//marks variable as ready to use, any use of it before this call is a error
 	current->locals[current->localCount - 1].depth = current->scopeDepth;
 }
 
-void compiler::patchBreak() {
-	int curCode = getChunk()->code.count();
-	//most recent breaks are going to be on top
-	for (int i = current->breakStmts.size() - 1; i >= 0; i--) {
-		jump curBreak = current->breakStmts[i];
-		//if the break stmt we're looking at has a depth that's equal or higher than current depth, we bail out
-		if (curBreak.depth > current->scopeDepth) {
-			int jumpLenght = curCode - curBreak.offset - 4;
-			int toPop = curBreak.varNum - current->localCount;
-			//variables declared by the time we hit the break whose depth is lower or equal to this break stmt
-			getChunk()->code[curBreak.offset] = (toPop >> 8) & 0xff;
-			getChunk()->code[curBreak.offset + 1] = toPop & 0xff;
-			//amount to jump
-			getChunk()->code[curBreak.offset + 2] = (jumpLenght >> 8) & 0xff;
-			getChunk()->code[curBreak.offset + 3] = jumpLenght & 0xff;
-			//delete break from array
-			current->breakStmts.pop_back();
-		}
-		else break;
-	}
-}
-
-void compiler::patchContinue() {
-	int curCode = getChunk()->code.count();
-	//most recent continues are going to be on top
-	for (int i = current->continueStmts.size() - 1; i >= 0; i--) {
-		jump curContinue = current->continueStmts[i];
-		//if the break stmt we're looking at has a depth that's equal or higher than current depth, we bail out
-		if (curContinue.depth >= current->scopeDepth) {
-			int jumpLenght = curCode - curContinue.offset - 4;
-			int toPop = curContinue.varNum - current->localCount;
-			//variables declared by the time we hit the break whose depth is lower or equal to this break stmt
-			getChunk()->code[curContinue.offset] = (toPop >> 8) & 0xff;
-			getChunk()->code[curContinue.offset + 1] = toPop & 0xff;
-			//amount to jump
-			getChunk()->code[curContinue.offset + 2] = (jumpLenght >> 8) & 0xff;
-			getChunk()->code[curContinue.offset + 3] = jumpLenght & 0xff;
-			//delete break from array
-			current->continueStmts.pop_back();
-		}
-		else break;
-	}
-}
-
-
-Token compiler::syntheticToken(const char* str) {
-	return Token(str, current->line, TOKEN_IDENTIFIER);
+Token Compiler::syntheticToken(string str) {
+	return Token(TokenType::IDENTIFIER, str);
 }
 
 #pragma endregion
 
 #pragma region Classes and methods
-void compiler::method(ASTFunc* _method, Token className) {
+void Compiler::method(AST::FuncDecl* _method, Token className) {
 	updateLine(_method->getName());
 	uInt16 name = identifierConstant(_method->getName());
 	//creating a new compilerInfo sets us up with a clean slate for writing bytecode, the enclosing functions info
@@ -928,98 +918,79 @@ void compiler::method(ASTFunc* _method, Token className) {
 	funcType type = funcType::TYPE_METHOD;
 	//constructors are treated separatly, but are still methods
 	if (_method->getName().getLexeme().compare(className.getLexeme()) == 0) type = funcType::TYPE_CONSTRUCTOR;
-	current = new compilerInfo(current, type);
+	current = new CurrentChunkInfo(current, type);
 	//->func = new objFunc();
 	//no need for a endScope, since returning from the function discards the entire callstack
 	beginScope();
 	//we define the args as locals, when the function is called, the args will be sitting on the stack in order
 	//we just assign those positions to each arg
-	for (Token& var : _method->getArgs()) {
+	for (Token& var : _method->args) {
 		uInt16 constant = parseVar(var);
 		defineVar(constant);
 	}
-	_method->getBody()->accept(this);
-	current->func->arity = _method->getArgs().size();
+	_method->body->accept(this);
+	current->func->arity = _method->arity;
 
 	string str = _method->getName().getLexeme();
-	current->func->name = copyString((char*)str.c_str(), str.length());
+	current->func->name = ObjString::createString((char*)str.c_str(), str.length(), internedStrings);
 	//have to do this here since endFuncDecl() deletes the compilerInfo
-	std::array<upvalue, UPVAL_MAX> upvals = current->upvalues;
+	std::array<Upvalue, UPVAL_MAX> upvals = current->upvalues;
 
-	objFunc* func = endFuncDecl();
+	ObjFunc* func = endFuncDecl();
 	if (func->upvalueCount == 0) {
-		gc.cachePtr(func);
-		objClosure* closure = new objClosure(dynamic_cast<objFunc*>(gc.getCachedPtr()));
-		emitConstant(OBJ_VAL(closure));
-
-		emitByteAnd16Bit(OP_METHOD, name);
+		ObjClosure* closure = new ObjClosure(dynamic_cast<ObjFunc*>(func));
+		emitConstant(Value(closure));
+		emitByteAnd16Bit(+OpCode::METHOD, name);
 		return;
 	}
-	uInt16 constant = makeConstant(OBJ_VAL(func));
+	uInt16 constant = makeConstant(Value(func));
 
-	if (constant < UINT8_MAX) emitBytes(OP_CLOSURE, constant);
-	else emitByteAnd16Bit(OP_CLOSURE_LONG, constant);
+	if (constant < UINT8_MAX) emitBytes(+OpCode::CLOSURE, constant);
+	else emitByteAnd16Bit(+OpCode::CLOSURE_LONG, constant);
 	//if this function does capture any upvalues, we emit the code for getting them, 
 	//when we execute "OP_CLOSURE" we will check to see how many upvalues the function captures by going directly to the func->upvalueCount
 	for (int i = 0; i < func->upvalueCount; i++) {
 		emitByte(upvals[i].isLocal ? 1 : 0);
 		emitByte(upvals[i].index);
 	}
-	emitByteAnd16Bit(OP_METHOD, name);
+	emitByteAnd16Bit(+OpCode::METHOD, name);
 }
 
-bool compiler::invoke(ASTCallExpr* expr) {
-	//we only optimize function calls
-	if (expr->getAccessor().type != TOKEN_LEFT_PAREN) return false;
-	if (expr->getCallee()->type == ASTType::CALL) {
+bool Compiler::invoke(AST::CallExpr* expr) {
+	if (dynamic_cast<AST::FieldAccessExpr*>(expr->callee.get())) {
 		//currently we only optimizes field invoking(struct.field())
-		ASTCallExpr* _call = (ASTCallExpr*)expr->getCallee();
-		if (_call->getAccessor().type != TOKEN_DOT) return false;
-
-		_call->getCallee()->accept(this);
-		uInt16 field = identifierConstant(((ASTLiteralExpr*)_call->getArgs()[0])->getToken());
+		AST::FieldAccessExpr* call = dynamic_cast<AST::FieldAccessExpr*>(expr->callee.get());
+		call->callee->accept(this);
+		call->field->accept(this);
 		int argCount = 0;
-		for (ASTNode* arg : expr->getArgs()) {
+		for (AST::ASTNodePtr arg : expr->args) {
 			arg->accept(this);
 			argCount++;
 		}
-		if (field < UINT8_MAX) {
-			emitBytes(OP_INVOKE, field);
-			emitByte(argCount);
-		}
-		else {
-			emitByteAnd16Bit(OP_INVOKE_LONG, field);
-			emitByte(argCount);
-		}
+		emitBytes(+OpCode::INVOKE, argCount);
 		return true;
 	}
-	else if (expr->getCallee()->type == ASTType::SUPER) {
-		ASTSuperExpr* _superCall = (ASTSuperExpr*)expr->getCallee();
-		int name = identifierConstant(_superCall->getName());
+	else if (dynamic_cast<AST::SuperExpr*>(expr->callee.get())) {
+		AST::SuperExpr* superCall = dynamic_cast<AST::SuperExpr*>(expr->callee.get());
+		int name = identifierConstant(superCall->methodName);
 
 		if (currentClass == nullptr) {
-			error(_superCall->getName(), "Can't use 'super' outside of a class.");
+			error(superCall->methodName, "Can't use 'super' outside of a class.");
 		}
 		else if (!currentClass->hasSuperclass) {
-			error(_superCall->getName(), "Can't use 'super' in a class with no superclass.");
+			error(superCall->methodName, "Can't use 'super' in a class with no superclass.");
 		}
 
 		namedVar(syntheticToken("this"), false);
 		int argCount = 0;
-		for (ASTNode* arg : expr->getArgs()) {
+		for (AST::ASTNodePtr arg : expr->args) {
 			arg->accept(this);
 			argCount++;
 		}
 		//super gets popped, leaving only the receiver and args on the stack
 		namedVar(syntheticToken("super"), false);
-		if (name < UINT8_MAX) {
-			emitBytes(OP_SUPER_INVOKE, name);
-			emitByte(argCount);
-		}
-		else {
-			emitByteAnd16Bit(OP_SUPER_INVOKE_LONG, name);
-			emitByte(argCount);
-		}
+		emitConstant(getChunk()->constants[name]);
+		emitBytes(+OpCode::INVOKE, argCount);
 		return true;
 	}
 	return false;
@@ -1027,30 +998,30 @@ bool compiler::invoke(ASTCallExpr* expr) {
 #pragma endregion
 
 
-Chunk* compiler::getChunk() {
+Chunk* Compiler::getChunk() {
 	return &current->func->body;
 }
 
-void compiler::error(string message) {
-	errorHandler::addSystemError("System compile error [line " + current->line + "] in '" + curUnit->name + "': \n" + message + "\n");
+void Compiler::error(string message) {
+	errorHandler::addSystemError("System compile error [line " + std::to_string(current->line) + "] in '" + curUnit->file->name + "': \n" + message + "\n");
 	throw CompilerException();
 }
 
 void Compiler::error(Token token, string msg) {
-	errorHandler::addCompilerError(msg, token);
+	errorHandler::addCompileError(msg, token);
 	throw CompilerException();
 }
 
-objFunc* compiler::endFuncDecl() {
-	if (!current->hasReturn) emitReturn();
+ObjFunc* Compiler::endFuncDecl() {
+	if (!current->hasReturnStmt) emitReturn();
 	//get the current function we've just compiled, delete it's compiler info, and replace it with the enclosing functions compiler info
-	objFunc* func = current->func;
+	ObjFunc* func = current->func;
 	//for the last line of code
-	func->body.lines[func->body.lines.size() - 1].end = func->body.code.count();
+	func->body.lines[func->body.lines.size() - 1].end = func->body.code.size();
 #ifdef DEBUG_PRINT_CODE
 	current->func->body.disassemble(current->func->name == nullptr ? "script" : current->func->name->str);
 #endif
-	compilerInfo* temp = current->enclosing;
+	CurrentChunkInfo* temp = current->enclosing;
 	delete current;
 	current = temp;
 	return func;
@@ -1058,7 +1029,59 @@ objFunc* compiler::endFuncDecl() {
 
 //a little helper for updating the lines emitted by the compiler(used for displaying runtime errors)
 void Compiler::updateLine(Token token) {
-	current->line = token.line;
+	current->line = token.str.line;
+}
+
+int Compiler::checkSymbol(Token symbol) {
+	std::unordered_map<string, CSLModule*> importedSymbols;
+	string lexeme = symbol.getLexeme();
+	for (Dependency dep : curUnit->deps) {
+		if (dep.alias.type == TokenType::NONE) {
+			for (Token token : dep.module->exports) {
+				if (token.getLexeme().compare(lexeme) != 0) continue;
+
+				if (importedSymbols.count(lexeme) > 0) {
+					string str = std::format("Ambiguous definition, symbol '{}' defined in {} and {}.", 
+						lexeme, importedSymbols[lexeme]->file->name, dep.module->file->name);
+					error(symbol, str);
+				}
+				else {
+					importedSymbols[lexeme] = dep.module;
+				}
+			}
+		}
+	}
+	if (importedSymbols.count(lexeme) == 0) {
+		error(symbol, "Variable not defined.");
+	}
+	else {
+		CSLModule* dep = importedSymbols[lexeme];
+		for (int i = 0; i < units.size(); i++) {
+			if (units[i] == dep) return i;
+		}
+		error(symbol, "Couldn't find source file of the definition.");
+	}
+}
+
+string Compiler::resolveGlobal(Token name, bool canAssign) {
+	bool inThisFile = false;
+	for (Token token : curUnit->topDeclarations) {
+		if (name.getLexeme().compare(name.getLexeme()) == 0) {
+			inThisFile = true;
+			break;
+		}
+	}
+	if (canAssign) {
+		if (inThisFile) return std::to_string(curUnitIndex) + name.getLexeme();
+	}
+	else {
+		if (inThisFile) return std::to_string(curUnitIndex) + name.getLexeme();
+		else {
+			int i = checkSymbol(name);
+			return std::to_string(i) + name.getLexeme();
+		}
+	}
+	error(name, "Variable isn't declared.");
 }
 #pragma endregion
 

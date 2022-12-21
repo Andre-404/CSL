@@ -329,7 +329,7 @@ void ObjThread::updateInternalPointers() {
 		//since position of the stack is bound to the position of ObjThread everytime the thread is moved, so is the stack
 		//every open upvals 'location' must be updated to new stack position
 		//we take the diff between current and next memory location, and then add the diff to 'location' field
-		uInt64 diff = moveTo - this;
+		uInt64 diff = reinterpret_cast<byte*>(moveTo) - reinterpret_cast<byte*>(this);
 		upval->location += diff;
 		//updates the ptr to upvalues
 		if (upval != nullptr) openUpvals[i] = reinterpret_cast<ObjUpval*>(upval->moveTo);
@@ -344,7 +344,6 @@ void ObjThread::updateInternalPointers() {
 		frame->closure = reinterpret_cast<ObjClosure*>(frame->closure->moveTo);
 	}
 	codeBlock = reinterpret_cast<ObjClosure*>(codeBlock->moveTo);
-	prevThread = reinterpret_cast<ObjThread*>(prevThread->moveTo);
 	openUpvals.updateInternalPtr();
 }
 
