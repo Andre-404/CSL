@@ -34,6 +34,27 @@ Compiler::Compiler(vector<CSLModule*>& _units) {
 	units = _units;
 
 	for (CSLModule* unit : units) {
+		vector<Token> depAlias;
+		//for every unit we check every dependency and see if there are any repeating aliases in the same unit
+		for (Dependency dep : unit->deps) {
+			try {
+				if (dep.alias.type != TokenType::NONE) {
+					for (Token& token : depAlias) {
+						if (token.compare(dep.alias)) {
+							error(token, "Cannot use the same alias for 2 module imports.");
+							error(dep.alias, "Cannot use the same alias for 2 module imports.");
+						}
+					}
+					depAlias.push_back(dep.alias);
+				}
+			}
+			catch (CompilerException e) {
+				continue;
+			}
+		}
+	}
+
+	for (CSLModule* unit : units) {
 		curUnit = unit;
 		sourceFiles.push_back(unit->file);
 		for (int i = 0; i < unit->stmts.size(); i++) {
@@ -117,19 +138,19 @@ void Compiler::visitBinaryExpr(AST::BinaryExpr* expr) {
 	}
 	uint8_t op = 0;
 	switch (expr->op.type) {
-		//take in double or string(in case of add)
+	//take in double or string(in case of add)
 	case TokenType::PLUS:	op = +OpCode::ADD; break;
 	case TokenType::MINUS:	op = +OpCode::SUBTRACT; break;
 	case TokenType::SLASH:	op = +OpCode::DIVIDE; break;
 	case TokenType::STAR:	op = +OpCode::MULTIPLY; break;
-		//operands get cast to int for these ops
+	//operands get cast to int for these ops
 	case TokenType::PERCENTAGE:		op = +OpCode::MOD; break;
 	case TokenType::BITSHIFT_LEFT:	op = +OpCode::BITSHIFT_LEFT; break;
 	case TokenType::BITSHIFT_RIGHT:	op = +OpCode::BITSHIFT_RIGHT; break;
 	case TokenType::BITWISE_AND:	op = +OpCode::BITWISE_AND; break;
 	case TokenType::BITWISE_OR:		op = +OpCode::BITWISE_OR; break;
 	case TokenType::BITWISE_XOR:	op = +OpCode::BITWISE_XOR; break;
-		//these return bools
+	//these return bools
 	case TokenType::EQUAL_EQUAL:	 op = +OpCode::EQUAL; break;
 	case TokenType::BANG_EQUAL:		 op = +OpCode::NOT_EQUAL; break;
 	case TokenType::GREATER:		 op = +OpCode::GREATER; break;
@@ -314,15 +335,37 @@ void Compiler::visitFuncLiteral(AST::FuncLiteral* expr) {;
 }
 
 void Compiler::visitModuleAccessExpr(AST::ModuleAccessExpr* expr) {
-	bool containsDepAlias = false;
+	Dependency* depPtr = nullptr;
 	for (Dependency dep : curUnit->deps) {
 		if (dep.alias.compare(expr->moduleName)) {
-			containsDepAlias = true;
+			depPtr = &dep;
 			break;
 		}
 	}
+	if (depPtr == nullptr) {
+		error(expr->moduleName, "Module alias doesn't exist.");
+	}
+	CSLModule* unit = depPtr->module;
+	for (Token& token : unit->exports) {
+		if (token.compare(expr->ident)) {
+			int i = 0;
+			for (i = 0; i < units.size(); i++) if (units[i] == unit) break;
+
+			string temp = std::to_string(i) + expr->ident.getLexeme();
+			uInt arg = makeConstant(Value(ObjString::createString((char*)temp.c_str(), temp.length(), internedStrings)));
+
+			if (arg > UINT8_MAX) {
+				emitByteAnd16Bit(+OpCode::GET_GLOBAL_LONG, arg);
+				return;
+			}
+			emitBytes(+OpCode::GET_GLOBAL, arg);
+			return;
+		}
+	}
+	error(expr->ident, std::format("Module {} doesn't export this symbol.", depPtr->alias.getLexeme()));
 }
 
+//TODO: do this when implementing multithreading
 void Compiler::visitAwaitExpr(AST::AwaitExpr* expr) {
 
 }
@@ -535,59 +578,91 @@ void Compiler::visitContinueStmt(AST::ContinueStmt* stmt) {
 }
 
 void Compiler::visitSwitchStmt(AST::SwitchStmt* stmt) {
-	/*beginScope();
-	//compile the expression in ()
+	beginScope();
+	//compile the expression in parentheses
 	stmt->expr->accept(this);
-	//based on the switch stmt type(all num, all string or mixed) we create a new switch table struct and get it's pos
-	//passing in the size to call .reserve() on map/vector
-	switchType type = stmt->getType();
-	int pos = getChunk()->addSwitch(switchTable(type, stmt->getCases().size()));
-	switchTable& table = getChunk()->switchTables[pos];
-	emitBytes(OP_SWITCH, pos);
-
-	long start = getChunk()->code.count();
-	for (ASTNode* _case : stmt->getCases()) {
-		ASTCase* curCase = (ASTCase*)_case;
-		//based on the type of switch stmt, we either convert all token lexemes to numbers,
-		//or add the strings to a hash table
-		if (!curCase->getDef()) {
-			switch (type) {
-			case switchType::NUM: {
-				ASTLiteralExpr* expr = (ASTLiteralExpr*)curCase->getExpr();
-				updateLine(expr->getToken());
-				int key = std::stoi(string(expr->getToken().getLexeme()));
-				long _ip = getChunk()->code.count() - start;
-
-				table.addToArr(key, _ip);
-				break;
-			}
-								//for both strings and mixed switches we pass them as strings
-			case switchType::STRING:
-			case switchType::MIXED: {
-				ASTLiteralExpr* expr = (ASTLiteralExpr*)curCase->getExpr();
-				updateLine(expr->getToken());
-				long _ip = getChunk()->code.count() - start;
-				//converts string_view to string and get's rid of ""
-				string _temp(expr->getToken().getLexeme());
-				if (expr->getToken().type == TOKEN_STRING) {
-					_temp.erase(0, 1);
-					_temp.erase(_temp.size() - 1, 1);
+	vector<uInt16> constants;
+	vector<uInt16> jumps;
+	bool isLong = false;
+	for (std::shared_ptr<AST::CaseStmt> _case : stmt->cases) {
+		if (_case->caseType.getLexeme().compare("default")) continue;
+		Value val;
+		updateLine(_case->constant);
+		//create constant and add it to the constants array
+		try {
+			switch (_case->constant.type) {
+				case TokenType::NUMBER: {
+					double num = std::stod(_case->constant.getLexeme());//doing this becuase stod doesn't accept string_view
+					val = Value(num);
+					break;
 				}
-				table.addToTable(_temp, _ip);
-				break;
+				case TokenType::TRUE: val = Value(true); break;
+				case TokenType::FALSE: val = Value(false); break;
+				case TokenType::NIL: val = Value::nil(); break;
+				case TokenType::STRING: {
+					//this gets rid of quotes, "Hello world"->Hello world
+					string temp = _case->constant.getLexeme();
+					temp.erase(0, 1);
+					temp.erase(temp.size() - 1, 1);
+					val = Value(ObjString::createString((char*)temp.c_str(), temp.length(), internedStrings));
+					break;
+				}
+				default: {
+					error(_case->constant, "Case expression can only be a constant.");
+				}
 			}
-			}
+			constants.push_back(makeConstant(val));
+			if (constants.back() > UINT8_MAX) isLong = true;
+		}
+		catch (CompilerException e) {
+
+		}
+	}
+	//the arguments for a switch op code are:
+	//8-bit number n of case constants
+	//n 8 or 16 bit numbers for each constant
+	//n + 1 16-bit numbers of jump offsets(default case is excluded from constants, so the number of jumps is the number of constants + 1)
+	//the default jump offset is always the last
+	if (isLong) {
+		emitBytes(+OpCode::SWITCH_LONG, constants.size());
+		for (uInt16 constant : constants) {
+			emit16Bit(constant);
+		}
+	}
+	else {
+		emitBytes(+OpCode::SWITCH, constants.size());
+		for (uInt16 constant : constants) {
+			emitByte(constant);
+		}
+	}
+	
+	for (int i = 0; i < constants.size(); i++) {
+		jumps.push_back(getChunk()->code.size());
+		emit16Bit(0xffff);
+	}
+	//default jump
+	jumps.push_back(getChunk()->code.size());
+	emit16Bit(0xffff);
+
+	//compile the code of all cases, before each case update the jump for that case to the current ip
+	int i = 0;
+	for (std::shared_ptr<AST::CaseStmt> _case : stmt->cases) {
+		updateLine(_case->constant);
+		if (_case->caseType.getLexeme().compare("default")) {
+			jumps[jumps.size() - 1] = getChunk()->code.size();
 		}
 		else {
-			table.defaultJump = getChunk()->code.count() - start;
+			jumps[i] = getChunk()->code.size();
+			i++;
 		}
-		curCase->accept(this);
+		_case->accept(this);
 	}
-	//implicit default if the user hasn't defined one, jumps to the end of switch stmt
-	if (table.defaultJump == -1) table.defaultJump = getChunk()->code.count() - start;
+	//if there is no default case the default jump goes to the end of the switch stmt
+	if (!stmt->hasDefault) jumps[jumps.size() - 1] = getChunk()->code.size();
+
 	//we use a scope and patch breaks AFTER ending the scope because breaks that are in the current scope aren't patched
 	endScope();
-	patchBreak();*/
+	patchScopeJumps(ScopeJumpType::BREAK);
 }
 
 void Compiler::visitCaseStmt(AST::CaseStmt* stmt) {

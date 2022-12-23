@@ -596,19 +596,20 @@ ASTNodePtr Parser::switchStmt() {
 }
 
 shared_ptr<CaseStmt> Parser::caseStmt() {
-	ASTNodePtr matchExpr = nullptr;
+	Token matchConstant;
 	//default cases don't have a match expression
-	if (previous().type != TokenType::DEFAULT) {
-		matchExpr = expression((int)precedence::PRIMARY);
-
-		if (!dynamic_cast<LiteralExpr*>(matchExpr.get())) throw error(previous(), "Expression must be a constant literal(string, number, boolean or nil).");
+	if (previous().type != TokenType::DEFAULT && match({TokenType::NIL, TokenType::NUMBER, TokenType::STRING, TokenType::TRUE, TokenType::FALSE})) {
+		matchConstant = previous();
+	}
+	else if (previous().type != TokenType::DEFAULT) {
+		throw error(previous(), "Expression must be a constant literal(string, number, boolean or nil).");
 	}
 	consume(TokenType::COLON, "Expect ':' after 'case'.");
 	vector<ASTNodePtr> stmts;
 	while (!check(TokenType::CASE) && !check(TokenType::RIGHT_BRACE) && !check(TokenType::DEFAULT)) {
 		stmts.push_back(statement());
 	}
-	return make_shared<CaseStmt>(matchExpr, stmts);
+	return make_shared<CaseStmt>(matchConstant, stmts);
 }
 
 ASTNodePtr Parser::returnStmt() {

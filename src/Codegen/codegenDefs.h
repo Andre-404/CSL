@@ -174,6 +174,8 @@ enum class OpCode {
 	JUMP_IF_FALSE_POP,//arg: 16-bit jump offset
 	LOOP,//arg: 16-bit jump offset(gets negated)
 	JUMP_POPN, //arg: 16-bit jump offset
+	SWITCH, //arg: 8-bit number of cases, followed by 8-bit case constants and 16-bit jump offsets
+	SWITCH_LONG, //arg: 8-bit number of cases, followed by 16-bit case constants and 16-bit jump offsets
 
 	//Functions
 	CALL,//arg: 8-bit argument count

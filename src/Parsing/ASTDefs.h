@@ -454,12 +454,12 @@ namespace AST {
 
 	class CaseStmt : public ASTNode {
 	public:
-		shared_ptr<ASTNode> expr;
+		Token constant;
 		vector<shared_ptr<ASTNode>> stmts;
 		Token caseType;//case or default
 
-		CaseStmt(shared_ptr<ASTNode> _expr, vector<shared_ptr<ASTNode>>& _stmts) {
-			expr = _expr;
+		CaseStmt(Token _constant, vector<shared_ptr<ASTNode>>& _stmts) {
+			constant = _constant;
 			stmts = _stmts;
 		}
 		void accept(Visitor* vis) {
