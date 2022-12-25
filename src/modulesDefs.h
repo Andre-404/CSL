@@ -130,9 +130,10 @@ namespace AST {
 
 struct Dependency {
 	Token alias;
+	Token pathString;//for error reporting in the compiler
 	CSLModule* module;
 
-	Dependency(Token _alias, CSLModule* _module) : alias(_alias), module(_module) {};
+	Dependency(Token _alias, Token _pathString, CSLModule* _module) : alias(_alias), pathString(_pathString), module(_module) {};
 };
 
 struct CSLModule {

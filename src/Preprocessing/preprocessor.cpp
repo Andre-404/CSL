@@ -62,12 +62,12 @@ CSLModule* Preprocessor::scanFile(string moduleName) {
 				addCompileError("Cyclical importing detected.", path);
 				continue;
 			}
-			unit->deps.push_back(Dependency(alias, allUnits[depName]));
+			unit->deps.push_back(Dependency(alias, path, allUnits[depName]));
 			continue;
 		}
 		std::filesystem::path p(projectRootPath + depName);
 		if (std::filesystem::exists(p)) {
-			Dependency dep = Dependency(alias, scanFile(depName));
+			Dependency dep = Dependency(alias, path, scanFile(depName));
 			unit->deps.push_back(dep);
 		}
 		else {

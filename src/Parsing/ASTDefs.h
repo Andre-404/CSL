@@ -4,6 +4,40 @@
 
 namespace AST {
 	using std::shared_ptr;
+
+
+	enum class ASTType {
+		ASSIGNMENT,
+		SET,
+		CONDITIONAL,
+		BINARY,
+		UNARY,
+		ARRAY_LITERAL,
+		CALL,
+		FIELD_ACCESS,
+		GROUPING,
+		AWAIT,
+		STRUCT,
+		LITERAL,
+		SUPER,
+		FUNC_LITERAL,
+		MODULE_ACCESS,
+		VAR,
+		FUNC,
+		CLASS,
+		PRINT,
+		EXPR_STMT,
+		BLOCK,
+		IF,
+		WHILE,
+		FOR,
+		BREAK,
+		CONTINUE,
+		SWITCH,
+		CASE,
+		ADVANCE,
+		RETURN
+	};
 	class AssignmentExpr;
 	class SetExpr;
 	class ConditionalExpr;
@@ -49,7 +83,7 @@ namespace AST {
 		virtual void visitFieldAccessExpr(FieldAccessExpr* expr) = 0;
 		virtual void visitGroupingExpr(GroupingExpr* expr) = 0;
 		virtual void visitAwaitExpr(AwaitExpr* expr) = 0;
-		virtual void visitArrayDeclExpr(ArrayLiteralExpr* expr) = 0;
+		virtual void visitArrayLiteralExpr(ArrayLiteralExpr* expr) = 0;
 		virtual void visitStructLiteralExpr(StructLiteral* expr) = 0;
 		virtual void visitLiteralExpr(LiteralExpr* expr) = 0;
 		virtual void visitSuperExpr(SuperExpr* expr) = 0;
@@ -178,7 +212,7 @@ namespace AST {
 			members = _members;
 		}
 		void accept(Visitor* vis) {
-			vis->visitArrayDeclExpr(this);
+			vis->visitArrayLiteralExpr(this);
 		}
 	};
 
@@ -518,11 +552,11 @@ namespace AST {
 	class ClassDecl : public ASTDecl {
 	public:
 		Token name;
-		Token inheritedClass;
-		vector<shared_ptr<ASTNode>> methods;
+		ASTNodePtr inheritedClass;
+		vector<ASTNodePtr> methods;
 		bool inherits;
 
-		ClassDecl(Token _name, vector<shared_ptr<ASTNode>> _methods, Token _inheritedClass, bool _inherits) {
+		ClassDecl(Token _name, vector<ASTNodePtr> _methods, ASTNodePtr _inheritedClass, bool _inherits) {
 			name = _name;
 			methods = _methods;
 			inheritedClass = _inheritedClass;

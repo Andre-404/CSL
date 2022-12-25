@@ -1,6 +1,7 @@
 #include "parser.h"
 #include "../ErrorHandling/errorHandler.h"
 #include "../DebugPrinting/ASTPrinter.h"
+#include <format>
 
 using std::make_shared;
 using namespace AST;
@@ -335,7 +336,28 @@ void Parser::parse(vector<CSLModule*> modules) {
 				sync();
 			}
 		}
-
+	}
+	//look at each unit and determine if any of its dependencies that are imported without an alias are exporting the same symbol
+	for (CSLModule* unit : modules) {
+		std::unordered_map<string, Dependency&> importedSymbols;
+		//only check deps with alias
+		for (Dependency& dep : unit->deps) {
+			if (dep.alias.type == TokenType::NONE) {
+				for (Token token : dep.module->exports) {
+					string lexeme = token.getLexeme();
+					if (importedSymbols.count(lexeme) > 0) {
+						//if there are 2 or more declaration which use the same symbol,
+						//throw an error and tell the user exactly which dependencies caused the error
+						string str = std::format("Ambiguous definition, symbol '{}' defined in {} and {}.",
+							lexeme, importedSymbols[lexeme].pathString.getLexeme(), dep.pathString.getLexeme());
+						error(dep.pathString, str);
+					}
+					else {
+						importedSymbols[lexeme] = dep;
+					}
+				}
+			}
+		}
 	}
 }
 
@@ -377,6 +399,12 @@ ASTNodePtr Parser::topLevelDeclaration() {
 		else if (match(TokenType::CLASS)) node = classDecl();
 		else if (match(TokenType::FUNC)) node = funcDecl();
 
+		for (Token token : curUnit->exports) {
+			if (node->getName().compare(token)) {
+				error(node->getName(), std::format("Error, {} already defined and exported.", node->getName().getLexeme()));
+			}
+		}
+
 		curUnit->exports.push_back(node->getName());
 		curUnit->topDeclarations.push_back(node->getName());
 
@@ -385,6 +413,7 @@ ASTNodePtr Parser::topLevelDeclaration() {
 		throw error(peek(), "Expected variable, class or function declaration");
 	}
 	else {
+		//top level declarations get put in a list for later loopup during compilation
 		shared_ptr<ASTDecl> node = nullptr;
 		if (match(TokenType::VAR)) node = varDecl();
 		else if (match(TokenType::CLASS)) node = classDecl();
@@ -394,10 +423,10 @@ ASTNodePtr Parser::topLevelDeclaration() {
 			return node;
 		}
 	}
-	return declaration();
+	return statement();
 }
 
-ASTNodePtr Parser::declaration() {
+ASTNodePtr Parser::localDeclaration() {
 	if (match(TokenType::VAR)) return varDecl();
 	else if (match(TokenType::CLASS)) return classDecl();
 	else if (match(TokenType::FUNC)) return funcDecl();
@@ -447,9 +476,19 @@ shared_ptr<ASTDecl> Parser::funcDecl() {
 
 shared_ptr<ASTDecl> Parser::classDecl() {
 	Token name = consume(TokenType::IDENTIFIER, "Expected a class name.");
-	Token inherited;
+	ASTNodePtr inherited = nullptr;
 	//inheritance is optional
-	if (match(TokenType::COLON)) inherited = consume(TokenType::IDENTIFIER, "Expected a parent class name.");
+	if (match(TokenType::COLON)) {
+		Token token = previous();
+		//only accept identifiers and module access
+		inherited = expression();
+		if (!((dynamic_cast<LiteralExpr*>(inherited.get())
+			&& dynamic_cast<LiteralExpr*>(inherited.get())->token.type == TokenType::IDENTIFIER)
+			|| dynamic_cast<ModuleAccessExpr*>(inherited.get()))) {
+			error(token, "Superclass can only be an identifier.");
+		}
+	}
+
 	consume(TokenType::LEFT_BRACE, "Expect '{' before class body.");
 	//a class body can contain only methods(fields are initialized in the constructor)
 	vector<ASTNodePtr> methods;
@@ -457,7 +496,7 @@ shared_ptr<ASTDecl> Parser::classDecl() {
 		methods.push_back(funcDecl());
 	}
 	consume(TokenType::RIGHT_BRACE, "Expect '}' after class body.");
-	return make_shared<ClassDecl>(name, methods, inherited, inherited.type == TokenType::IDENTIFIER);
+	return make_shared<ClassDecl>(name, methods, inherited, inherited != nullptr);
 }
 
 ASTNodePtr Parser::statement() {
@@ -498,7 +537,7 @@ ASTNodePtr Parser::blockStmt() {
 	vector<ASTNodePtr> stmts;
 	//TokenType::LEFT_BRACE is already consumed
 	while (!check(TokenType::RIGHT_BRACE)) {
-		stmts.push_back(declaration());
+		stmts.push_back(localDeclaration());
 	}
 	consume(TokenType::RIGHT_BRACE, "Expect '}' after block.");
 	return make_shared<BlockStmt>(stmts);

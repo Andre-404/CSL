@@ -83,7 +83,7 @@ namespace AST {
 
 #pragma region Statements
 		ASTNodePtr topLevelDeclaration();
-		ASTNodePtr declaration();
+		ASTNodePtr localDeclaration();
 		shared_ptr<ASTDecl> varDecl();
 		shared_ptr<ASTDecl> funcDecl();
 		shared_ptr<ASTDecl> classDecl();

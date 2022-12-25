@@ -30,6 +30,7 @@ namespace compileCore {
 	//since we can jump over several scopes when eg. breaking out of a for loop
 	//offset is how many bytes to jump over
 	//varNum is how many variables need to be poppped from the stack
+	//TODO: remember to close any upvalues these jumps pop from the stack
 	struct ScopeJumpInfo {
 		int depth = 0;
 		int offset = -1;
@@ -103,7 +104,7 @@ namespace compileCore {
 		void visitFieldAccessExpr(AST::FieldAccessExpr* expr);
 		void visitGroupingExpr(AST::GroupingExpr* expr);
 		void visitAwaitExpr(AST::AwaitExpr* expr);
-		void visitArrayDeclExpr(AST::ArrayLiteralExpr* expr);
+		void visitArrayLiteralExpr(AST::ArrayLiteralExpr* expr);
 		void visitStructLiteralExpr(AST::StructLiteral* expr);
 		void visitLiteralExpr(AST::LiteralExpr* expr);
 		void visitSuperExpr(AST::SuperExpr* expr);
@@ -171,9 +172,11 @@ namespace compileCore {
 		void error(Token token, string msg);
 		void error(string message);
 		//checks all imports to see if the symbol 'token' is imported
-		int checkSymbol(Token token);
+		uInt checkSymbol(Token token);
 		//given a token and whether the operation is assigning or reading a variable, determines the correct symbol to use
 		string resolveGlobal(Token token, bool canAssign);
+		//given a token for module alias and a token for variable name, returns correct symbol to use 
+		string resolveModuleVariable(Token moduleAlias, Token variable);
 		#pragma endregion
 	};
 }

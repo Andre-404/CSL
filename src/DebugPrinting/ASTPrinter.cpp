@@ -69,7 +69,7 @@ void ASTPrinter::visitAwaitExpr(AwaitExpr* expr) {
 	expr->expr->accept(this);
 }
 
-void ASTPrinter::visitArrayDeclExpr(ArrayLiteralExpr* expr) {
+void ASTPrinter::visitArrayLiteralExpr(ArrayLiteralExpr* expr) {
 	cout << "[ ";
 	for (shared_ptr<ASTNode> node : expr->members) {
 		node->accept(this);
