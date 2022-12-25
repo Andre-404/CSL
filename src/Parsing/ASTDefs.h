@@ -34,6 +34,7 @@ namespace AST {
 	class ContinueStmt;
 	class SwitchStmt;
 	class CaseStmt;
+	class AdvanceStmt;
 	class ReturnStmt;
 
 	//visitor pattern
@@ -69,6 +70,7 @@ namespace AST {
 		virtual void visitContinueStmt(ContinueStmt* stmt) = 0;
 		virtual void visitSwitchStmt(SwitchStmt* stmt) = 0;
 		virtual void visitCaseStmt(CaseStmt* _case) = 0;
+		virtual void visitAdvanceStmt(AdvanceStmt* stmt) = 0;
 		virtual void visitReturnStmt(ReturnStmt* stmt) = 0;
 	};
 
@@ -454,16 +456,28 @@ namespace AST {
 
 	class CaseStmt : public ASTNode {
 	public:
-		Token constant;
+		vector<Token> constants;
 		vector<shared_ptr<ASTNode>> stmts;
 		Token caseType;//case or default
 
-		CaseStmt(Token _constant, vector<shared_ptr<ASTNode>>& _stmts) {
-			constant = _constant;
+		CaseStmt(vector<Token> _constants, vector<shared_ptr<ASTNode>>& _stmts) {
+			constants = _constants;
 			stmts = _stmts;
 		}
 		void accept(Visitor* vis) {
 			vis->visitCaseStmt(this);
+		}
+	};
+
+	class AdvanceStmt : public ASTNode {
+	public:
+		Token token;
+
+		AdvanceStmt(Token _token) {
+			token = _token;
+		}
+		void accept(Visitor* vis) {
+			vis->visitAdvanceStmt(this);
 		}
 	};
 

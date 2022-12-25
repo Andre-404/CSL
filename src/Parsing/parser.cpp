@@ -473,6 +473,7 @@ ASTNodePtr Parser::statement() {
 		case TokenType::FOR: return forStmt();
 		case TokenType::BREAK: return breakStmt();
 		case TokenType::CONTINUE: return continueStmt();
+		case TokenType::ADVANCE: return advanceStmt();
 		case TokenType::SWITCH: return switchStmt();
 		case TokenType::RETURN: return returnStmt();
 		}
@@ -596,20 +597,29 @@ ASTNodePtr Parser::switchStmt() {
 }
 
 shared_ptr<CaseStmt> Parser::caseStmt() {
-	Token matchConstant;
+	vector<Token> matchConstants;
 	//default cases don't have a match expression
-	if (previous().type != TokenType::DEFAULT && match({TokenType::NIL, TokenType::NUMBER, TokenType::STRING, TokenType::TRUE, TokenType::FALSE})) {
-		matchConstant = previous();
+	if (previous().type != TokenType::DEFAULT) {
+		while (match({ TokenType::NIL, TokenType::NUMBER, TokenType::STRING, TokenType::TRUE, TokenType::FALSE })) {
+			matchConstants.push_back(previous());
+			if (!match(TokenType::BITWISE_OR)) break;
+		}
+		if (!match({ TokenType::NIL, TokenType::NUMBER, TokenType::STRING, TokenType::TRUE, TokenType::FALSE })) {
+			throw error(peek(), "Expression must be a constant literal(string, number, boolean or nil).");
+		}
 	}
-	else if (previous().type != TokenType::DEFAULT) {
-		throw error(previous(), "Expression must be a constant literal(string, number, boolean or nil).");
-	}
-	consume(TokenType::COLON, "Expect ':' after 'case'.");
+	consume(TokenType::COLON, "Expect ':' after 'case' or 'default'.");
 	vector<ASTNodePtr> stmts;
 	while (!check(TokenType::CASE) && !check(TokenType::RIGHT_BRACE) && !check(TokenType::DEFAULT)) {
 		stmts.push_back(statement());
 	}
-	return make_shared<CaseStmt>(matchConstant, stmts);
+	return make_shared<CaseStmt>(matchConstants, stmts);
+}
+
+ASTNodePtr Parser::advanceStmt() {
+	if (switchDepth == 0) throw error(previous(), "Cannot use 'advance' outside of switch statements.");
+	consume(TokenType::SEMICOLON, "Expect ';' after 'advance'.");
+	return make_shared<AdvanceStmt>(previous());
 }
 
 ASTNodePtr Parser::returnStmt() {

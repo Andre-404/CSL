@@ -220,11 +220,17 @@ void ASTPrinter::visitSwitchStmt(SwitchStmt* stmt) {
 
 void ASTPrinter::visitCaseStmt(CaseStmt* stmt) {
 	cout << (stmt->caseType.type == TokenType::CASE ? "case " : "default ");
-	stmt->expr->accept(this);
+	for (Token token : stmt->constants) {
+		cout << token.getLexeme() << " | ";
+	}
 	cout << ": " << endl;
 	for (shared_ptr<ASTNode> statement : stmt->stmts) {
 		statement->accept(this);
 	}
+}
+
+void ASTPrinter::visitAdvanceStmt(AdvanceStmt* stmt) {
+
 }
 
 void ASTPrinter::visitReturnStmt(ReturnStmt* stmt) {

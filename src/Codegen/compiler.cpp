@@ -557,12 +557,12 @@ void Compiler::visitForStmt(AST::ForStmt* stmt) {
 
 void Compiler::visitBreakStmt(AST::BreakStmt* stmt) {
 	//the amount of variables to pop and the amount of code to jump is determined in patchScopeJumps()
-	//which is called at the end of loops
+	//which is called at the end of loops or a switch
 	updateLine(stmt->token);
 	emitByte(+ScopeJumpType::BREAK);
 	int breakJump = getChunk()->code.size();
-	emitBytes(0xff, 0xff);
-	emitBytes(0xff, 0xff);
+	emitBytes((current->scopeDepth >> 8) & 0xff, current->scopeDepth & 0xff);
+	emitBytes((current->localCount >> 8) & 0xff, current->localCount & 0xff);
 	current->scopeJumps.push_back(breakJump);
 }
 
@@ -572,8 +572,8 @@ void Compiler::visitContinueStmt(AST::ContinueStmt* stmt) {
 	updateLine(stmt->token);
 	emitByte(+ScopeJumpType::CONTINUE);
 	int continueJump = getChunk()->code.size();
-	emitBytes(0xff, 0xff);
-	emitBytes(0xff, 0xff);
+	emitBytes((current->scopeDepth >> 8) & 0xff, current->scopeDepth & 0xff);
+	emitBytes((current->localCount >> 8) & 0xff, current->localCount & 0xff);
 	current->scopeJumps.push_back(continueJump);
 }
 
@@ -586,36 +586,38 @@ void Compiler::visitSwitchStmt(AST::SwitchStmt* stmt) {
 	bool isLong = false;
 	for (std::shared_ptr<AST::CaseStmt> _case : stmt->cases) {
 		if (_case->caseType.getLexeme().compare("default")) continue;
-		Value val;
-		updateLine(_case->constant);
-		//create constant and add it to the constants array
-		try {
-			switch (_case->constant.type) {
-				case TokenType::NUMBER: {
-					double num = std::stod(_case->constant.getLexeme());//doing this becuase stod doesn't accept string_view
-					val = Value(num);
-					break;
+		for (Token constant : _case->constants) {
+			Value val;
+			updateLine(constant);
+			//create constant and add it to the constants array
+			try {
+				switch (constant.type) {
+					case TokenType::NUMBER: {
+						double num = std::stod(constant.getLexeme());//doing this becuase stod doesn't accept string_view
+						val = Value(num);
+						break;
+					}
+					case TokenType::TRUE: val = Value(true); break;
+					case TokenType::FALSE: val = Value(false); break;
+					case TokenType::NIL: val = Value::nil(); break;
+					case TokenType::STRING: {
+						//this gets rid of quotes, "Hello world"->Hello world
+						string temp = constant.getLexeme();
+						temp.erase(0, 1);
+						temp.erase(temp.size() - 1, 1);
+						val = Value(ObjString::createString((char*)temp.c_str(), temp.length(), internedStrings));
+						break;
+					}
+					default: {
+						error(constant, "Case expression can only be a constant.");
+					}
 				}
-				case TokenType::TRUE: val = Value(true); break;
-				case TokenType::FALSE: val = Value(false); break;
-				case TokenType::NIL: val = Value::nil(); break;
-				case TokenType::STRING: {
-					//this gets rid of quotes, "Hello world"->Hello world
-					string temp = _case->constant.getLexeme();
-					temp.erase(0, 1);
-					temp.erase(temp.size() - 1, 1);
-					val = Value(ObjString::createString((char*)temp.c_str(), temp.length(), internedStrings));
-					break;
-				}
-				default: {
-					error(_case->constant, "Case expression can only be a constant.");
-				}
+				constants.push_back(makeConstant(val));
+				if (constants.back() > UINT8_MAX) isLong = true;
 			}
-			constants.push_back(makeConstant(val));
-			if (constants.back() > UINT8_MAX) isLong = true;
-		}
-		catch (CompilerException e) {
+			catch (CompilerException e) {
 
+			}
 		}
 	}
 	//the arguments for a switch op code are:
@@ -644,21 +646,34 @@ void Compiler::visitSwitchStmt(AST::SwitchStmt* stmt) {
 	jumps.push_back(getChunk()->code.size());
 	emit16Bit(0xffff);
 
+	//at the end of each case is a implicit break
+	vector<uInt> implicitBreaks;
+
 	//compile the code of all cases, before each case update the jump for that case to the current ip
 	int i = 0;
 	for (std::shared_ptr<AST::CaseStmt> _case : stmt->cases) {
-		updateLine(_case->constant);
 		if (_case->caseType.getLexeme().compare("default")) {
 			jumps[jumps.size() - 1] = getChunk()->code.size();
 		}
 		else {
-			jumps[i] = getChunk()->code.size();
-			i++;
+			for (Token token : _case->constants) {
+				jumps[i] = getChunk()->code.size();
+				i++;
+			}
 		}
+		patchScopeJumps(ScopeJumpType::ADVANCE);
+		beginScope();
 		_case->accept(this);
+		endScope();
+		implicitBreaks.push_back(emitJump(+OpCode::JUMP));
 	}
 	//if there is no default case the default jump goes to the end of the switch stmt
 	if (!stmt->hasDefault) jumps[jumps.size() - 1] = getChunk()->code.size();
+
+	//all implicit breaks lead to the end of the switch statement
+	for (uInt jmp : implicitBreaks) {
+		patchJump(jmp);
+	}
 
 	//we use a scope and patch breaks AFTER ending the scope because breaks that are in the current scope aren't patched
 	endScope();
@@ -671,6 +686,17 @@ void Compiler::visitCaseStmt(AST::CaseStmt* stmt) {
 	for (AST::ASTNodePtr stmt : stmt->stmts) {
 		stmt->accept(this);
 	}
+}
+
+void Compiler::visitAdvanceStmt(AST::AdvanceStmt* stmt) {
+	//the amount of variables to pop and the amount of code to jump is determined in patchScopeJumps()
+	//which is called at the start of each case statements
+	updateLine(stmt->token);
+	emitByte(+ScopeJumpType::ADVANCE);
+	int advanceJump = getChunk()->code.size();
+	emitBytes((current->scopeDepth >> 8) & 0xff, current->scopeDepth & 0xff);
+	emitBytes((current->localCount >> 8) & 0xff, current->localCount & 0xff);
+	current->scopeJumps.push_back(advanceJump);
 }
 
 void Compiler::visitReturnStmt(AST::ReturnStmt* stmt) {
@@ -787,10 +813,11 @@ void Compiler::patchScopeJumps(ScopeJumpType type) {
 		byte jumpType = getChunk()->code[jumpPatchPos - 1];
 		uInt jumpDepth = (getChunk()->code[jumpPatchPos] << 8) | getChunk()->code[jumpPatchPos + 1];
 		uInt jumpVarNum = (getChunk()->code[jumpPatchPos + 2] << 8) | getChunk()->code[jumpPatchPos + 3];
-		//only break statements which are in a strictly deeper scope get patched, on the other hand
+		//break and advance statements which are in a strictly deeper scope get patched, on the other hand
 		//continue statements which are in current or a deeper scope get patched
-		if ((jumpDepth > current->scopeDepth && type == ScopeJumpType::BREAK && +type == jumpType) ||
-			(jumpDepth >= current->scopeDepth && type == ScopeJumpType::CONTINUE && +type == jumpType)) {
+		if (((jumpDepth > current->scopeDepth && type == ScopeJumpType::BREAK) ||
+			(jumpDepth >= current->scopeDepth && type == ScopeJumpType::CONTINUE) ||
+			(jumpDepth > current->scopeDepth && type == ScopeJumpType::ADVANCE)) && +type == jumpType) {
 			int jumpLenght = curCode - jumpPatchPos - 4;
 			int toPop = jumpVarNum - current->localCount;
 			if (jumpLenght > UINT16_MAX) error("Too much code to jump over.");

@@ -34,6 +34,7 @@ namespace AST {
 		void visitContinueStmt(ContinueStmt* stmt);
 		void visitSwitchStmt(SwitchStmt* stmt);
 		void visitCaseStmt(CaseStmt* _case);
+		void visitAdvanceStmt(AdvanceStmt* stmt);
 		void visitReturnStmt(ReturnStmt* stmt);
 	};
 }

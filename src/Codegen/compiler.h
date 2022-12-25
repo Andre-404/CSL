@@ -39,7 +39,8 @@ namespace compileCore {
 
 	enum class ScopeJumpType {
 		BREAK,
-		CONTINUE
+		CONTINUE,
+		ADVANCE
 	};
 	//conversion from enum to 1 byte number
 	inline constexpr unsigned operator+ (ScopeJumpType const val) { return static_cast<byte>(val); }
@@ -123,6 +124,7 @@ namespace compileCore {
 		void visitContinueStmt(AST::ContinueStmt* stmt);
 		void visitSwitchStmt(AST::SwitchStmt* stmt);
 		void visitCaseStmt(AST::CaseStmt* _case);
+		void visitAdvanceStmt(AST::AdvanceStmt* stmt);
 		void visitReturnStmt(AST::ReturnStmt* stmt);
 		#pragma endregion 
 	private:

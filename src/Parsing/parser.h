@@ -99,6 +99,7 @@ namespace AST {
 		ASTNodePtr continueStmt();
 		ASTNodePtr switchStmt();
 		shared_ptr<CaseStmt> caseStmt();
+		ASTNodePtr advanceStmt();
 		ASTNodePtr returnStmt();
 
 #pragma endregion
