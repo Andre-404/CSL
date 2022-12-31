@@ -101,12 +101,14 @@ namespace AST {
 	//variable assignment
 	class assignmentExpr : public InfixParselet {
 		ASTNodePtr parse(ASTNodePtr left, Token token, int surroundingPrec) {
+
+			if (left->type != ASTType::LITERAL) throw cur->error(token, "Left side is not assignable");
+			LiteralExpr* castLeft = dynamic_cast<LiteralExpr*>(left.get());
+			if (castLeft->token.type != TokenType::IDENTIFIER) throw cur->error(token, "Left side is not assignable");
+
 			//makes it right associative
 			ASTNodePtr right = parseAssign(left, token);
-			if (!dynamic_cast<LiteralExpr*>(left.get()) || dynamic_cast<LiteralExpr*>(left.get())->token.type != TokenType::IDENTIFIER) {
-				throw cur->error(token, "Left side is not assignable");
-			}
-			return make_shared<AssignmentExpr>(dynamic_cast<LiteralExpr*>(left.get())->token, right);
+			return make_shared<AssignmentExpr>(castLeft->token, right);
 		}
 
 		//used for parsing assignment tokens(eg. =, +=, *=...)
@@ -168,7 +170,7 @@ namespace AST {
 		ASTNodePtr parse(ASTNodePtr left, Token token, int surroundingPrec) {
 			if (token.type == TokenType::DOUBLE_COLON) {
 				//dynamic cast B2D is dumb but its the best solution for this outlier
-				if (dynamic_cast<LiteralExpr*>(left.get())) {
+				if (left->type == ASTType::LITERAL) {
 					LiteralExpr* expr = dynamic_cast<LiteralExpr*>(left.get());
 					Token ident = cur->consume(TokenType::IDENTIFIER, "Expected variable name.");
 					make_shared<ModuleAccessExpr>(expr->token, ident);
@@ -207,8 +209,14 @@ namespace AST {
 	public:
 		ASTNodePtr parse(ASTNodePtr left, Token token, int surroundingPrec) {
 			ASTNodePtr field = nullptr;
+			Token newToken = token;
 			if (token.type == TokenType::LEFT_BRACKET) {//array/struct with string access
 				field = cur->expression();
+				//object["field"] gets optimized to object.field
+				if (field->type == ASTType::LITERAL) {
+					LiteralExpr* expr = dynamic_cast<LiteralExpr*>(field.get());
+					if (expr->token.type == TokenType::STRING) newToken.type = TokenType::DOT;
+				}
 				cur->consume(TokenType::RIGHT_BRACKET, "Expect ']' after array/map access.");
 			}
 			else if (token.type == TokenType::DOT) {//struct/object access
@@ -225,9 +233,9 @@ namespace AST {
 					TokenType::BITWISE_OR_EQUAL, TokenType::PERCENTAGE_EQUAL })) {
 				Token op = cur->previous();
 				ASTNodePtr val = cur->expression();
-				return make_shared<SetExpr>(left, field, token, op, val);
+				return make_shared<SetExpr>(left, field, newToken, op, val);
 			}
-			return make_shared<FieldAccessExpr>(left, token, field);
+			return make_shared<FieldAccessExpr>(left, newToken, field);
 		}
 	};
 }
@@ -482,9 +490,9 @@ shared_ptr<ASTDecl> Parser::classDecl() {
 		Token token = previous();
 		//only accept identifiers and module access
 		inherited = expression();
-		if (!((dynamic_cast<LiteralExpr*>(inherited.get())
+		if (!((inherited->type == ASTType::LITERAL
 			&& dynamic_cast<LiteralExpr*>(inherited.get())->token.type == TokenType::IDENTIFIER)
-			|| dynamic_cast<ModuleAccessExpr*>(inherited.get()))) {
+			|| inherited->type == ASTType::MODULE_ACCESS)) {
 			error(token, "Superclass can only be an identifier.");
 		}
 	}

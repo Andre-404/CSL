@@ -26,18 +26,7 @@ namespace compileCore {
 		uint8_t index = 0;
 		bool isLocal = false;
 	};
-	//used when compiling break and continue statements, depth is used to calculate how many local variables need to be popped
-	//since we can jump over several scopes when eg. breaking out of a for loop
-	//offset is how many bytes to jump over
-	//varNum is how many variables need to be poppped from the stack
 	//TODO: remember to close any upvalues these jumps pop from the stack
-	struct ScopeJumpInfo {
-		int depth = 0;
-		int offset = -1;
-		int varNum = 0;
-		ScopeJumpInfo(int _d, int _o, int _varNum) : depth(_d), offset(_o), varNum(_varNum) {}
-	};
-
 	enum class ScopeJumpType {
 		BREAK,
 		CONTINUE,
@@ -59,9 +48,6 @@ namespace compileCore {
 		uInt line;
 		//information about unpatched 'continue' and 'break' statements
 		vector<uInt> scopeJumps;
-		//keeps track of every break and continue statement that has been encountered
-		vector<ScopeJumpInfo> breakStmts;
-		vector<ScopeJumpInfo> continueStmts;
 		//locals
 		Local locals[LOCAL_MAX];
 		int localCount;
@@ -135,14 +121,14 @@ namespace compileCore {
 
 		#pragma region Helpers
 		//emitters
-		void emitByte(uint8_t byte);
-		void emitBytes(uint8_t byte1, uint8_t byte2);
+		void emitByte(byte byte);
+		void emitBytes(byte byte1, byte byte2);
 		void emit16Bit(uInt16 number);
-		void emitByteAnd16Bit(uint8_t byte, uInt16 num);
+		void emitByteAnd16Bit(byte byte, uInt16 num);
 		void emitConstant(Value value);
 		void emitReturn();
 		//control flow
-		int emitJump(uint8_t jumpType);
+		int emitJump(byte jumpType);
 		void patchJump(int offset);
 		void emitLoop(int start);
 		void patchScopeJumps(ScopeJumpType type);
@@ -159,7 +145,7 @@ namespace compileCore {
 		int resolveLocal(Token name);
 		int resolveLocal(CurrentChunkInfo* func, Token name);
 		int resolveUpvalue(CurrentChunkInfo* func, Token name);
-		int addUpvalue(uint8_t index, bool isLocal);
+		int addUpvalue(byte index, bool isLocal);
 		void markInit();
 		void beginScope() { current->scopeDepth++; }
 		void endScope();

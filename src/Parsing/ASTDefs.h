@@ -22,9 +22,11 @@ namespace AST {
 		SUPER,
 		FUNC_LITERAL,
 		MODULE_ACCESS,
+
 		VAR,
 		FUNC,
 		CLASS,
+		
 		PRINT,
 		EXPR_STMT,
 		BLOCK,
@@ -110,6 +112,8 @@ namespace AST {
 
 	class ASTNode {
 	public:
+		ASTType type;
+
 		virtual ~ASTNode() {};
 		virtual void accept(Visitor* vis) = 0;
 	};
@@ -129,6 +133,7 @@ namespace AST {
 		AssignmentExpr(Token _name, shared_ptr<ASTNode> _value) {
 			name = _name;
 			value = _value;
+			type = ASTType::ASSIGNMENT;
 		}
 		void accept(Visitor* vis) {
 			vis->visitAssignmentExpr(this);
@@ -150,6 +155,7 @@ namespace AST {
 			accessor = _accessor;
 			value = _val;
 			op = _op;
+			type = ASTType::SET;
 		}
 		void accept(Visitor* vis) {
 			vis->visitSetExpr(this);
@@ -166,6 +172,7 @@ namespace AST {
 			condition = _condition;
 			thenBranch = _thenBranch;
 			elseBranch = _elseBranch;
+			type = ASTType::CONDITIONAL;
 		}
 		void accept(Visitor* vis) {
 			vis->visitConditionalExpr(this);
@@ -182,6 +189,7 @@ namespace AST {
 			left = _left;
 			op = _op;
 			right = _right;
+			type = ASTType::BINARY;
 		}
 		void accept(Visitor* vis) {
 			vis->visitBinaryExpr(this);
@@ -198,6 +206,7 @@ namespace AST {
 			op = _op;
 			right = _right;
 			isPrefix = _isPrefix;
+			type = ASTType::UNARY;
 		}
 		void accept(Visitor* vis) {
 			vis->visitUnaryExpr(this);
@@ -210,6 +219,7 @@ namespace AST {
 
 		ArrayLiteralExpr(vector<shared_ptr<ASTNode>>& _members) {
 			members = _members;
+			type = ASTType::ARRAY_LITERAL;
 		}
 		void accept(Visitor* vis) {
 			vis->visitArrayLiteralExpr(this);
@@ -224,6 +234,7 @@ namespace AST {
 		CallExpr(shared_ptr<ASTNode> _callee, vector<shared_ptr<ASTNode>>& _args) {
 			callee = _callee;
 			args = _args;
+			type = ASTType::CALL;
 		}
 		void accept(Visitor* vis) {
 			vis->visitCallExpr(this);
@@ -241,6 +252,7 @@ namespace AST {
 			callee = _callee;
 			accessor = _accessor;
 			field = _field;
+			type = ASTType::FIELD_ACCESS;
 		}
 		void accept(Visitor* vis) {
 			vis->visitFieldAccessExpr(this);
@@ -253,6 +265,7 @@ namespace AST {
 
 		SuperExpr(Token _methodName) {
 			methodName = _methodName;
+			type = ASTType::SUPER;
 		}
 		void accept(Visitor* vis) {
 			vis->visitSuperExpr(this);
@@ -265,6 +278,7 @@ namespace AST {
 
 		GroupingExpr(shared_ptr<ASTNode> _expr) {
 			expr = _expr;
+			type = ASTType::GROUPING;
 		}
 		void accept(Visitor* vis) {
 			vis->visitGroupingExpr(this);
@@ -277,6 +291,7 @@ namespace AST {
 
 		AwaitExpr(shared_ptr<ASTNode> _expr) {
 			expr = _expr;
+			type = ASTType::AWAIT;
 		}
 		void accept(Visitor* vis) {
 			vis->visitAwaitExpr(this);
@@ -289,6 +304,7 @@ namespace AST {
 
 		LiteralExpr(Token _token) {
 			token = _token;
+			type = ASTType::LITERAL;
 		}
 		void accept(Visitor* vis) {
 			vis->visitLiteralExpr(this);
@@ -307,6 +323,7 @@ namespace AST {
 
 		StructLiteral(vector<StructEntry> _fields) {
 			fields = _fields;
+			type = ASTType::STRUCT;
 		}
 		void accept(Visitor* vis) {
 			vis->visitStructLiteralExpr(this);
@@ -323,6 +340,7 @@ namespace AST {
 			args = _args;
 			arity = _args.size();
 			body = _body;
+			type = ASTType::FUNC_LITERAL;
 		}
 		void accept(Visitor* vis) {
 			vis->visitFuncLiteral(this);
@@ -337,6 +355,7 @@ namespace AST {
 		ModuleAccessExpr(Token _moduleName, Token _ident) {
 			moduleName = _moduleName;
 			ident = _ident;
+			type = ASTType::MODULE_ACCESS;
 		}
 
 		void accept(Visitor* vis) {
@@ -355,6 +374,7 @@ namespace AST {
 
 		PrintStmt(shared_ptr<ASTNode> _expr) {
 			expr = _expr;
+			type = ASTType::PRINT;
 		}
 		void accept(Visitor* vis) {
 			vis->visitPrintStmt(this);
@@ -367,6 +387,7 @@ namespace AST {
 
 		ExprStmt(shared_ptr<ASTNode> _expr) {
 			expr = _expr;
+			type = ASTType::EXPR_STMT;
 		}
 		void accept(Visitor* vis) {
 			vis->visitExprStmt(this);
@@ -381,6 +402,7 @@ namespace AST {
 		VarDecl(Token _name, shared_ptr<ASTNode> _value) {
 			name = _name;
 			value = _value;
+			type = ASTType::VAR;
 		}
 		void accept(Visitor* vis) {
 			vis->visitVarDecl(this);
@@ -394,6 +416,7 @@ namespace AST {
 
 		BlockStmt(vector<shared_ptr<ASTNode>> _statements) {
 			statements = _statements;
+			type = ASTType::BLOCK;
 		}
 		void accept(Visitor* vis) {
 			vis->visitBlockStmt(this);
@@ -410,6 +433,7 @@ namespace AST {
 			condition = _condition;
 			thenBranch = _then;
 			elseBranch = _else;
+			type = ASTType::IF;
 		}
 		void accept(Visitor* vis) {
 			vis->visitIfStmt(this);
@@ -424,6 +448,7 @@ namespace AST {
 		WhileStmt(shared_ptr<ASTNode> _body, shared_ptr<ASTNode> _condition) {
 			body = _body;
 			condition = _condition;
+			type = ASTType::WHILE;
 		}
 		void accept(Visitor* vis) {
 			vis->visitWhileStmt(this);
@@ -442,6 +467,7 @@ namespace AST {
 			condition = _condition;
 			increment = _increment;
 			body = _body;
+			type = ASTType::FOR;
 		}
 		void accept(Visitor* vis) {
 			vis->visitForStmt(this);
@@ -454,6 +480,7 @@ namespace AST {
 
 		BreakStmt(Token _token) {
 			token = _token;
+			type = ASTType::BREAK;
 		}
 		void accept(Visitor* vis) {
 			vis->visitBreakStmt(this);
@@ -466,6 +493,7 @@ namespace AST {
 
 		ContinueStmt(Token _token) {
 			token = _token;
+			type = ASTType::CONTINUE;
 		}
 		void accept(Visitor* vis) {
 			vis->visitContinueStmt(this);
@@ -482,6 +510,7 @@ namespace AST {
 			expr = _expr;
 			cases = _cases;
 			hasDefault = _hasDefault;
+			type = ASTType::SWITCH;
 		}
 		void accept(Visitor* vis) {
 			vis->visitSwitchStmt(this);
@@ -497,6 +526,7 @@ namespace AST {
 		CaseStmt(vector<Token> _constants, vector<shared_ptr<ASTNode>>& _stmts) {
 			constants = _constants;
 			stmts = _stmts;
+			type = ASTType::CASE;
 		}
 		void accept(Visitor* vis) {
 			vis->visitCaseStmt(this);
@@ -509,6 +539,7 @@ namespace AST {
 
 		AdvanceStmt(Token _token) {
 			token = _token;
+			type = ASTType::ADVANCE;
 		}
 		void accept(Visitor* vis) {
 			vis->visitAdvanceStmt(this);
@@ -527,6 +558,7 @@ namespace AST {
 			args = _args;
 			arity = _args.size();
 			body = _body;
+			type = ASTType::FUNC;
 		}
 		void accept(Visitor* vis) {
 			vis->visitFuncDecl(this);
@@ -543,6 +575,7 @@ namespace AST {
 		ReturnStmt(shared_ptr<ASTNode> _expr, Token _keyword) {
 			expr = _expr;
 			keyword = _keyword;
+			type = ASTType::RETURN;
 		}
 		void accept(Visitor* vis) {
 			vis->visitReturnStmt(this);
@@ -561,6 +594,7 @@ namespace AST {
 			methods = _methods;
 			inheritedClass = _inheritedClass;
 			inherits = _inherits;
+			type = ASTType::CLASS;
 		}
 		void accept(Visitor* vis) {
 			vis->visitClassDecl(this);

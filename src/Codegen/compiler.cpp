@@ -94,7 +94,7 @@ void Compiler::visitSetExpr(AST::SetExpr* expr) {
 		expr->callee->accept(this);
 		expr->value->accept(this);
 		uInt16 name = identifierConstant(dynamic_cast<AST::LiteralExpr*>(expr->field.get())->token);
-		if (name < UINT8_MAX) emitBytes(+OpCode::SET_PROPERTY, name);
+		if (name <= UINT8_MAX) emitBytes(+OpCode::SET_PROPERTY, name);
 		else emitByteAnd16Bit(+OpCode::SET_PROPERTY_LONG, name);
 		break;
 	}
@@ -165,12 +165,62 @@ void Compiler::visitBinaryExpr(AST::BinaryExpr* expr) {
 }
 
 void Compiler::visitUnaryExpr(AST::UnaryExpr* expr) {
-	expr->right->accept(this);
 	updateLine(expr->op);
-	if (!expr->isPrefix) {
+	if (expr->op.type == TokenType::INCREMENT || expr->op.type == TokenType::DECREMENT) {
+		int arg = -1;
+		//type definition and arg size
+		//0: local(8bit index), 1: upvalue(8bit index), 2: global(8bit constant), 3: global(16bit constant)
+		//4: dot access(8bit constant), 5: dot access(16bit constant), 6: field access(none, field is compiled to stack)
+		byte type = 0;
+		if (expr->right->type == AST::ASTType::LITERAL) {
+			//if a variable is being incremented, first get what kind of variable it is(local, upvalue or global)
+			//also get argument(local: stack position, upvalue: upval position in func, global: name constant index)
+			AST::LiteralExpr* left = dynamic_cast<AST::LiteralExpr*>(expr->right.get());
 
+			updateLine(left->token);
+			arg = resolveLocal(left->token);
+			if (arg != -1) type = 0;
+			else if ((arg = resolveUpvalue(current, left->token)) != -1) type = 1;
+			else {
+				//all global variables have a numerical prefix which indicates which source file they came from, used for scoping
+				string temp = resolveGlobal(left->token, true);
+				arg = makeConstant(Value(ObjString::createString((char*)temp.c_str(), temp.length(), internedStrings)));
+
+				type = arg > UINT8_MAX ? 3 : 2;
+			}
+		}
+		else if (expr->right->type == AST::ASTType::FIELD_ACCESS) {
+			//if a field is being incremented, compile the object, and then if it's not a dot access also compile the field
+			AST::FieldAccessExpr* left = dynamic_cast<AST::FieldAccessExpr*>(expr->right.get());
+			updateLine(left->accessor);
+			left->callee->accept(this);
+			if (left->accessor.type == TokenType::DOT) {
+				arg = identifierConstant(dynamic_cast<AST::LiteralExpr*>(left->field.get())->token);
+				type = arg > UINT8_MAX ? 5 : 4;
+			}
+			else {
+				left->field->accept(this);
+				type = 6;
+			}
+		}
+		else error(expr->op, "Left side is not incrementable.");
+
+		//0b00000001: increment or decrement
+		//0b00000010: prefix or postfix increment/decrement
+		//0b00011100: type
+		byte args;
+		args = (expr->op.type == TokenType::INCREMENT ? 1 : 0) |
+			((expr->isPrefix ? 1 : 0) << 1) |
+			(type << 2);
+		emitBytes(+OpCode::INCREMENT, args);
+
+		if (arg != -1) arg > UINT8_MAX ? emit16Bit(arg) : emitByte(arg);
+
+		return;
 	}
-	else {
+	//regular unary operations
+	if (expr->isPrefix) {
+		expr->right->accept(this);
 		switch (expr->op.type) {
 		case TokenType::MINUS: emitByte(+OpCode::NEGATE); break;
 		case TokenType::BANG: emitByte(+OpCode::NOT); break;
@@ -215,7 +265,7 @@ void Compiler::visitFieldAccessExpr(AST::FieldAccessExpr* expr) {
 	//object.property, we can optimize since we know the string in advance
 	case TokenType::DOT:
 		uInt16 name = identifierConstant(dynamic_cast<AST::LiteralExpr*>(expr->field.get())->token);
-		if (name < UINT8_MAX) emitBytes(+OpCode::GET_PROPERTY, name);
+		if (name <= UINT8_MAX) emitBytes(+OpCode::GET_PROPERTY, name);
 		else emitByteAnd16Bit(+OpCode::GET_PROPERTY_LONG, name);
 		break;
 	}
@@ -262,7 +312,7 @@ void Compiler::visitSuperExpr(AST::SuperExpr* expr) {
 	//we use syntethic tokens since we know that 'super' and 'this' are defined if we're currently compiling a class method
 	namedVar(syntheticToken("this"), false);
 	namedVar(syntheticToken("super"), false);
-	if (name < UINT8_MAX) emitBytes(+OpCode::GET_SUPER, name);
+	if (name <= UINT8_MAX) emitBytes(+OpCode::GET_SUPER, name);
 	else emitByteAnd16Bit(+OpCode::GET_SUPER_LONG, name);
 }
 
@@ -332,7 +382,7 @@ void Compiler::visitFuncLiteral(AST::FuncLiteral* expr) {;
 	}
 
 	uInt16 constant = makeConstant(Value(func));
-	if (constant < UINT8_MAX) emitBytes(+OpCode::CLOSURE, constant);
+	if (constant <= UINT8_MAX) emitBytes(+OpCode::CLOSURE, constant);
 	else emitByteAnd16Bit(+OpCode::CLOSURE_LONG, constant);
 	//if this function does capture any upvalues, we emit the code for getting them, 
 	//when we execute "OP_CLOSURE" we will check to see how many upvalues the function captures by going directly to the func->upvalueCount
@@ -409,7 +459,7 @@ void Compiler::visitFuncDecl(AST::FuncDecl* decl) {
 	}
 
 	uInt16 constant = makeConstant(Value(func));
-	if (constant < UINT8_MAX) emitBytes(+OpCode::CLOSURE, constant);
+	if (constant <= UINT8_MAX) emitBytes(+OpCode::CLOSURE, constant);
 	else emitByteAnd16Bit(+OpCode::CLOSURE_LONG, constant);
 	//if this function does capture any upvalues, we emit the code for getting them, 
 	//when we execute "OP_CLOSURE" we will check to see how many upvalues the function captures by going directly to the func->upvalueCount
@@ -439,7 +489,7 @@ void Compiler::visitClassDecl(AST::ClassDecl* decl) {
 		
 		//even if a class wants to inherit from a class in another file of the same name, the import has to use an alias, otherwise we get
 		//undefined behavior (eg. class a : a)
-		if (dynamic_cast<AST::LiteralExpr*>(decl->inheritedClass.get())) {
+		if (decl->inheritedClass->type == AST::ASTType::LITERAL) {
 			AST::LiteralExpr* expr = dynamic_cast<AST::LiteralExpr*>(decl->inheritedClass.get());
 			if (className.compare(expr->token)) {
 				error(expr->token, "A class can't inherit from itself.");
@@ -717,11 +767,11 @@ void Compiler::visitReturnStmt(AST::ReturnStmt* stmt) {
 
 #pragma region Emitting bytes
 
-void Compiler::emitByte(uint8_t byte) {
+void Compiler::emitByte(byte byte) {
 	getChunk()->writeData(byte, current->line, curUnit->file->name);//line is incremented whenever we find a statement/expression that contains tokens
 }
 
-void Compiler::emitBytes(uint8_t byte1, uint8_t byte2) {
+void Compiler::emitBytes(byte byte1, byte byte2) {
 	emitByte(byte1);
 	emitByte(byte2);
 }
@@ -731,7 +781,7 @@ void Compiler::emit16Bit(uInt16 number) {
 	emitBytes((number >> 8) & 0xff, number & 0xff);
 }
 
-void Compiler::emitByteAnd16Bit(uint8_t byte, uInt16 num) {
+void Compiler::emitByteAnd16Bit(byte byte, uInt16 num) {
 	emitByte(byte);
 	emit16Bit(num);
 }
@@ -748,7 +798,7 @@ uInt16 Compiler::makeConstant(Value value) {
 void Compiler::emitConstant(Value value) {
 	//shorthand for adding a constant to the chunk and emitting it
 	uInt16 constant = makeConstant(value);
-	if (constant < UINT8_MAX) emitBytes(+OpCode::CONSTANT, constant);
+	if (constant <= UINT8_MAX) emitBytes(+OpCode::CONSTANT, constant);
 	else emitByteAnd16Bit(+OpCode::CONSTANT_LONG, constant);
 }
 
@@ -757,16 +807,15 @@ void Compiler::emitGlobalVar(Token name, bool canAssign) {
 	string temp = resolveGlobal(name, canAssign);
 	uInt16 arg = makeConstant(Value(ObjString::createString((char*)temp.c_str(), temp.length(), internedStrings)));
 
-	uint8_t getOp = +OpCode::GET_GLOBAL;
-	uint8_t setOp = +OpCode::SET_GLOBAL;
+	byte getOp = +OpCode::GET_GLOBAL;
+	byte setOp = +OpCode::SET_GLOBAL;
 	if (arg > UINT8_MAX) {
 		getOp = +OpCode::GET_GLOBAL_LONG;
 		setOp = +OpCode::SET_GLOBAL_LONG;
-		emitByteAnd16Bit(canAssign ? setOp : getOp, arg);
+		emitByteAnd16Bit((canAssign ? setOp : getOp), arg);
 		return;
 	}
-	emitByte(canAssign ? setOp : getOp);
-	emitByte(arg);
+	emitBytes((canAssign ? setOp : getOp), arg);
 }
 
 void Compiler::emitReturn() {
@@ -776,7 +825,7 @@ void Compiler::emitReturn() {
 	emitByte(+OpCode::RETURN);
 }
 
-int Compiler::emitJump(uint8_t jumpType) {
+int Compiler::emitJump(byte jumpType) {
 	emitByte(jumpType);
 	emitBytes(0xff, 0xff);
 	return getChunk()->code.size() - 2;
@@ -852,7 +901,7 @@ void Compiler::defineVar(uInt16 name) {
 		markInit();
 		return;
 	}
-	if (name < UINT8_MAX) emitBytes(+OpCode::DEFINE_GLOBAL, name);
+	if (name <= UINT8_MAX) emitBytes(+OpCode::DEFINE_GLOBAL, name);
 	else {
 		emitByteAnd16Bit(+OpCode::DEFINE_GLOBAL_LONG, name);
 	}
@@ -861,9 +910,9 @@ void Compiler::defineVar(uInt16 name) {
 //gets/sets a variable, respects the scoping rules(locals->upvalues->globals)
 void Compiler::namedVar(Token token, bool canAssign) {
 	updateLine(token);
-	uint8_t getOp;
-	uint8_t setOp;
-	uInt arg = resolveLocal(token);
+	byte getOp;
+	byte setOp;
+	int arg = resolveLocal(token);
 	if (arg != -1) {
 		getOp = +OpCode::GET_LOCAL;
 		setOp = +OpCode::SET_LOCAL;
@@ -978,7 +1027,7 @@ int Compiler::resolveUpvalue(CurrentChunkInfo* func, Token name) {
 	return -1;
 }
 
-int Compiler::addUpvalue(uint8_t index, bool isLocal) {
+int Compiler::addUpvalue(byte index, bool isLocal) {
 	int upvalueCount = current->func->upvalueCount;
 	//first check if this upvalue has already been captured
 	for (int i = 0; i < upvalueCount; i++) {
@@ -1043,7 +1092,7 @@ void Compiler::method(AST::FuncDecl* _method, Token className) {
 	}
 	uInt16 constant = makeConstant(Value(func));
 
-	if (constant < UINT8_MAX) emitBytes(+OpCode::CLOSURE, constant);
+	if (constant <= UINT8_MAX) emitBytes(+OpCode::CLOSURE, constant);
 	else emitByteAnd16Bit(+OpCode::CLOSURE_LONG, constant);
 	//if this function does capture any upvalues, we emit the code for getting them, 
 	//when we execute "OP_CLOSURE" we will check to see how many upvalues the function captures by going directly to the func->upvalueCount
@@ -1055,7 +1104,7 @@ void Compiler::method(AST::FuncDecl* _method, Token className) {
 }
 
 bool Compiler::invoke(AST::CallExpr* expr) {
-	if (dynamic_cast<AST::FieldAccessExpr*>(expr->callee.get())) {
+	if (expr->callee->type == AST::ASTType::FIELD_ACCESS) {
 		//currently we only optimizes field invoking(struct.field() or array[field]())
 		AST::FieldAccessExpr* call = dynamic_cast<AST::FieldAccessExpr*>(expr->callee.get());
 		int argCount = 0;
@@ -1069,7 +1118,7 @@ bool Compiler::invoke(AST::CallExpr* expr) {
 		emitBytes(+OpCode::INVOKE, argCount);
 		return true;
 	}
-	else if (dynamic_cast<AST::SuperExpr*>(expr->callee.get())) {
+	else if (expr->callee->type == AST::ASTType::SUPER) {
 		AST::SuperExpr* superCall = dynamic_cast<AST::SuperExpr*>(expr->callee.get());
 		int name = identifierConstant(superCall->methodName);
 

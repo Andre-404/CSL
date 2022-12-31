@@ -120,6 +120,7 @@ enum class OpCode {
 	NEGATE,
 	NOT,
 	BIN_NOT,
+	INCREMENT,
 	//binary
 	BITWISE_XOR,
 	BITWISE_OR,
@@ -144,6 +145,8 @@ enum class OpCode {
 	GREATER_EQUAL,
 	LESS,
 	LESS_EQUAL,
+
+
 	//temporary
 	PRINT,
 	//Variables
