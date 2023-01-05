@@ -134,9 +134,10 @@ void ASTPrinter::visitFuncDecl(FuncDecl* decl) {
 }
 
 void ASTPrinter::visitClassDecl(ClassDecl* decl) {
-	cout << "class " << decl->name.getLexeme()  
-		 << (decl->inherits ? ":" : "") << (decl->inherits ? decl->inheritedClass.getLexeme() : "") 
-		 << "{ " << endl;
+	cout << "class " << decl->name.getLexeme()
+		<< (decl->inherits ? ":" : "");
+	if(decl->inherits) decl->inheritedClass->accept(this);
+	cout << "{ " << endl;
 	for (shared_ptr<ASTNode> method : decl->methods) {
 		method->accept(this);
 	}

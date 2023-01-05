@@ -7,7 +7,6 @@
 
 namespace AST {
 	using std::unique_ptr;
-	typedef std::shared_ptr<ASTNode> ASTNodePtr;
 	class Parser;
 
 	enum class precedence {

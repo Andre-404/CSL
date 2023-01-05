@@ -117,6 +117,7 @@ namespace AST {
 		virtual ~ASTNode() {};
 		virtual void accept(Visitor* vis) = 0;
 	};
+	typedef std::shared_ptr<ASTNode> ASTNodePtr;
 
 	class ASTDecl : public ASTNode {
 	public:
@@ -549,7 +550,7 @@ namespace AST {
 	class FuncDecl : public ASTDecl {
 	public:
 		vector<Token> args;
-		int arity;
+		uInt arity;
 		shared_ptr<ASTNode> body;
 		Token name;
 

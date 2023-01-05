@@ -58,6 +58,10 @@ void ObjString::mark() {
 	//nothing to mark
 }
 
+string ObjString::toString() {
+	return string(getString());
+}
+
 char* ObjString::getString() {
 	return reinterpret_cast<char*>(this) + sizeof(ObjString);
 }
@@ -123,6 +127,13 @@ void ObjFunc::updateInternalPointers() {
 	body.code.updateInternalPtr();
 	body.lines.updateInternalPtr();
 }
+
+string ObjFunc::toString() {
+	if (!name) {
+		return "<anonymous function>";
+	}
+	return string(name->getString());
+}
 #pragma endregion
 
 #pragma region objNativeFn
@@ -143,6 +154,10 @@ void ObjNativeFunc::updateInternalPointers() {
 
 void ObjNativeFunc::mark() {
 	//nothing
+}
+
+string ObjNativeFunc::toString() {
+	return "<native function>";
 }
 #pragma endregion
 
@@ -175,6 +190,10 @@ void ObjClosure::mark() {
 	}
 	upvals.mark();
 }
+
+string ObjClosure::toString() {
+	return func->toString();
+}
 #pragma endregion
 
 #pragma region objUpval
@@ -198,6 +217,10 @@ void ObjUpval::mark() {
 
 void ObjUpval::updateInternalPointers() {
 	if(!isOpen) closed.updatePtr();
+}
+
+string ObjUpval::toString() {
+	return "upvalue";
 }
 #pragma endregion
 
@@ -242,6 +265,10 @@ void ObjArray::updateInternalPointers() {
 	}
 	values.updateInternalPtr();
 }
+
+string ObjArray::toString() {
+	return "<array>";
+}
 #pragma endregion
 
 #pragma region objClass
@@ -263,6 +290,10 @@ void ObjClass::mark() {
 void ObjClass::updateInternalPointers() {
 	name = reinterpret_cast<ObjString*>(name->moveTo);
 	methods.updateInternalPtrs();
+}
+
+string ObjClass::toString() {
+	return "<class " + name->toString() + ">";
 }
 #pragma endregion
 
@@ -288,6 +319,11 @@ void ObjInstance::updateInternalPointers() {
 	if (klass != nullptr) klass = reinterpret_cast<ObjClass*>(klass->moveTo);
 	fields.updateInternalPtrs();
 }
+
+string ObjInstance::toString() {
+	if (!klass) return "<struct>";
+	return "<" + klass->name->toString() + " instance>";
+}
 #pragma endregion
 
 #pragma region objBoundMethod
@@ -311,11 +347,20 @@ void ObjBoundMethod::updateInternalPointers() {
 	method = (ObjClosure*)method->moveTo;
 	receiver.updatePtr();
 }
+
+string ObjBoundMethod::toString() {
+	return method->func->toString();
+}
 #pragma endregion
 
 #pragma region ObjThread
 ObjThread::ObjThread(ObjClosure* _codeBlock) {
 	codeBlock = _codeBlock;
+	stackTop = stack;
+	frameCount = 0;
+	blocker = nullptr;
+	priority = 0;
+	state = ThreadState::NOT_STARTED;
 }
 
 void ObjThread::move(byte* to) {
@@ -361,5 +406,9 @@ void ObjThread::mark() {
 	}
 	gc.markObj(codeBlock);
 	openUpvals.mark();
+}
+
+string ObjThread::toString() {
+	return "<thread>";
 }
 #pragma endregion

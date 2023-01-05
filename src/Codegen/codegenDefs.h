@@ -65,9 +65,9 @@ struct Value {
 		return Value();
 	}
 
-	bool equals(Value other) {
-		return false;
-	}
+	bool equals(Value other);
+
+	void print();
 
 	#pragma region Helpers
 	bool isBool() { return type == ValueType::BOOL; };
@@ -120,7 +120,7 @@ enum class OpCode {
 	NEGATE,
 	NOT,
 	BIN_NOT,
-	INCREMENT,
+	INCREMENT,//arg: bit flags for type of incrementation and optional 8-16bit arg
 	//binary
 	BITWISE_XOR,
 	BITWISE_OR,
@@ -132,12 +132,8 @@ enum class OpCode {
 	MOD,
 	BITSHIFT_LEFT,
 	BITSHIFT_RIGHT,
-	//optimizations, if the rhs of one of these binary ops is a integer thats smaller than 256
-	//it's directly inserted into the bytecode instead of having a new constant
-	ADD_INT,//arg: 8-bit num
-	SUBTRACT_INT,//arg: 8-bit num
-	DIVIDE_INT,//arg: 8-bit num
-	MULTIPLY_INT,//arg: 8-bit num
+	
+	LOAD_INT,//arg: 8-bit, interger smaller than 256 to load
 	//comparisons and equality
 	EQUAL,
 	NOT_EQUAL,
@@ -175,10 +171,11 @@ enum class OpCode {
 	JUMP_IF_FALSE,//arg: 16-bit jump offset
 	JUMP_IF_TRUE,//arg: 16-bit jump offset
 	JUMP_IF_FALSE_POP,//arg: 16-bit jump offset
+	LOOP_IF_TRUE,//arg: 16-bit jump offset(gets negated)
 	LOOP,//arg: 16-bit jump offset(gets negated)
-	JUMP_POPN, //arg: 16-bit jump offset
-	SWITCH, //arg: 8-bit number of cases, followed by 8-bit case constants and 16-bit jump offsets
-	SWITCH_LONG, //arg: 8-bit number of cases, followed by 16-bit case constants and 16-bit jump offsets
+	JUMP_POPN, //arg: 16-bit jump offset, 8-bit num to pop
+	SWITCH, //arg: 16-bit number of constants in cases, followed by 8-bit case constants and 16-bit jump offsets
+	SWITCH_LONG, //arg: 16-bit number of constants in cases, followed by 16-bit case constants and 16-bit jump offsets
 
 	//Functions
 	CALL,//arg: 8-bit argument count
@@ -202,28 +199,26 @@ enum class OpCode {
 	GET_SUPER_LONG,//arg: 16-bit ObjString constant index
 	SUPER_INVOKE,//arg: 8-bit ObjString constant index, 8-bit argument count
 	SUPER_INVOKE_LONG,//arg: 16-bit ObjString constant index, 8-bit argument count
-
-	//fibers
-	THREAD_RUN,
-	THREAD_YIELD,
 };
 //conversion from enum to 1 byte number
 inline constexpr unsigned operator+ (OpCode const val) { return static_cast<byte>(val); }
 
 
 struct codeLine {
-	uInt64 end;
-	uInt64 line;
-	string name;
+	uInt end;
+	uInt line;
+	//index of the file in the array of all source files held by the vm
+	byte fileIndex;
 
 	codeLine() {
 		line = 0;
 		end = 0;
-		name = "";
+		fileIndex = 0;
 	}
-	codeLine(uInt64 _line, string& _name) {
+	codeLine(uInt _line, byte _fileIndex) {
 		line = _line;
-		name = _name;
+		end = 0;
+		fileIndex = _fileIndex;
 	}
 };
 
@@ -234,7 +229,7 @@ public:
 	ManagedArray<uint8_t> code;
 	ManagedArray<Value> constants;
 	Chunk();
-	void writeData(uint8_t opCode, uInt line, string& name);
+	void writeData(uint8_t opCode, uInt line, byte name);
 	codeLine getLine(uInt offset);
 	void disassemble(string name);
 	uInt addConstant(Value val);

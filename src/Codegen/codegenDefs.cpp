@@ -7,20 +7,20 @@
 using namespace object;
 
 Chunk::Chunk() {
-
+	file = nullptr;
 }
 
-void Chunk::writeData(uint8_t opCode, uInt line, string& name) {
+void Chunk::writeData(uint8_t opCode, uInt line, byte fileIndex) {
 	code.push(opCode);
 	if (lines.size() == 0) {
-		lines.push(codeLine(line, name));
+		lines.push(codeLine(line, fileIndex));
 		return;
 	}
 	if (lines[lines.size() - 1].line == line) return;
 	//if we're on a new line, mark the end of the bytecode for this line
 	//when looking up the line of code for a particular OP we check if it's position in 'code' is less than .end of a line
 	lines[lines.size() - 1].end = code.size() - 1;
-	lines.push(codeLine(line, name));
+	lines.push(codeLine(line, fileIndex));
 }
 
 codeLine Chunk::getLine(uInt offset) {
@@ -48,6 +48,39 @@ uInt Chunk::addConstant(Value val) {
 	return size;
 }
 
+
+bool Value::equals(Value other) {
+	if (type != other.type) return false;
+	switch (type) {
+	case ValueType::NUM: return FLOAT_EQ(asNum(), other.asNum());
+	case ValueType::BOOL: return asBool() == other.asBool();
+	case ValueType::OBJ: return asObj() == other.asObj();
+	case ValueType::NIL: return true;
+	}
+}
+
+string valueToStr(Value val) {
+	switch (val.type) {
+	case ValueType::BOOL:
+		return val.asBool() ? "true" : "false";
+		break;
+	case ValueType::NIL: return "nil"; break;
+	case ValueType::NUM: {
+		double num = val.asNum();
+		int prec = (num == static_cast<int>(num)) ? 0 : 5;
+		return std::to_string(num).substr(0, std::to_string(num).find(".") + prec);
+		break;
+	}
+	case ValueType::OBJ: return val.asObj()->toString(); break;
+	default:
+		std::cout << "Error printing object";
+		return "";
+	}
+}
+
+void Value::print() {
+	std::cout << valueToStr(this)<< std::endl;
+}
 
 bool Value::isString() {
 	return isObj() && asObj()->type == ObjType::STRING;

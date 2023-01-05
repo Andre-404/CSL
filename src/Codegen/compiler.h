@@ -9,7 +9,7 @@ namespace compileCore {
 	#define LOCAL_MAX 256
 	#define UPVAL_MAX 256
 
-	enum class funcType {
+	enum class FuncType {
 		TYPE_FUNC,
 		TYPE_METHOD,
 		TYPE_CONSTRUCTOR,
@@ -40,9 +40,9 @@ namespace compileCore {
 	struct CurrentChunkInfo {
 		//for closures
 		CurrentChunkInfo* enclosing;
-		//function that's currently being compiled
+		//function whose information is contained within this chunk info
 		object::ObjFunc* func;
-		funcType type;
+		FuncType type;
 		bool hasReturnStmt;
 
 		uInt line;
@@ -50,11 +50,13 @@ namespace compileCore {
 		vector<uInt> scopeJumps;
 		//locals
 		Local locals[LOCAL_MAX];
-		int localCount;
-		int scopeDepth;
+		uInt localCount;
+		uInt scopeDepth;
+		vector<bool> scopeHasLoop;
+		vector<bool> scopeHasSwitch;
 		std::array<Upvalue, UPVAL_MAX> upvalues;
 		bool hasCapturedLocals;
-		CurrentChunkInfo(CurrentChunkInfo* _enclosing, funcType _type);
+		CurrentChunkInfo(CurrentChunkInfo* _enclosing, FuncType _type);
 	};
 
 	struct ClassChunkInfo {
@@ -138,7 +140,6 @@ namespace compileCore {
 		void defineVar(uInt16 name);
 		void namedVar(Token name, bool canAssign);
 		uInt16 parseVar(Token name);
-		void emitGlobalVar(Token name, bool canAssign);
 		//locals
 		void declareVar(Token& name);
 		void addLocal(Token name);
@@ -147,7 +148,7 @@ namespace compileCore {
 		int resolveUpvalue(CurrentChunkInfo* func, Token name);
 		int addUpvalue(byte index, bool isLocal);
 		void markInit();
-		void beginScope() { current->scopeDepth++; }
+		void beginScope();
 		void endScope();
 		//classes and methods
 		void method(AST::FuncDecl* _method, Token className);
@@ -155,8 +156,8 @@ namespace compileCore {
 		Token syntheticToken(string str);
 		//misc
 		void updateLine(Token token);
-		void error(Token token, string msg);
-		void error(string message);
+		void error(Token token, string msg) throw(CompilerException);
+		void error(string message) throw(CompilerException);
 		//checks all imports to see if the symbol 'token' is imported
 		uInt checkSymbol(Token token);
 		//given a token and whether the operation is assigning or reading a variable, determines the correct symbol to use

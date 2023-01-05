@@ -345,25 +345,35 @@ void Parser::parse(vector<CSLModule*> modules) {
 			}
 		}
 	}
-	//look at each unit and determine if any of its dependencies that are imported without an alias are exporting the same symbol
+	//look at each unit and determine if any of its dependencies that are imported without an alias are exporting the same symbol,
+	//or if 2 or more units using aliases share the same alias, which is forbidden
 	for (CSLModule* unit : modules) {
-		std::unordered_map<string, Dependency&> importedSymbols;
-		//only check deps with alias
+		std::unordered_map<string, Dependency*> importedSymbols;
+		std::unordered_map<string, Dependency*> importAliases;
+
 		for (Dependency& dep : unit->deps) {
 			if (dep.alias.type == TokenType::NONE) {
 				for (Token token : dep.module->exports) {
 					string lexeme = token.getLexeme();
-					if (importedSymbols.count(lexeme) > 0) {
-						//if there are 2 or more declaration which use the same symbol,
-						//throw an error and tell the user exactly which dependencies caused the error
-						string str = std::format("Ambiguous definition, symbol '{}' defined in {} and {}.",
-							lexeme, importedSymbols[lexeme].pathString.getLexeme(), dep.pathString.getLexeme());
-						error(dep.pathString, str);
+
+					if (importedSymbols.count(lexeme) == 0) {
+						importedSymbols[lexeme] = &dep;
+						continue;
 					}
-					else {
-						importedSymbols[lexeme] = dep;
-					}
+					//if there are 2 or more declaration which use the same symbol,
+					//throw an error and tell the user exactly which dependencies caused the error
+					string str = std::format("Ambiguous definition, symbol '{}' defined in {} and {}.",
+						lexeme, importedSymbols[lexeme]->pathString.getLexeme(), dep.pathString.getLexeme());
+					error(dep.pathString, str);
 				}
+			}
+			else {
+				//check if any imported dependencies share the same alias
+				if (importAliases.count(dep.alias.getLexeme()) > 0) {
+					error(importAliases[dep.alias.getLexeme()]->alias, "Cannot use the same alias for 2 module imports.");
+					error(dep.alias, "Cannot use the same alias for 2 module imports.");
+				}
+				importAliases[dep.alias.getLexeme()] = &dep;
 			}
 		}
 	}
@@ -651,7 +661,7 @@ shared_ptr<CaseStmt> Parser::caseStmt() {
 			matchConstants.push_back(previous());
 			if (!match(TokenType::BITWISE_OR)) break;
 		}
-		if (!match({ TokenType::NIL, TokenType::NUMBER, TokenType::STRING, TokenType::TRUE, TokenType::FALSE })) {
+		if (!match({ TokenType::NIL, TokenType::NUMBER, TokenType::STRING, TokenType::TRUE, TokenType::FALSE }) && peek().type != TokenType::COLON) {
 			throw error(peek(), "Expression must be a constant literal(string, number, boolean or nil).");
 		}
 	}

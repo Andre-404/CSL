@@ -4,6 +4,7 @@
 #include "../DataStructures/hashMap.h"
 #include "../DataStructures/gcArray.h"
 #include <fstream>
+#include <stdio.h>
 
 namespace runtime {
 	class VM;
@@ -28,6 +29,8 @@ namespace object {
 	class Obj : public memory::HeapObject{
 	public:
 		ObjType type;
+
+		virtual string toString() = 0;
 	};
 
 	class ObjThread;
@@ -46,11 +49,6 @@ namespace object {
 
 		static ObjString* createString(char* from, uInt64 length, HashMap& interned);
 
-		void move(byte* newAddress);
-		void updateInternalPointers();
-		uInt64 getSize();
-		void mark();
-
 		char* getString();
 
 		bool compare(ObjString* other);
@@ -58,6 +56,12 @@ namespace object {
 		bool compare(string other);
 
 		ObjString* concat(ObjString* other, HashMap& interned);
+
+		void move(byte* newAddress);
+		void updateInternalPointers();
+		uInt64 getSize();
+		void mark();
+		string toString();
 	};
 
 	class ObjArray : public Obj {
@@ -72,6 +76,7 @@ namespace object {
 		size_t getSize() { return sizeof(ObjArray); }
 		void updateInternalPointers();
 		void mark();
+		string toString();
 	};
 
 	class ObjFunc : public Obj {
@@ -88,6 +93,7 @@ namespace object {
 		size_t getSize() { return sizeof(ObjFunc); }
 		void updateInternalPointers();
 		void mark();
+		string toString();
 	};
 
 	class ObjNativeFunc : public Obj {
@@ -100,6 +106,7 @@ namespace object {
 		size_t getSize() { return sizeof(ObjNativeFunc); }
 		void updateInternalPointers();
 		void mark();
+		string toString();
 	};
 
 	class ObjUpval : public Obj {
@@ -114,6 +121,7 @@ namespace object {
 		size_t getSize() { return sizeof(ObjUpval); }
 		void updateInternalPointers();
 		void mark();
+		string toString();
 	};
 
 	//multiple closures with different upvalues can point to the same function
@@ -127,6 +135,7 @@ namespace object {
 		size_t getSize() { return sizeof(ObjClosure); }
 		void updateInternalPointers();
 		void mark();
+		string toString();
 	};
 
 	//parent classes use copy down inheritance, meaning all methods of a superclass are copied into the hash map of this class
@@ -140,6 +149,7 @@ namespace object {
 		size_t getSize() { return sizeof(ObjClass); }
 		void updateInternalPointers();
 		void mark();
+		string toString();
 	};
 
 	//method bound to a specific instance of a class
@@ -154,6 +164,7 @@ namespace object {
 		size_t getSize() { return sizeof(ObjBoundMethod); }
 		void updateInternalPointers();
 		void mark();
+		string toString();
 	};
 
 	//used for instances of classes and structs, if 'klass' is null then it's a struct
@@ -167,6 +178,7 @@ namespace object {
 		size_t getSize() { return sizeof(ObjInstance); }
 		void updateInternalPointers();
 		void mark();
+		string toString();
 	};
 
 	class ObjThread : public Obj {
@@ -191,10 +203,22 @@ namespace object {
 		size_t getSize() { return sizeof(ObjThread); }
 		void updateInternalPointers();
 		void mark();
+		string toString();
 	};
+	//using C-style file accessing since the reference to the file is a pointer rather than a file stream object
+	//this is done because stream objects can't be copied/moved, and all Obj objects are moved in memory on the managed heap
+	class ObjFile : public Obj {
+	public:
+		FILE* file;
+		ObjString* path;
 
-	class ObjFile {
+		ObjFile(FILE* file);
 
+		void move(byte* to);
+		size_t getSize() { return sizeof(ObjThread); }
+		void updateInternalPointers();
+		void mark();
+		string toString();
 	};
 
 }
