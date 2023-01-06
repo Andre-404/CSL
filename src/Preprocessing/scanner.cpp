@@ -97,6 +97,8 @@ Token Scanner::scanToken() {
 	start = current;
 	if (isAtEnd()) return makeToken(TokenType::TOKEN_EOF);
 	if(consumeWhitespace()) return makeToken(TokenType::WHITESPACE);
+	//a comment could go to the end of the file
+	if (isAtEnd()) return makeToken(TokenType::TOKEN_EOF);
 
 	char c = advance();
 	//identifiers start with _ or [a-z][A-Z]
@@ -142,7 +144,6 @@ Token Scanner::scanToken() {
 Token Scanner::makeToken(TokenType type) {
 	Span newSpan(line, start - curFile->lines.back(), current - start, curFile);
 	Token token(newSpan, type);
-	string str = token.getLexeme();
 	return token;
 }
 

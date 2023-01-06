@@ -17,7 +17,7 @@ constexpr double pi = 3.14159265358979323846;
 
 //Using epsilon value because of floating point precision
 #define FLOAT_EQ(x,v) (fabs(x - v) <= DBL_EPSILON)
-#define IS_INT(num) (std::floor(num) == num)
+#define IS_INT(num) (FLOAT_EQ(std::floor(num), num))
 
 #define AST_DEBUG
 #define COMPILER_DEBUG

@@ -225,7 +225,6 @@ struct codeLine {
 class Chunk {
 public:
 	ManagedArray<codeLine> lines;
-	File* file;
 	ManagedArray<uint8_t> code;
 	ManagedArray<Value> constants;
 	Chunk();

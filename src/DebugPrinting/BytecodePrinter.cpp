@@ -20,7 +20,7 @@ static int constantInstruction(string name, Chunk* chunk, int offset, bool isLon
 	else constant = ((chunk->code[offset + 1] << 8) | chunk->code[offset + 2]);
 	std::cout << std::format("{:16} {:4d}", name, constant) << std::endl;
 	chunk->constants[constant].print();
-	std::cout<<"'\n";
+	std::cout<<"\n";
 	return offset + (isLong ? 3 : 2);
 }
 
@@ -108,10 +108,12 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 	case +OpCode::BIN_NOT:
 		return simpleInstruction("OP BIN NOT", offset);
 	case +OpCode::INCREMENT: {
+		offset++;
 		byte args = chunk->code[offset++];
 		string sign = (args & 0b00000001) == 0 ? "--" : "++";
 		string fix = (args & 0b00000010) == 0 ? "postfix" : "prefix";
-		switch (((args & 0b00011100) >> 2)) {
+		byte type = (args >> 2);
+		switch (type) {
 		case 0: {
 			std::cout << std::format("OP INCREMENT {} {} local: {}", sign, fix, chunk->code[offset++]) << std::endl; break;
 		}
@@ -152,6 +154,7 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 			std::cout << std::format("OP INCREMENT {} {} field access", sign, fix) << std::endl; break;
 		}
 		}
+		return offset;
 	}
 	case +OpCode::BITWISE_XOR:
 		return simpleInstruction("OP BITWISE XOR", offset);
@@ -194,13 +197,13 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 	case +OpCode::DEFINE_GLOBAL_LONG:
 		return constantInstruction("OP DEFINE GLOBAL LONG", chunk, offset, true);
 	case +OpCode::GET_GLOBAL:
-		return doubleConstantInstruction("OP GET GLOBAL", chunk, offset, false);
+		return constantInstruction("OP GET GLOBAL", chunk, offset, false);
 	case +OpCode::GET_GLOBAL_LONG:
-		return doubleConstantInstruction("OP GET GLOBAL LONG", chunk, offset, true);
+		return constantInstruction("OP GET GLOBAL LONG", chunk, offset, true);
 	case +OpCode::SET_GLOBAL:
-		return doubleConstantInstruction("OP SET GLOBAL", chunk, offset, false);
+		return constantInstruction("OP SET GLOBAL", chunk, offset, false);
 	case +OpCode::SET_GLOBAL_LONG:
-		return doubleConstantInstruction("OP SET GLOBAL LONG", chunk, offset, true);
+		return constantInstruction("OP SET GLOBAL LONG", chunk, offset, true);
 	case +OpCode::GET_LOCAL:
 		return byteInstruction("OP GET LOCAL", chunk, offset);
 	case +OpCode::SET_LOCAL:
@@ -237,6 +240,7 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 		return offset + 5;
 	}
 	case +OpCode::SWITCH: {
+		offset++;
 		uInt16 numOfConstants = static_cast<uInt16>(chunk->code[offset++] << 8);
 		numOfConstants |= chunk->code[offset++];
 		uInt jumps = offset + numOfConstants;
@@ -252,6 +256,7 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 		return jumps + (numOfConstants + 1) * 2;
 	}
 	case +OpCode::SWITCH_LONG: {
+		offset++;
 		uInt16 numOfConstants = (uInt16)(chunk->code[offset++] << 8);
 		numOfConstants |= chunk->code[offset++];
 		uInt jumps = offset + numOfConstants*2;

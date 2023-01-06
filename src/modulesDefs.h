@@ -115,6 +115,7 @@ struct Token {
 	string getLexeme() const {
 		if (type == TokenType::ERROR) return "Unexpected character.";
 		else if (isSynthetic) return syntheticStr;
+		else if (type == TokenType::TOKEN_EOF) return "EOF";
 		return str.getStr();
 	}
 

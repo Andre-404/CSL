@@ -121,6 +121,7 @@ public:
 			std::cout << std::format("Tried accessing item at index {}, array size is {}.", index, count);
 			exit(64);
 		}
+
 		return *(reinterpret_cast<T*>(header->getPtr()) + index);
 	}
 

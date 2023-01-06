@@ -50,7 +50,7 @@ namespace AST {
 	class Parser {
 	public:
 		Parser();
-		void parse(vector<CSLModule*> modules);
+		void parse(vector<CSLModule*>& modules);
 
 	private:
 		CSLModule* curUnit;

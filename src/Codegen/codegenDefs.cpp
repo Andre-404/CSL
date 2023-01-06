@@ -2,12 +2,12 @@
 #include "../ErrorHandling/errorHandler.h"
 #include "../Objects/objects.h"
 #include "../MemoryManagment/garbageCollector.h"
+#include "../DebugPrinting/BytecodePrinter.h"
 #include <format>
 
 using namespace object;
 
 Chunk::Chunk() {
-	file = nullptr;
 }
 
 void Chunk::writeData(uint8_t opCode, uInt line, byte fileIndex) {
@@ -33,7 +33,11 @@ codeLine Chunk::getLine(uInt offset) {
 }
 
 void Chunk::disassemble(string name) {
-	//debug
+	std::cout << "=======" << name << "=======\n";
+	//prints every instruction in chunk
+	for (uInt offset = 0; offset < code.size();) {
+		offset = disassembleInstruction(this, offset);
+	}
 }
 
 //adds the constant to the array and returns it's index, which is used in conjuction with OP_CONSTANT
@@ -59,19 +63,19 @@ bool Value::equals(Value other) {
 	}
 }
 
-string valueToStr(Value val) {
-	switch (val.type) {
+string valueToStr(Value* val) {
+	switch (val->type) {
 	case ValueType::BOOL:
-		return val.asBool() ? "true" : "false";
+		return val->asBool() ? "true" : "false";
 		break;
 	case ValueType::NIL: return "nil"; break;
 	case ValueType::NUM: {
-		double num = val.asNum();
+		double num = val->asNum();
 		int prec = (num == static_cast<int>(num)) ? 0 : 5;
 		return std::to_string(num).substr(0, std::to_string(num).find(".") + prec);
 		break;
 	}
-	case ValueType::OBJ: return val.asObj()->toString(); break;
+	case ValueType::OBJ: return val->asObj()->toString(); break;
 	default:
 		std::cout << "Error printing object";
 		return "";
@@ -79,7 +83,7 @@ string valueToStr(Value val) {
 }
 
 void Value::print() {
-	std::cout << valueToStr(this)<< std::endl;
+	std::cout << valueToStr(this);
 }
 
 bool Value::isString() {

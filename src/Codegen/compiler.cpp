@@ -48,7 +48,7 @@ Compiler::Compiler(vector<CSLModule*>& _units) {
 				unit->stmts[i]->accept(this);
 			}
 			catch (CompilerException e) {
-				
+				int a = 1;
 			}
 		}
 		curUnitIndex++;
@@ -199,7 +199,7 @@ void Compiler::visitUnaryExpr(AST::UnaryExpr* expr) {
 		//0b00000001: increment or decrement
 		//0b00000010: prefix or postfix increment/decrement
 		//0b00011100: type
-		byte args;
+		byte args = 0;
 		args = (expr->op.type == TokenType::INCREMENT ? 1 : 0) |
 			((expr->isPrefix ? 1 : 0) << 1) |
 			(type << 2);
@@ -280,13 +280,13 @@ void Compiler::visitStructLiteralExpr(AST::StructLiteral* expr) {
 	}
 	//since the amount of fields is variable, we emit the number of fields follwed by constants for each field
 	//constants are emitted in reverse order, because we get the values by popping them from stack(reverse order from which they were pushed)
-	if (isLong) {
+	if (!isLong) {
 		emitBytes(+OpCode::CREATE_STRUCT, constants.size());
 
 		for (int i = constants.size() - 1; i >= 0; i--) emitByte(constants[i]);
 	}
 	else {
-		emitByteAnd16Bit(+OpCode::CREATE_STRUCT_LONG, constants.size());
+		emitBytes(+OpCode::CREATE_STRUCT_LONG, constants.size());
 
 		for (int i = constants.size() - 1; i >= 0; i--) emit16Bit(constants[i]);
 	}
@@ -997,7 +997,7 @@ void Compiler::namedVar(Token token, bool canAssign) {
 	else {
 		//all global variables have a numerical prefix which indicates which source file they came from, used for scoping
 		string temp = resolveGlobal(token, canAssign);
-		uInt16 arg = makeConstant(Value(ObjString::createString((char*)temp.c_str(), temp.length(), internedStrings)));
+		arg = makeConstant(Value(ObjString::createString((char*)temp.c_str(), temp.length(), internedStrings)));
 
 		getOp = +OpCode::GET_GLOBAL;
 		setOp = +OpCode::SET_GLOBAL;
@@ -1300,7 +1300,7 @@ uInt Compiler::checkSymbol(Token symbol) {
 string Compiler::resolveGlobal(Token name, bool canAssign) {
 	bool inThisFile = false;
 	for (Token token : curUnit->topDeclarations) {
-		if (name.getLexeme().compare(name.getLexeme()) == 0) {
+		if (name.getLexeme().compare(token.getLexeme()) == 0) {
 			inThisFile = true;
 			break;
 		}
@@ -1348,4 +1348,3 @@ string Compiler::resolveModuleVariable(Token moduleAlias, Token variable) {
 
 //only used when debugging _LONG versions of op codes
 #undef SHORT_CONSTANT_LIMIT
-

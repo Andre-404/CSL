@@ -173,7 +173,7 @@ namespace AST {
 				if (left->type == ASTType::LITERAL) {
 					LiteralExpr* expr = dynamic_cast<LiteralExpr*>(left.get());
 					Token ident = cur->consume(TokenType::IDENTIFIER, "Expected variable name.");
-					make_shared<ModuleAccessExpr>(expr->token, ident);
+					return make_shared<ModuleAccessExpr>(expr->token, ident);
 				}
 				else throw cur->error(token, "Expected module name identifier.");
 			}
@@ -321,7 +321,7 @@ Parser::Parser() {
 #pragma endregion
 }
 
-void Parser::parse(vector<CSLModule*> modules) {
+void Parser::parse(vector<CSLModule*>& modules) {
 	#ifdef AST_DEBUG
 	ASTPrinter printer;
 	#endif
@@ -520,7 +520,7 @@ shared_ptr<ASTDecl> Parser::classDecl() {
 ASTNodePtr Parser::statement() {
 	if (match({ TokenType::PRINT, TokenType::LEFT_BRACE, TokenType::IF, TokenType::WHILE,
 		TokenType::FOR, TokenType::BREAK, TokenType::SWITCH,
-		TokenType::RETURN, TokenType::CONTINUE })) {
+		TokenType::RETURN, TokenType::CONTINUE, TokenType::ADVANCE })) {
 
 		switch (previous().type) {
 		case TokenType::PRINT: return printStmt();
