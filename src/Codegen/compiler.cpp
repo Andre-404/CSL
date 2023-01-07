@@ -12,6 +12,9 @@ using namespace object;
 #define SHORT_CONSTANT_LIMIT UINT8_MAX
 #endif
 
+#define CHECK_SCOPE_FOR_LOOP (current->scopeWithLoop.size() > 0 && local.depth <= current->scopeWithLoop.back())
+#define CHECK_SCOPE_FOR_SWITCH (current->scopeWithSwitch.size() > 0 && local.depth <= current->scopeWithSwitch.back())
+
 CurrentChunkInfo::CurrentChunkInfo(CurrentChunkInfo* _enclosing, FuncType _type) : enclosing(_enclosing), type(_type) {
 	upvalues = std::array<Upvalue, UPVAL_MAX>();
 	hasReturnStmt = false;
@@ -53,6 +56,7 @@ Compiler::Compiler(vector<CSLModule*>& _units) {
 		}
 		curUnitIndex++;
 	}
+	ObjFunc* c = endFuncDecl();
 	for (CSLModule* unit : units) delete unit;
 }
 
@@ -465,10 +469,10 @@ void Compiler::visitFuncDecl(AST::FuncDecl* decl) {
 
 void Compiler::visitClassDecl(AST::ClassDecl* decl) {
 	Token className = decl->getName();
-	uInt16 constant = identifierConstant(className);
-	declareVar(className);
-
-	emitByteAnd16Bit(+OpCode::CLASS, constant);
+	uInt16 constant = parseVar(className);
+	
+	//name of the class is different than the name of the variable containing the class(global vars get a prefix)
+	emitByteAnd16Bit(+OpCode::CLASS, identifierConstant(className));
 
 	ClassChunkInfo temp(currentClass, false);
 	currentClass = &temp;
@@ -489,6 +493,7 @@ void Compiler::visitClassDecl(AST::ClassDecl* decl) {
 			}
 		}
 		decl->inheritedClass->accept(this);
+		//when compiling methods, "this" is implicitly defined as the first local, "super" gets accessed as an upvalue
 		beginScope();
 		addLocal(syntheticToken("super"));
 		defineVar(0);//0 is a dummy number, all this does it mark the latest local variable as ready to use
@@ -562,11 +567,11 @@ void Compiler::visitWhileStmt(AST::WhileStmt* stmt) {
 	int loopStart = getChunk()->code.size();
 	//loop body gets it's own scope because we only patch break and continue jumps which are declared in higher scope depths
 	//user might not use {} block when writing a loop, this ensures the body is always in it's own scope
-	current->scopeHasLoop[current->scopeDepth - 1] = true;
+	current->scopeWithLoop.push_back(current->scopeDepth);
 	beginScope();
 	stmt->body->accept(this);
 	endScope();
-	current->scopeHasLoop[current->scopeDepth - 1] = false;
+	current->scopeWithLoop.pop_back();
 	//continue skips the rest of the body and evals the condition again
 	patchScopeJumps(ScopeJumpType::CONTINUE);
 	stmt->condition->accept(this);
@@ -590,11 +595,11 @@ void Compiler::visitForStmt(AST::ForStmt* stmt) {
 	int loopStart = getChunk()->code.size();
 	//loop body gets it's own scope because we only patch break and continue jumps which are declared in higher scope depths
 	//user might not use {} block when writing a loop, this ensures the body is always in it's own scope
-	current->scopeHasLoop[current->scopeDepth - 1] = true;
+	current->scopeWithLoop.push_back(current->scopeDepth);
 	beginScope();
 	stmt->body->accept(this);
 	endScope();
-	current->scopeHasLoop[current->scopeDepth - 1] = false;
+	current->scopeWithLoop.pop_back();
 	//patching continue here to increment if a variable for incrementing has been defined
 	patchScopeJumps(ScopeJumpType::CONTINUE);
 	//if there is a increment expression, we compile it and emit a POP to get rid of the result
@@ -633,7 +638,7 @@ void Compiler::visitBreakStmt(AST::BreakStmt* stmt) {
 	if (current->hasCapturedLocals) {
 		for (int i = current->localCount - 1; i >= 0; i--) {
 			Local& local = current->locals[i];
-			if (local.depth != -1 && (current->scopeHasLoop[local.depth] || current->scopeHasSwitch[local.depth])) break;
+			if (local.depth != -1 && (CHECK_SCOPE_FOR_LOOP || CHECK_SCOPE_FOR_SWITCH)) break;
 
 			if (local.isCaptured) emitByte(+OpCode::CLOSE_UPVALUE);
 			else emitByte(+OpCode::POP);
@@ -642,7 +647,7 @@ void Compiler::visitBreakStmt(AST::BreakStmt* stmt) {
 	else {
 		for (int i = current->localCount - 1; i >= 0; i--) {
 			Local& local = current->locals[i];
-			if (local.depth != -1 && (current->scopeHasLoop[local.depth] || current->scopeHasSwitch[local.depth])) break;
+			if (local.depth != -1 && (CHECK_SCOPE_FOR_LOOP || CHECK_SCOPE_FOR_SWITCH)) break;
 			toPop++;
 		}
 	}
@@ -667,7 +672,7 @@ void Compiler::visitContinueStmt(AST::ContinueStmt* stmt) {
 	if (current->hasCapturedLocals) {
 		for (int i = current->localCount - 1; i >= 0; i--) {
 			Local& local = current->locals[i];
-			if (local.depth != -1 && current->scopeHasLoop[local.depth]) break;
+			if (local.depth != -1 && CHECK_SCOPE_FOR_LOOP) break;
 
 			if (local.isCaptured) emitByte(+OpCode::CLOSE_UPVALUE);
 			else emitByte(+OpCode::POP);
@@ -676,7 +681,7 @@ void Compiler::visitContinueStmt(AST::ContinueStmt* stmt) {
 	else {
 		for (int i = current->localCount - 1; i >= 0; i--) {
 			Local& local = current->locals[i];
-			if (local.depth != -1 && current->scopeHasLoop[local.depth]) break;
+			if (local.depth != -1 && CHECK_SCOPE_FOR_LOOP) break;
 			toPop++;
 		}
 	}
@@ -691,14 +696,14 @@ void Compiler::visitContinueStmt(AST::ContinueStmt* stmt) {
 }
 
 void Compiler::visitSwitchStmt(AST::SwitchStmt* stmt) {
-	current->scopeHasSwitch[current->scopeDepth - 1] = true;
+	current->scopeWithSwitch.push_back(current->scopeDepth);
 	//compile the expression in parentheses
 	stmt->expr->accept(this);
 	vector<uInt16> constants;
 	vector<uInt16> jumps;
 	bool isLong = false;
 	for (std::shared_ptr<AST::CaseStmt> _case : stmt->cases) {
-		if (_case->caseType.getLexeme().compare("default")) continue;
+		if (_case->caseType.getLexeme().compare("default") == 0) continue;
 		//a single case can contain multiple constants(eg. case 1 | 4 | 9:), each constant is compiled and its jump will point to the 
 		//same case code block
 		for (Token constant : _case->constants) {
@@ -767,14 +772,14 @@ void Compiler::visitSwitchStmt(AST::SwitchStmt* stmt) {
 	//compile the code of all cases, before each case update the jump for that case to the current ip
 	int i = 0;
 	for (std::shared_ptr<AST::CaseStmt> _case : stmt->cases) {
-		if (_case->caseType.getLexeme().compare("default")) {
-			jumps[jumps.size() - 1] = getChunk()->code.size();
+		if (_case->caseType.getLexeme().compare("default") == 0) {
+			patchJump(jumps[jumps.size() - 1]);
 		}
 		else {
 			//a single case can contain multiple constants(eg. case 1 | 4 | 9:), need to update jumps for each constant
 			int constantNum = _case->constants.size();
 			for (int j = 0; j < constantNum; j++) {
-				jumps[i] = getChunk()->code.size();
+				patchJump(jumps[i]);
 				i++;
 			}
 		}
@@ -782,6 +787,7 @@ void Compiler::visitSwitchStmt(AST::SwitchStmt* stmt) {
 		beginScope();
 		_case->accept(this);
 		endScope();
+		//end scope takes care of upvalues
 		implicitBreaks.push_back(emitJump(+OpCode::JUMP));
 		//patch advance after the implicit break jump for fallthrough
 		patchScopeJumps(ScopeJumpType::ADVANCE);
@@ -793,7 +799,7 @@ void Compiler::visitSwitchStmt(AST::SwitchStmt* stmt) {
 	for (uInt jmp : implicitBreaks) {
 		patchJump(jmp);
 	}
-	current->scopeHasSwitch[current->scopeDepth - 1] = false;
+	current->scopeWithSwitch.pop_back();
 	patchScopeJumps(ScopeJumpType::BREAK);
 }
 
@@ -815,7 +821,7 @@ void Compiler::visitAdvanceStmt(AST::AdvanceStmt* stmt) {
 	if (current->hasCapturedLocals) {
 		for (int i = current->localCount - 1; i >= 0; i--) {
 			Local& local = current->locals[i];
-			if (local.depth != -1 && current->scopeHasSwitch[local.depth]) break;
+			if (local.depth != -1 && CHECK_SCOPE_FOR_SWITCH) break;
 
 			if (local.isCaptured) emitByte(+OpCode::CLOSE_UPVALUE);
 			else emitByte(+OpCode::POP);
@@ -824,7 +830,7 @@ void Compiler::visitAdvanceStmt(AST::AdvanceStmt* stmt) {
 	else {
 		for (int i = current->localCount - 1; i >= 0; i--) {
 			Local& local = current->locals[i];
-			if (local.depth != -1 && current->scopeHasSwitch[local.depth]) break;
+			if (local.depth != -1 && CHECK_SCOPE_FOR_SWITCH) break;
 			toPop++;
 		}
 	}
@@ -939,7 +945,7 @@ void Compiler::patchScopeJumps(ScopeJumpType type) {
 		//break and advance statements which are in a strictly deeper scope get patched, on the other hand
 		//continue statements which are in current or a deeper scope get patched
 		if (jumpDepth > current->scopeDepth && +type == jumpType) {
-			int jumpLenght = curCode - jumpPatchPos - 4;
+			int jumpLenght = curCode - jumpPatchPos - 3;
 			if (jumpLenght > UINT16_MAX) error("Too much code to jump over.");
 			if (toPop > UINT8_MAX) error("Too many variables to pop.");
 
@@ -1057,15 +1063,11 @@ void Compiler::addLocal(Token name) {
 
 void Compiler::beginScope() {
 	current->scopeDepth++;
-	current->scopeHasLoop.push_back(false);
-	current->scopeHasSwitch.push_back(false);
 }
 
 void Compiler::endScope() {
 	//Pop every variable that was declared in this scope
 	current->scopeDepth--;//first lower the scope, the check for every var that is deeper than the current scope
-	current->scopeHasLoop.pop_back();
-	current->scopeHasSwitch.pop_back();
 	int toPop = 0;
 	while (current->localCount > 0 && current->locals[current->localCount - 1].depth > current->scopeDepth) {
 		if (!current->hasCapturedLocals) toPop++;
@@ -1079,7 +1081,14 @@ void Compiler::endScope() {
 		}
 		current->localCount--;
 	}
-	if (toPop > 0 && !current->hasCapturedLocals) emitBytes(+OpCode::POPN, toPop);
+	if (toPop > 0 && !current->hasCapturedLocals) {
+		if (toPop == 0) return;
+		else if (toPop == 1) {
+			emitByte(+OpCode::POP);
+			return;
+		}
+		emitBytes(+OpCode::POPN, toPop);
+	}
 }
 
 int Compiler::resolveLocal(CurrentChunkInfo* func, Token name) {
@@ -1213,7 +1222,7 @@ bool Compiler::invoke(AST::CallExpr* expr) {
 	}
 	else if (expr->callee->type == AST::ASTType::SUPER) {
 		AST::SuperExpr* superCall = dynamic_cast<AST::SuperExpr*>(expr->callee.get());
-		int name = identifierConstant(superCall->methodName);
+		uInt16 name = identifierConstant(superCall->methodName);
 
 		if (currentClass == nullptr) {
 			error(superCall->methodName, "Can't use 'super' outside of a class.");
@@ -1221,7 +1230,7 @@ bool Compiler::invoke(AST::CallExpr* expr) {
 		else if (!currentClass->hasSuperclass) {
 			error(superCall->methodName, "Can't use 'super' in a class with no superclass.");
 		}
-
+		//in methods and constructors, "this" is implicitly defined as the first local
 		namedVar(syntheticToken("this"), false);
 		int argCount = 0;
 		for (AST::ASTNodePtr arg : expr->args) {
@@ -1230,8 +1239,8 @@ bool Compiler::invoke(AST::CallExpr* expr) {
 		}
 		//super gets popped, leaving only the receiver and args on the stack
 		namedVar(syntheticToken("super"), false);
-		emitConstant(getChunk()->constants[name]);
-		emitBytes(+OpCode::INVOKE, argCount);
+		emitBytes(+OpCode::INVOKE, name);
+		emitByte(argCount);
 		return true;
 	}
 	return false;
@@ -1348,3 +1357,6 @@ string Compiler::resolveModuleVariable(Token moduleAlias, Token variable) {
 
 //only used when debugging _LONG versions of op codes
 #undef SHORT_CONSTANT_LIMIT
+
+#undef CHECK_SCOPE_FOR_LOOP 
+#undef CHECK_SCOPE_FOR_SWITCH

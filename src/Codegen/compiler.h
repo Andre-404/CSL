@@ -52,8 +52,8 @@ namespace compileCore {
 		Local locals[LOCAL_MAX];
 		uInt localCount;
 		uInt scopeDepth;
-		vector<bool> scopeHasLoop;
-		vector<bool> scopeHasSwitch;
+		vector<int> scopeWithLoop;
+		vector<int> scopeWithSwitch;
 		std::array<Upvalue, UPVAL_MAX> upvalues;
 		bool hasCapturedLocals;
 		CurrentChunkInfo(CurrentChunkInfo* _enclosing, FuncType _type);

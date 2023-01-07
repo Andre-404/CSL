@@ -18,7 +18,7 @@ static int constantInstruction(string name, Chunk* chunk, int offset, bool isLon
 	uInt constant = 0;
 	if (!isLong) constant = chunk->code[offset + 1];
 	else constant = ((chunk->code[offset + 1] << 8) | chunk->code[offset + 2]);
-	std::cout << std::format("{:16} {:4d}", name, constant) << std::endl;
+	std::cout << std::format("{:16} {:4d} ", name, constant);
 	chunk->constants[constant].print();
 	std::cout<<"\n";
 	return offset + (isLong ? 3 : 2);
@@ -53,9 +53,9 @@ static int jumpInstruction(string name, int sign, Chunk* chunk, int offset) {
 static int invokeInstruction(string name, Chunk* chunk, int offset) {
 	uint8_t constant = chunk->code[offset + 1];
 	uint8_t argCount = chunk->code[offset + 2];
-	std::cout << std::format("{:16} ({} args) {:4d}", name, argCount, constant);
+	std::cout << std::format("{:16} ({} args) {:4d} ", name, argCount, constant);
 	chunk->constants[constant].print();
-	std::cout << "'\n";
+	std::cout << "\n";
 	return offset + 3;
 }
 
@@ -233,32 +233,35 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 	case +OpCode::LOOP:
 		return jumpInstruction("OP LOOP", -1, chunk, offset);
 	case +OpCode::JUMP_POPN: {
-		uint16_t jump = (uint16_t)(chunk->code[offset + 1] << 8);
-		jump |= chunk->code[offset + 2];
-		uint16_t toPop = chunk->code[offset + 3];
-		std::cout << std::format("{:16} {:4d} -> {} POP {}", "OP JUMP POPN", offset, offset + 5 + jump, toPop) << std::endl;
-		return offset + 5;
+		uint16_t toPop = chunk->code[offset + 1];
+		uint16_t jump = (uint16_t)(chunk->code[offset + 2] << 8);
+		jump |= chunk->code[offset + 3];
+		std::cout << std::format("{:16} {:4d} -> {} POP {}", "OP JUMP POPN", offset, offset + 4 + jump, toPop) << std::endl;
+		return offset + 4;
 	}
 	case +OpCode::SWITCH: {
 		offset++;
 		uInt16 numOfConstants = static_cast<uInt16>(chunk->code[offset++] << 8);
 		numOfConstants |= chunk->code[offset++];
+		std::cout << std::format("{:16} {:4d} ", "OP SWITCH", numOfConstants) << std::endl;
 		uInt jumps = offset + numOfConstants;
 
 		for (int i = 0; i < numOfConstants; i++) {
 			uInt constant = chunk->code[offset++];
 			std::cout << std::format("{:0>4d}    | {:16} {:4d} ", offset - 1, "CASE CONSTANT", constant);
 			chunk->constants[constant].print();
-			std::cout << std::format(" -> {}", jumps + i*2) << std::endl;
+			uInt16 caseJmp = (uInt16)(chunk->code[jumps + i * 2] << 8) | chunk->code[(jumps + i * 2) + 1];
+			std::cout << std::format(" {} -> {:4d}", jumps + i * 2, jumps + i * 2 + 2 + caseJmp) << std::endl;
 		}
 		uInt16 defaultJmp = static_cast<uInt16>(chunk->code[jumps + numOfConstants * 2] << 8) | chunk->code[(jumps + numOfConstants * 2) + 1];
-		std::cout << std::format("{:0>4d}    | {:16} -> {:4d} ", jumps + numOfConstants * 2, "DEFAULT CASE", defaultJmp) << std::endl;
+		std::cout << std::format("{:0>4d}    | {:16} {} -> {:4d} ", jumps + numOfConstants * 2, "DEFAULT CASE", jumps + numOfConstants * 2, jumps + numOfConstants * 2 + 2+ defaultJmp) << std::endl;
 		return jumps + (numOfConstants + 1) * 2;
 	}
 	case +OpCode::SWITCH_LONG: {
 		offset++;
 		uInt16 numOfConstants = (uInt16)(chunk->code[offset++] << 8);
 		numOfConstants |= chunk->code[offset++];
+		std::cout << std::format("{:16} {:4d} ", "OP SWITCH LONG", numOfConstants) << std::endl;;
 		uInt jumps = offset + numOfConstants*2;
 
 		for (int i = 0; i < numOfConstants; i++) {
@@ -266,11 +269,11 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 			std::cout << std::format("{:0>4d}    | {:16} {:4d} ", offset, "CASE CONSTANT", constant);
 			chunk->constants[constant].print();
 			uInt16 caseJmp = (uInt16)(chunk->code[jumps + i * 2] << 8) | chunk->code[(jumps + i * 2) + 1];
-			std::cout << std::format(" -> {:4d}", caseJmp) << std::endl;
+			std::cout << std::format(" {} -> {:4d}", jumps + i * 2, jumps + i * 2 + 2 + caseJmp) << std::endl;
 			offset += 2;
 		}
 		uInt16 defaultJmp = static_cast<uInt16>(chunk->code[jumps + numOfConstants * 2] << 8) | chunk->code[(jumps + numOfConstants * 2) + 1];
-		std::cout << std::format("{:0>4d}    | {:16} -> {:4d} ", jumps + numOfConstants * 2, "DEFAULT CASE", defaultJmp) << std::endl;
+		std::cout << std::format("{:0>4d}    | {:16} -> {:4d} ", jumps + numOfConstants * 2, "DEFAULT CASE", jumps + numOfConstants * 2 + 2 + defaultJmp) << std::endl;
 		return jumps + (numOfConstants + 1) * 2;
 	}
 	case +OpCode::CALL:
@@ -288,7 +291,7 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 		for (int j = 0; j < function->upvalueCount; j++) {
 			int isLocal = chunk->code[offset++];
 			int index = chunk->code[offset++];
-			std::cout << std::format("{:0>4d}      |                     {} index: {}\n", offset - 2, isLocal ? "local" : "upvalue", index) << std::endl;
+			std::cout << std::format("{:0>4d}    |                     {} index: {}\n", offset - 2, isLocal ? "local" : "upvalue", index) << std::endl;
 		}
 		return offset;
 	}
@@ -304,7 +307,7 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 		for (int j = 0; j < function->upvalueCount; j++) {
 			int isLocal = chunk->code[offset++];
 			int index = chunk->code[offset++];
-			std::cout << std::format("{:0>4d}      |                     {} index: {}\n", offset - 2, isLocal ? "local" : "upvalue", index) << std::endl;
+			std::cout << std::format("{:0>4d}    |                     {} index: {}\n", offset - 2, isLocal ? "local" : "upvalue", index) << std::endl;
 		}
 		return offset;
 	}
