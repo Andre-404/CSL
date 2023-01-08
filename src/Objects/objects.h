@@ -36,7 +36,7 @@ namespace object {
 	class ObjThread;
 
 	//pointer to a native C++ function
-	typedef bool(*NativeFn)(ObjThread* fiber, int argCount, Value* args);
+	using NativeFn = bool(*)(ObjThread* fiber, int argCount, Value* args);
 
 
 	//this is a header which is followed by the bytes of the string

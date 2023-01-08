@@ -117,7 +117,7 @@ namespace AST {
 		virtual ~ASTNode() {};
 		virtual void accept(Visitor* vis) = 0;
 	};
-	typedef std::shared_ptr<ASTNode> ASTNodePtr;
+	using ASTNodePtr = std::shared_ptr<ASTNode>;
 
 	class ASTDecl : public ASTNode {
 	public:

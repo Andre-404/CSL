@@ -9,7 +9,12 @@ using namespace AST;
 //have to define this in the AST namespace because parselets are c++ friend classes
 namespace AST {
 	//!, -, ~, ++a and --a
-	class unaryPrefixExpr : public PrefixParselet {
+	class UnaryPrefixParselet : public PrefixParselet {
+	public:
+		UnaryPrefixParselet(Parser* _cur, int _prec) {
+			cur = _cur;
+			prec = _prec;
+		}
 		ASTNodePtr parse(Token token) {
 			ASTNodePtr expr = cur->expression(prec);
 			return make_shared<UnaryExpr>(token, expr, true);
@@ -17,7 +22,12 @@ namespace AST {
 	};
 
 	//numbers, string, boolean, nil, array and struct literals, grouping as well as super calls and anonymous functions
-	class literalExpr : public PrefixParselet {
+	class LiteralParselet : public PrefixParselet {
+	public:
+		LiteralParselet(Parser* _cur, int _prec) {
+			cur = _cur;
+			prec = _prec;
+		}
 		ASTNodePtr parse(Token token) {
 			switch (token.type) {
 				//only thing that gets inherited is methods
@@ -99,7 +109,12 @@ namespace AST {
 	};
 
 	//variable assignment
-	class assignmentExpr : public InfixParselet {
+	class AssignmentParselet : public InfixParselet {
+	public:
+		AssignmentParselet(Parser* _cur, int _prec) {
+			cur = _cur;
+			prec = _prec;
+		}
 		ASTNodePtr parse(ASTNodePtr left, Token token, int surroundingPrec) {
 
 			if (left->type != ASTType::LITERAL) throw cur->error(token, "Left side is not assignable");
@@ -156,7 +171,12 @@ namespace AST {
 	};
 
 	//?: operator
-	class conditionalExpr : public InfixParselet {
+	class ConditionalParselet : public InfixParselet {
+	public:
+		ConditionalParselet(Parser* _cur, int _prec) {
+			cur = _cur;
+			prec = _prec;
+		}
 		ASTNodePtr parse(ASTNodePtr left, Token token, int surroundingPrec) {
 			ASTNodePtr thenBranch = cur->expression(prec - 1);
 			cur->consume(TokenType::COLON, "Expected ':' after then branch.");
@@ -166,7 +186,12 @@ namespace AST {
 	};
 
 	//any binary operation + module alias access operator(::)
-	class binaryExpr : public InfixParselet {
+	class BinaryParselet : public InfixParselet {
+	public:
+		BinaryParselet(Parser* _cur, int _prec) {
+			cur = _cur;
+			prec = _prec;
+		}
 		ASTNodePtr parse(ASTNodePtr left, Token token, int surroundingPrec) {
 			if (token.type == TokenType::DOUBLE_COLON) {
 				//dynamic cast B2D is dumb but its the best solution for this outlier
@@ -183,15 +208,24 @@ namespace AST {
 	};
 
 	//a++, a--
-	class unaryPostfixExpr : public InfixParselet {
+	class UnaryPostfixParselet : public InfixParselet {
+	public:
+		UnaryPostfixParselet(Parser* _cur, int _prec) {
+			cur = _cur;
+			prec = _prec;
+		}
 		ASTNodePtr parse(ASTNodePtr var, Token op, int surroundingPrec) {
 			return make_shared<UnaryExpr>(op, var, false);
 		}
 	};
 
 	//function calling
-	class callExpr : public InfixParselet {
+	class CallParselet : public InfixParselet {
 	public:
+		CallParselet(Parser* _cur, int _prec) {
+			cur = _cur;
+			prec = _prec;
+		}
 		ASTNodePtr parse(ASTNodePtr left, Token token, int surroundingPrec) {
 			vector<ASTNodePtr> args;
 			if (!cur->check(TokenType::RIGHT_PAREN)) {
@@ -205,8 +239,12 @@ namespace AST {
 	};
 
 	//accessing struct, class or array fields
-	class fieldAccessExpr : public InfixParselet {
+	class FieldAccessParselet : public InfixParselet {
 	public:
+		FieldAccessParselet(Parser* _cur, int _prec) {
+			cur = _cur;
+			prec = _prec;
+		}
 		ASTNodePtr parse(ASTNodePtr left, Token token, int surroundingPrec) {
 			ASTNodePtr field = nullptr;
 			Token newToken = token;
@@ -227,7 +265,7 @@ namespace AST {
 			//this handles that case and produces a special set expr
 			//we also check the precedence level of the surrounding expression, so "a + b.c = 3" doesn't get parsed
 			//the match() covers every possible type of assignment
-			if (surroundingPrec <= (int)precedence::ASSIGNMENT
+			if (surroundingPrec <= (int)Precedence::ASSIGNMENT
 				&& cur->match({ TokenType::EQUAL, TokenType::PLUS_EQUAL, TokenType::MINUS_EQUAL, TokenType::SLASH_EQUAL,
 					TokenType::STAR_EQUAL, TokenType::BITWISE_XOR_EQUAL, TokenType::BITWISE_AND_EQUAL,
 					TokenType::BITWISE_OR_EQUAL, TokenType::PERCENTAGE_EQUAL })) {
@@ -248,76 +286,76 @@ Parser::Parser() {
 
 	#pragma region Parselets
 	//Prefix
-	addPrefix<literalExpr>(TokenType::THIS, precedence::NONE);
+	addPrefix<LiteralParselet>(TokenType::THIS, Precedence::NONE);
 
-	addPrefix<unaryPrefixExpr>(TokenType::BANG, precedence::NOT);
-	addPrefix<unaryPrefixExpr>(TokenType::MINUS, precedence::NOT);
-	addPrefix<unaryPrefixExpr>(TokenType::TILDA, precedence::NOT);
+	addPrefix<UnaryPrefixParselet>(TokenType::BANG, Precedence::NOT);
+	addPrefix<UnaryPrefixParselet>(TokenType::MINUS, Precedence::NOT);
+	addPrefix<UnaryPrefixParselet>(TokenType::TILDA, Precedence::NOT);
 
-	addPrefix<unaryPrefixExpr>(TokenType::INCREMENT, precedence::ALTER);
-	addPrefix<unaryPrefixExpr>(TokenType::DECREMENT, precedence::ALTER);
+	addPrefix<UnaryPrefixParselet>(TokenType::INCREMENT, Precedence::ALTER);
+	addPrefix<UnaryPrefixParselet>(TokenType::DECREMENT, Precedence::ALTER);
 
 
-	addPrefix<literalExpr>(TokenType::IDENTIFIER, precedence::PRIMARY);
-	addPrefix<literalExpr>(TokenType::STRING, precedence::PRIMARY);
-	addPrefix<literalExpr>(TokenType::NUMBER, precedence::PRIMARY);
-	addPrefix<literalExpr>(TokenType::TRUE, precedence::PRIMARY);
-	addPrefix<literalExpr>(TokenType::FALSE, precedence::PRIMARY);
-	addPrefix<literalExpr>(TokenType::NIL, precedence::PRIMARY);
-	addPrefix<literalExpr>(TokenType::LEFT_PAREN, precedence::PRIMARY);
-	addPrefix<literalExpr>(TokenType::LEFT_BRACKET, precedence::PRIMARY);
-	addPrefix<literalExpr>(TokenType::LEFT_BRACE, precedence::PRIMARY);
-	addPrefix<literalExpr>(TokenType::SUPER, precedence::PRIMARY);
-	addPrefix<literalExpr>(TokenType::FUNC, precedence::PRIMARY);
+	addPrefix<LiteralParselet>(TokenType::IDENTIFIER, Precedence::PRIMARY);
+	addPrefix<LiteralParselet>(TokenType::STRING, Precedence::PRIMARY);
+	addPrefix<LiteralParselet>(TokenType::NUMBER, Precedence::PRIMARY);
+	addPrefix<LiteralParselet>(TokenType::TRUE, Precedence::PRIMARY);
+	addPrefix<LiteralParselet>(TokenType::FALSE, Precedence::PRIMARY);
+	addPrefix<LiteralParselet>(TokenType::NIL, Precedence::PRIMARY);
+	addPrefix<LiteralParselet>(TokenType::LEFT_PAREN, Precedence::PRIMARY);
+	addPrefix<LiteralParselet>(TokenType::LEFT_BRACKET, Precedence::PRIMARY);
+	addPrefix<LiteralParselet>(TokenType::LEFT_BRACE, Precedence::PRIMARY);
+	addPrefix<LiteralParselet>(TokenType::SUPER, Precedence::PRIMARY);
+	addPrefix<LiteralParselet>(TokenType::FUNC, Precedence::PRIMARY);
 
 	//Infix
-	addInfix<assignmentExpr>(TokenType::EQUAL, precedence::ASSIGNMENT);
-	addInfix<assignmentExpr>(TokenType::PLUS_EQUAL, precedence::ASSIGNMENT);
-	addInfix<assignmentExpr>(TokenType::MINUS_EQUAL, precedence::ASSIGNMENT);
-	addInfix<assignmentExpr>(TokenType::SLASH_EQUAL, precedence::ASSIGNMENT);
-	addInfix<assignmentExpr>(TokenType::STAR_EQUAL, precedence::ASSIGNMENT);
-	addInfix<assignmentExpr>(TokenType::PERCENTAGE_EQUAL, precedence::ASSIGNMENT);
-	addInfix<assignmentExpr>(TokenType::BITWISE_XOR_EQUAL, precedence::ASSIGNMENT);
-	addInfix<assignmentExpr>(TokenType::BITWISE_OR_EQUAL, precedence::ASSIGNMENT);
-	addInfix<assignmentExpr>(TokenType::BITWISE_AND_EQUAL, precedence::ASSIGNMENT);
+	addInfix<AssignmentParselet>(TokenType::EQUAL, Precedence::ASSIGNMENT);
+	addInfix<AssignmentParselet>(TokenType::PLUS_EQUAL, Precedence::ASSIGNMENT);
+	addInfix<AssignmentParselet>(TokenType::MINUS_EQUAL, Precedence::ASSIGNMENT);
+	addInfix<AssignmentParselet>(TokenType::SLASH_EQUAL, Precedence::ASSIGNMENT);
+	addInfix<AssignmentParselet>(TokenType::STAR_EQUAL, Precedence::ASSIGNMENT);
+	addInfix<AssignmentParselet>(TokenType::PERCENTAGE_EQUAL, Precedence::ASSIGNMENT);
+	addInfix<AssignmentParselet>(TokenType::BITWISE_XOR_EQUAL, Precedence::ASSIGNMENT);
+	addInfix<AssignmentParselet>(TokenType::BITWISE_OR_EQUAL, Precedence::ASSIGNMENT);
+	addInfix<AssignmentParselet>(TokenType::BITWISE_AND_EQUAL, Precedence::ASSIGNMENT);
 
-	addInfix<conditionalExpr>(TokenType::QUESTIONMARK, precedence::CONDITIONAL);
+	addInfix<ConditionalParselet>(TokenType::QUESTIONMARK, Precedence::CONDITIONAL);
 
-	addInfix<binaryExpr>(TokenType::OR, precedence::OR);
-	addInfix<binaryExpr>(TokenType::AND, precedence::AND);
+	addInfix<BinaryParselet>(TokenType::OR, Precedence::OR);
+	addInfix<BinaryParselet>(TokenType::AND, Precedence::AND);
 
-	addInfix<binaryExpr>(TokenType::BITWISE_OR, precedence::BIN_OR);
-	addInfix<binaryExpr>(TokenType::BITWISE_XOR, precedence::BIN_XOR);
-	addInfix<binaryExpr>(TokenType::BITWISE_AND, precedence::BIN_AND);
+	addInfix<BinaryParselet>(TokenType::BITWISE_OR, Precedence::BIN_OR);
+	addInfix<BinaryParselet>(TokenType::BITWISE_XOR, Precedence::BIN_XOR);
+	addInfix<BinaryParselet>(TokenType::BITWISE_AND, Precedence::BIN_AND);
 
-	addInfix<binaryExpr>(TokenType::EQUAL_EQUAL, precedence::EQUALITY);
-	addInfix<binaryExpr>(TokenType::BANG_EQUAL, precedence::EQUALITY);
+	addInfix<BinaryParselet>(TokenType::EQUAL_EQUAL, Precedence::EQUALITY);
+	addInfix<BinaryParselet>(TokenType::BANG_EQUAL, Precedence::EQUALITY);
 
-	addInfix<binaryExpr>(TokenType::LESS, precedence::COMPARISON);
-	addInfix<binaryExpr>(TokenType::LESS_EQUAL, precedence::COMPARISON);
-	addInfix<binaryExpr>(TokenType::GREATER, precedence::COMPARISON);
-	addInfix<binaryExpr>(TokenType::GREATER_EQUAL, precedence::COMPARISON);
+	addInfix<BinaryParselet>(TokenType::LESS, Precedence::COMPARISON);
+	addInfix<BinaryParselet>(TokenType::LESS_EQUAL, Precedence::COMPARISON);
+	addInfix<BinaryParselet>(TokenType::GREATER, Precedence::COMPARISON);
+	addInfix<BinaryParselet>(TokenType::GREATER_EQUAL, Precedence::COMPARISON);
 
-	addInfix<binaryExpr>(TokenType::BITSHIFT_LEFT, precedence::BITSHIFT);
-	addInfix<binaryExpr>(TokenType::BITSHIFT_RIGHT, precedence::BITSHIFT);
+	addInfix<BinaryParselet>(TokenType::BITSHIFT_LEFT, Precedence::BITSHIFT);
+	addInfix<BinaryParselet>(TokenType::BITSHIFT_RIGHT, Precedence::BITSHIFT);
 
-	addInfix<binaryExpr>(TokenType::PLUS, precedence::SUM);
-	addInfix<binaryExpr>(TokenType::MINUS, precedence::SUM);
+	addInfix<BinaryParselet>(TokenType::PLUS, Precedence::SUM);
+	addInfix<BinaryParselet>(TokenType::MINUS, Precedence::SUM);
 
-	addInfix<binaryExpr>(TokenType::SLASH, precedence::FACTOR);
-	addInfix<binaryExpr>(TokenType::STAR, precedence::FACTOR);
-	addInfix<binaryExpr>(TokenType::PERCENTAGE, precedence::FACTOR);
+	addInfix<BinaryParselet>(TokenType::SLASH, Precedence::FACTOR);
+	addInfix<BinaryParselet>(TokenType::STAR, Precedence::FACTOR);
+	addInfix<BinaryParselet>(TokenType::PERCENTAGE, Precedence::FACTOR);
 
-	addInfix<callExpr>(TokenType::LEFT_PAREN, precedence::CALL);
-	addInfix<fieldAccessExpr>(TokenType::LEFT_BRACKET, precedence::CALL);
-	addInfix<fieldAccessExpr>(TokenType::DOT, precedence::CALL);
+	addInfix<CallParselet>(TokenType::LEFT_PAREN, Precedence::CALL);
+	addInfix<FieldAccessParselet>(TokenType::LEFT_BRACKET, Precedence::CALL);
+	addInfix<FieldAccessParselet>(TokenType::DOT, Precedence::CALL);
 
-	addInfix<binaryExpr>(TokenType::DOUBLE_COLON, precedence::PRIMARY);
+	addInfix<BinaryParselet>(TokenType::DOUBLE_COLON, Precedence::PRIMARY);
 
 	//Postfix
 	//postfix and mixfix operators get parsed with the infix parselets
-	addInfix<unaryPostfixExpr>(TokenType::INCREMENT, precedence::ALTER);
-	addInfix<unaryPostfixExpr>(TokenType::DECREMENT, precedence::ALTER);
+	addInfix<UnaryPostfixParselet>(TokenType::INCREMENT, Precedence::ALTER);
+	addInfix<UnaryPostfixParselet>(TokenType::DECREMENT, Precedence::ALTER);
 #pragma endregion
 }
 
@@ -446,8 +484,6 @@ ASTNodePtr Parser::topLevelDeclaration() {
 
 ASTNodePtr Parser::localDeclaration() {
 	if (match(TokenType::VAR)) return varDecl();
-	else if (match(TokenType::CLASS)) return classDecl();
-	else if (match(TokenType::FUNC)) return funcDecl();
 	return statement();
 }
 
@@ -780,17 +816,13 @@ void Parser::sync() {
 }
 
 template<typename ParseletType>
-void Parser::addPrefix(TokenType type, precedence prec) {
-	prefixParselets[type] = std::make_unique<ParseletType>();
-	prefixParselets[type]->cur = this;
-	prefixParselets[type]->prec = (int)prec;
+void Parser::addPrefix(TokenType type, Precedence prec) {
+	prefixParselets[type] = std::make_unique<ParseletType>(this, +prec);
 }
 
 template<typename ParseletType>
-void Parser::addInfix(TokenType type, precedence prec) {
-	infixParselets[type] = std::make_unique<ParseletType>();
-	infixParselets[type]->cur = this;
-	infixParselets[type]->prec = (int)prec;
+void Parser::addInfix(TokenType type, Precedence prec) {
+	infixParselets[type] = std::make_unique<ParseletType>(this, +prec);
 }
 
 //checks if the current token has any infix parselet associated with it, and if so the precedence of that operation is returned

@@ -9,7 +9,7 @@ namespace AST {
 	using std::unique_ptr;
 	class Parser;
 
-	enum class precedence {
+	enum class Precedence {
 		NONE,
 		ASSIGNMENT,
 		CONDITIONAL,
@@ -28,6 +28,8 @@ namespace AST {
 		CALL,
 		PRIMARY
 	};
+	//conversion from enum to 1 byte number
+	inline constexpr unsigned operator+ (Precedence const val) { return static_cast<byte>(val); }
 
 	class PrefixParselet {
 	public:
@@ -63,23 +65,23 @@ namespace AST {
 		std::unordered_map<TokenType, unique_ptr<InfixParselet>> infixParselets;
 
 		template<typename ParsletType>
-		void addPrefix(TokenType type, precedence prec);
+		void addPrefix(TokenType type, Precedence prec);
 		template<typename ParsletType>
-		void addInfix(TokenType type, precedence prec);
+		void addInfix(TokenType type, Precedence prec);
 
 #pragma region Expressions
 		ASTNodePtr expression(int prec);
 		ASTNodePtr expression();
 
 		//parselets that need to have access to private methods of parser
-		friend class fieldAccessExpr;
-		friend class callExpr;
-		friend class binaryExpr;
-		friend class conditionalExpr;
-		friend class assignmentExpr;
-		friend class literalExpr;
-		friend class unaryPrefixExpr;
-		friend class unaryPostfixExpr;
+		friend class FieldAccessParselet;
+		friend class CallParselet;
+		friend class BinaryParselet;
+		friend class ConditionalParselet;
+		friend class AssignmentParselet;
+		friend class LiteralParselet;
+		friend class UnaryPrefixParselet;
+		friend class UnaryPostfixParselet;
 #pragma endregion
 
 #pragma region Statements
