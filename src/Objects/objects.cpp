@@ -19,7 +19,6 @@ static uInt64 hashString(char* str, uInt length) {
 
 ObjString::ObjString(uInt64 length) {
 	size = length;
-	moveTo = nullptr;
 	hash = 0;
 	type = ObjType::STRING;
 }
@@ -97,7 +96,6 @@ ObjFunc::ObjFunc() {
 	arity = 0;
 	upvalueCount = 0;
 	type = ObjType::FUNC;
-	moveTo = nullptr;
 	name = nullptr;
 }
 
@@ -141,7 +139,6 @@ ObjNativeFunc::ObjNativeFunc(NativeFn _func, byte _arity) {
 	func = _func;
 	arity = _arity;
 	type = ObjType::NATIVE;
-	moveTo = nullptr;
 }
 
 void ObjNativeFunc::move(byte* to) {
@@ -166,7 +163,6 @@ ObjClosure::ObjClosure(ObjFunc* _func) {
 	func = _func;
 	upvals = ManagedArray<ObjUpval*>(func->upvalueCount, nullptr);
 	type = ObjType::CLOSURE;
-	moveTo = nullptr;
 }
 
 void ObjClosure::move(byte* to) {
@@ -202,7 +198,6 @@ ObjUpval::ObjUpval(Value* slot) {
 	closed = Value::nil();
 	isOpen = true;
 	type = ObjType::UPVALUE;
-	moveTo = nullptr;
 }
 
 void ObjUpval::move(byte* to) {
@@ -227,7 +222,6 @@ string ObjUpval::toString() {
 #pragma region objArray
 ObjArray::ObjArray() {
 	type = ObjType::ARRAY;
-	moveTo = nullptr;
 	numOfHeapPtr = 0;
 }
 
@@ -275,7 +269,6 @@ string ObjArray::toString() {
 ObjClass::ObjClass(ObjString* _name) {
 	name = _name;
 	type = ObjType::CLASS;
-	moveTo = nullptr;
 }
 
 void ObjClass::move(byte* to) {
@@ -300,7 +293,6 @@ string ObjClass::toString() {
 #pragma region objInstance
 ObjInstance::ObjInstance(ObjClass* _klass) {
 	klass = _klass;
-	moveTo = nullptr;
 	type = ObjType::INSTANCE;
 	fields = HashMap();
 }
@@ -331,7 +323,6 @@ ObjBoundMethod::ObjBoundMethod(Value _receiver, ObjClosure* _method) {
 	receiver = _receiver;
 	method = _method;
 	type = ObjType::BOUND_METHOD;
-	moveTo = nullptr;
 }
 
 void ObjBoundMethod::move(byte* to) {

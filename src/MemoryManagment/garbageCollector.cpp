@@ -1,5 +1,6 @@
 #include "garbageCollector.h"
 #include "../ErrorHandling/errorHandler.h"
+#include "../Codegen/compiler.h"
 #include <format>
 #include <immintrin.h>
 
@@ -81,7 +82,9 @@ namespace memory {
 	void GarbageCollector::collect(compileCore::Compiler* compiler) {
 		markRoots(compiler);
 		mark();
-
+		#ifdef GC_PRINT_HEAP
+		uInt64 sizeBeforeShrink = heapTop - memoryBlock.get();
+		#endif
 		unique_ptr<byte> ptr = nullptr;
 		if (shrinkedHeapSize > memoryBlockSize * 0.9) {
 			//Amortized size to reduce the number of future resizes
@@ -105,13 +108,27 @@ namespace memory {
 		}
 		tempAllocs.clear();
 		shrinkedHeapSize = 0;
+		#ifdef GC_PRINT_HEAP
+		std::cout << "=======HEAP STATE=======\n";
+		byte* from = memoryBlock.get();
+		while (from < heapTop) {
+			HeapObject* curObject = reinterpret_cast<HeapObject*>(from);
+			size_t sizeOfObj = curObject->getSize();
+			string str = curObject->gcDebugToStr();
+			std::cout << std::format("{:#0x}   size: {:6}  {:12} \n", (uInt64)from, sizeOfObj, str);
+			from = from + sizeOfObj;
+		}
+		std::cout << std::format("Size before collect: {:8}, size after collect: {:8}\n", sizeBeforeShrink, heapTop - memoryBlock.get());
+		#endif
 	}
 
 	void GarbageCollector::mark() {
 		//we use a stack to avoid going into a deep recursion(which might fail)
-		while (markStack.size() != 0) {
+		while (!markStack.empty()) {
 			HeapObject* ptr = markStack.back();
 			markStack.pop_back();
+			ptr->moveTo = ptr;
+			ptr->mark();
 		}
 	}
 
@@ -120,7 +137,7 @@ namespace memory {
 	}
 
 	void GarbageCollector::markRoots(compileCore::Compiler* compiler) {
-		
+		markObj(compiler->current->func);
 	}
 
 	void GarbageCollector::computeCompactedAddress(byte* start) {
@@ -137,6 +154,7 @@ namespace memory {
 			from += temp->getSize();
 		}
 		for (HeapObject* temp : tempAllocs) {
+			if (!temp->moveTo) continue;
 			temp->moveTo = reinterpret_cast<HeapObject*>(to);
 			//move the compacted position pointer
 			to += temp->getSize();
@@ -165,12 +183,12 @@ namespace memory {
 	}
 
 	void GarbageCollector::updateRootPtrs(compileCore::Compiler* compiler) {
-
+		compiler->current->func = reinterpret_cast<object::ObjFunc*>(compiler->current->func->moveTo);
 	}
 
 	void GarbageCollector::compact(byte* start) {
 		byte* newStackTop = start;
-		byte* from = memoryBlock.get();;
+		byte* from = memoryBlock.get();
 		//stackTop points to the top of the old heap, we ONLY update stackTop once we're done with compacting
 		while (from < heapTop) {
 			HeapObject* curObject = reinterpret_cast<HeapObject*>(from);
@@ -196,6 +214,8 @@ namespace memory {
 			if (curObject->moveTo) {
 				byte* to = reinterpret_cast<byte*>(curObject->moveTo);
 				curObject->moveTo = nullptr;//reset the marked flag
+				//this is a simple optimization, if the object doesn't move in memory at all, there's no need to copy it
+				if (from != to) curObject->move(to);
 				newStackTop = to + sizeOfObj;
 			}
 			else {
@@ -203,12 +223,6 @@ namespace memory {
 			}
 		}
 		heapTop = newStackTop;
-	}
-
-	void GarbageCollector::traceObj(HeapObject* obj) {
-		if (!obj || obj->moveTo != nullptr) return;
-		obj->moveTo = obj;
-		obj->mark();
 	}
 
 	void GarbageCollector::markObj(HeapObject* ptr) {

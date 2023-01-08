@@ -42,8 +42,6 @@ namespace memory {
 		void updateRootPtrs(runtime::VM* vm);
 		void updateRootPtrs(compileCore::Compiler* compiler);
 		void compact(byte* start);
-
-		void traceObj(HeapObject* obj);
 	};
 
 	extern GarbageCollector gc;

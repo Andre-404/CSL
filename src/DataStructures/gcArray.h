@@ -26,7 +26,6 @@ class ArrHeader : public memory::HeapObject {
 			//nothing to update
 		}
 		uInt64 getSize() {
-			//+1 for terminator byte
 			return sizeof(ArrHeader) + size * sizeOfType;
 		}
 		void mark() {
@@ -35,6 +34,9 @@ class ArrHeader : public memory::HeapObject {
 		byte* getPtr() {
 			return reinterpret_cast<byte*>(this) + sizeof(ArrHeader);
 		}
+		#ifdef GC_PRINT_HEAP
+		string gcDebugToStr() { return std::format("ArrHeader, size: {}, size of type: {}", size, sizeOfType); }
+		#endif
 	private:
 		uInt64 sizeOfType;
 	};
@@ -142,7 +144,7 @@ public:
 	}
 
 	void updateInternalPtr() {
-		header = reinterpret_cast<ArrHeader*>(header->moveTo);
+		if(header) header = reinterpret_cast<ArrHeader*>(header->moveTo);
 	}
 private:
 	ArrHeader* header;

@@ -21,7 +21,8 @@ constexpr double pi = 3.14159265358979323846;
 
 #define AST_DEBUG
 #define COMPILER_DEBUG
-//#define COMPILER_USE_LONG
+//#define COMPILER_USE_LONG_INSTRUCTION
+#define GC_PRINT_HEAP
 
 
 

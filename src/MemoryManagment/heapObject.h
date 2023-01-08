@@ -7,14 +7,16 @@ namespace memory {
 
 	class HeapObject {
 	public:
-		HeapObject* moveTo;
+		HeapObject* moveTo = nullptr;
 
 		virtual void move(byte* newAddress) = 0;
 		//only updates ptr references in this object
 		virtual void updateInternalPointers() = 0;
 		virtual uInt64 getSize() = 0;
 		virtual void mark() = 0;
-
+		#ifdef GC_PRINT_HEAP
+		virtual string gcDebugToStr() = 0;
+		#endif
 		//this reroutes the new operator to take memory which the GC gives out
 		void* operator new(uInt64 size) {
 			return __allocObj(size);

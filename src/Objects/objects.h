@@ -62,6 +62,9 @@ namespace object {
 		uInt64 getSize();
 		void mark();
 		string toString();
+		#ifdef GC_PRINT_HEAP
+		string gcDebugToStr() { return "ObjString"; }
+		#endif
 	};
 
 	class ObjArray : public Obj {
@@ -77,6 +80,9 @@ namespace object {
 		void updateInternalPointers();
 		void mark();
 		string toString();
+		#ifdef GC_PRINT_HEAP
+		string gcDebugToStr() { return "ObjArray"; }
+		#endif
 	};
 
 	class ObjFunc : public Obj {
@@ -94,6 +100,9 @@ namespace object {
 		void updateInternalPointers();
 		void mark();
 		string toString();
+		#ifdef GC_PRINT_HEAP
+		string gcDebugToStr() { return "ObjFunc"; }
+		#endif
 	};
 
 	class ObjNativeFunc : public Obj {
@@ -107,6 +116,9 @@ namespace object {
 		void updateInternalPointers();
 		void mark();
 		string toString();
+		#ifdef GC_PRINT_HEAP
+		string gcDebugToStr() { return "ObjNativeFunc"; }
+		#endif
 	};
 
 	class ObjUpval : public Obj {
@@ -122,6 +134,9 @@ namespace object {
 		void updateInternalPointers();
 		void mark();
 		string toString();
+		#ifdef GC_PRINT_HEAP
+		string gcDebugToStr() { return "ObjUpval"; }
+		#endif
 	};
 
 	//multiple closures with different upvalues can point to the same function
@@ -136,6 +151,9 @@ namespace object {
 		void updateInternalPointers();
 		void mark();
 		string toString();
+		#ifdef GC_PRINT_HEAP
+		string gcDebugToStr() { return "ObjClosure"; }
+		#endif
 	};
 
 	//parent classes use copy down inheritance, meaning all methods of a superclass are copied into the hash map of this class
@@ -150,6 +168,9 @@ namespace object {
 		void updateInternalPointers();
 		void mark();
 		string toString();
+		#ifdef GC_PRINT_HEAP
+		string gcDebugToStr() { return "ObjClass"; }
+		#endif
 	};
 
 	//method bound to a specific instance of a class
@@ -165,6 +186,9 @@ namespace object {
 		void updateInternalPointers();
 		void mark();
 		string toString();
+		#ifdef GC_PRINT_HEAP
+		string gcDebugToStr() { return "ObjBoundMethod"; }
+		#endif
 	};
 
 	//used for instances of classes and structs, if 'klass' is null then it's a struct
@@ -179,6 +203,9 @@ namespace object {
 		void updateInternalPointers();
 		void mark();
 		string toString();
+		#ifdef GC_PRINT_HEAP
+		string gcDebugToStr() { return "ObjInstance"; }
+		#endif
 	};
 
 	class ObjThread : public Obj {
@@ -204,6 +231,9 @@ namespace object {
 		void updateInternalPointers();
 		void mark();
 		string toString();
+		#ifdef GC_PRINT_HEAP
+		string gcDebugToStr() { return "ObjThread"; }
+		#endif
 	};
 	//using C-style file accessing since the reference to the file is a pointer rather than a file stream object
 	//this is done because stream objects can't be copied/moved, and all Obj objects are moved in memory on the managed heap
@@ -215,10 +245,13 @@ namespace object {
 		ObjFile(FILE* file);
 
 		void move(byte* to);
-		size_t getSize() { return sizeof(ObjThread); }
+		size_t getSize() { return sizeof(ObjFile); }
 		void updateInternalPointers();
 		void mark();
 		string toString();
+		#ifdef GC_PRINT_HEAP
+		string gcDebugToStr() { return "ObjFile"; }
+		#endif
 	};
 
 }

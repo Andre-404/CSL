@@ -6,12 +6,13 @@
 using namespace compileCore;
 using namespace object;
 
-#ifdef COMPILER_USE_LONG
+#ifdef COMPILER_USE_LONG_INSTRUCTION
 #define SHORT_CONSTANT_LIMIT 0
 #else 
 #define SHORT_CONSTANT_LIMIT UINT8_MAX
 #endif
 
+//only checks the closest loop/switch, since any break, continue or advance is going to break out of that loop/switch
 #define CHECK_SCOPE_FOR_LOOP (current->scopeWithLoop.size() > 0 && local.depth <= current->scopeWithLoop.back())
 #define CHECK_SCOPE_FOR_SWITCH (current->scopeWithSwitch.size() > 0 && local.depth <= current->scopeWithSwitch.back())
 
@@ -56,7 +57,7 @@ Compiler::Compiler(vector<CSLModule*>& _units) {
 		}
 		curUnitIndex++;
 	}
-	ObjFunc* c = endFuncDecl();
+	memory::gc.collect(this);
 	for (CSLModule* unit : units) delete unit;
 }
 
