@@ -26,7 +26,7 @@ class Scanner {
 		char advance();
 		char peek();
 		char peekNext();
-		bool consumeWhitespace();
+		void consumeWhitespace();
 
 		Token string_();
 

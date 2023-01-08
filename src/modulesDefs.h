@@ -33,7 +33,7 @@ enum class TokenType {
 	IMPORT, EXPORT, AS,
 	AWAIT,
 
-	WHITESPACE, NEWLINE, ERROR, TOKEN_EOF, NONE
+	NEWLINE, ERROR, TOKEN_EOF, NONE
 };
 
 struct File {
@@ -125,6 +125,7 @@ struct Token {
 };
 
 struct CSLModule;
+
 namespace AST {
 	class ASTNode;
 }

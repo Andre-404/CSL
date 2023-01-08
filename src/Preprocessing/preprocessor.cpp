@@ -7,6 +7,7 @@
 
 using std::unordered_set;
 using std::unordered_map;
+using std::pair;
 using namespace preprocessing;
 using namespace errorHandler;
 
@@ -46,25 +47,25 @@ CSLModule* Preprocessor::scanFile(string moduleName) {
 	allUnits[moduleName] = unit;
 	curUnit = unit;
 	
-	vector<tuple<Token, Token>> depsToParse = processDirectivesAndMacros(unit);
+	vector<pair<Token, Token>> depsToParse = processDirectives(unit);
 
-	for (const tuple<Token, Token>& dep : depsToParse) {
-		auto &[path, alias] = dep;
-		//since import names are strings, we get rid of ""
+	for (auto &[path, alias] : depsToParse) {
 		string depName = path.getLexeme();
-		depName.erase(0, 1);
-		depName.erase(depName.size() - 1, depName.size());
-		//if we have already scanned module with name 'dep' we add it to the deps list of this module
-		//to topsort it later
-		if (allUnits.count(depName) > 0) {
-			//if we detect a cyclical import we still continue parsing other files to detect as many errors as possible
+		std::cout << depName << '\n';
+		depName = depName.substr(1, depName.size() - 2); // Extract dependency name from "" (it's a string)
+		
+		// If we have already scanned module with name 'dep' we add it to the deps list of this module to topsort it later
+		if (allUnits.count(depName)) {
+			// If we detect a cyclical import we still continue parsing other files to detect as many errors as possible
 			if (!allUnits[depName]->resolvedDeps) {
 				addCompileError("Cyclical importing detected.", path);
 				continue;
 			}
 			unit->deps.push_back(Dependency(alias, path, allUnits[depName]));
+			
 			continue;
 		}
+
 		std::filesystem::path p(projectRootPath + depName);
 		if (std::filesystem::exists(p)) {
 			Dependency dep = Dependency(alias, path, scanFile(depName));
@@ -91,10 +92,10 @@ void Preprocessor::topsort(CSLModule* unit) {
 	sortedUnits.push_back(unit);
 }
 
-vector<tuple<Token, Token>> Preprocessor::processDirectivesAndMacros(CSLModule* unit) {
+vector<pair<Token, Token>> Preprocessor::processDirectives(CSLModule* unit) {
 	vector<Token>& tokens = unit->tokens;
 	vector<Token> resultTokens; // Tokenization after processing imports and macros
-	vector<tuple<Token, Token>> importTokens;
+	vector<pair<Token, Token>> importTokens;
 
 	auto getErrorToken = [&](int i) {
 		if (i < 0 || tokens.size() <= i) return tokens[tokens.size() - 1];
@@ -103,18 +104,12 @@ vector<tuple<Token, Token>> Preprocessor::processDirectivesAndMacros(CSLModule* 
 
 	for (int i = 0; i < tokens.size(); i++) {
 		Token& token = tokens[i];
-		// Exclude whitespace and new line tokens from final tokenization (they are only used for macro processing)
-		if (token.type == TokenType::WHITESPACE || token.type == TokenType::NEWLINE) { continue; }
+		// New line tokens from final tokenization (they are only used for macro processing)
+		if (token.type == TokenType::NEWLINE) { continue; }
 		// Add a dependency
 		if (token.type == TokenType::IMPORT) {
 			// Move to dependency name
-			if (getTypeAt(tokens, i + 1) == TokenType::WHITESPACE) i += 2;
-			else {
-				addCompileError("Expected whitespace.", getErrorToken(i + 1));
-				continue;
-			}
-
-			if (getTypeAt(tokens, i) != TokenType::STRING) {
+			if (getTypeAt(tokens, ++i) != TokenType::STRING) {
 				addCompileError("Expected a module name.", getErrorToken(i));
 				continue;
 			}
@@ -122,16 +117,16 @@ vector<tuple<Token, Token>> Preprocessor::processDirectivesAndMacros(CSLModule* 
 			// Add dependency to list of dependencies
 			Token dependencyName = tokens[i];
 			Token alias;
-			if (getTypeAt(tokens, i + 2) == TokenType::AS) {
-				if (getTypeAt(tokens, i + 4) == TokenType::IDENTIFIER) alias = tokens[i + 4];
+			if (getTypeAt(tokens, i + 1) == TokenType::AS) {
+				if (getTypeAt(tokens, i + 2) == TokenType::IDENTIFIER) alias = tokens[i + 2];
 				else {
-					addCompileError("Expected alias for module. ", getErrorToken(i + 4));
+					addCompileError("Expected alias for module. ", getErrorToken(i + 2));
 					continue;
 				}
-				i += 4;
+				i += 2;
 			}
 
-			importTokens.push_back(std::make_tuple(dependencyName, alias));
+			importTokens.emplace_back(dependencyName, alias);
 		}
 		else resultTokens.push_back(token);
 	}

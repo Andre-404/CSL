@@ -10,7 +10,7 @@ namespace preprocessing {
 	using std::unordered_set;
 	using std::unordered_map;
 	using std::unique_ptr;
-	using std::tuple;
+	using std::pair;
 
 	class Preprocessor {
 	public:
@@ -27,7 +27,7 @@ namespace preprocessing {
 		unordered_map<string, CSLModule*> allUnits;
 		vector<CSLModule*> sortedUnits;
 		
-		vector<tuple<Token, Token>> processDirectivesAndMacros(CSLModule* unit);
+		vector<pair<Token, Token>> processDirectives(CSLModule* unit);
 
 		CSLModule* scanFile(string unitName);
 		void topsort(CSLModule* unit);

@@ -96,7 +96,10 @@ char Scanner::advance() {
 Token Scanner::scanToken() {
 	start = current;
 	if (isAtEnd()) return makeToken(TokenType::TOKEN_EOF);
-	if(consumeWhitespace()) return makeToken(TokenType::WHITESPACE);
+	
+	consumeWhitespace();
+	start = current;
+
 	//a comment could go to the end of the file
 	if (isAtEnd()) return makeToken(TokenType::TOKEN_EOF);
 
@@ -157,42 +160,40 @@ char Scanner::peekNext() {
 	return curFile->sourceFile[current + 1];
 }
 
-bool Scanner::consumeWhitespace() {
-	int whitespaceCount = 0;
+void Scanner::consumeWhitespace() {
 	while (true) {
 		char c = peek();
 		switch (c) {
-		case ' ':
-		case '\r':
-		case '\t':
-			advance();
-			whitespaceCount++;
-			break;
-		case '/':
-			// Standard comment
-			if (peekNext() == '/') while (!isAtEnd() && peek() != '\n') advance();
-			// Multi-line comment
-			else if (peekNext() == '*') {
+			case ' ':
+			case '\r':
+			case '\t':
 				advance();
-				advance();
-				while (!isAtEnd() && !(peek() == '*' && peekNext() == '/')) {
-					if (peek() == '\n') {
-						line++;
-						curFile->lines.push_back(current);
+				break;
+			case '/':
+				// Standard comment
+				if (peekNext() == '/') while (!isAtEnd() && peek() != '\n') advance();
+				// Multi-line comment
+				else if (peekNext() == '*') {
+					advance();
+					advance();
+					while (!isAtEnd() && !(peek() == '*' && peekNext() == '/')) {
+						if (peek() == '\n') {
+							line++;
+							curFile->lines.push_back(current);
+						}
+						advance();
 					}
-					advance();
+					if (!isAtEnd()) {
+						advance();
+						advance();
+					}
 				}
-				if (!isAtEnd()) {
-					advance();
-					advance();
+				else {
+					return;
 				}
-			}
-			else {
-				return whitespaceCount > 0;
-			}
-			break;
-		default:
-			return whitespaceCount > 0;
+				break;
+			default:
+				return;
 		}
 	}
 }
@@ -229,7 +230,7 @@ Token Scanner::number() {
 }
 
 Token Scanner::identifier() {
-	//first character of the identifier has to be alphabetical, rest can be alphanumerical + _
+	//first character of the identifier has to be alphabetical, rest can be alphanumerical and '_'
 	while (isalnum(peek()) || peek() == '_') advance();
 	return makeToken(identifierType());
 }
