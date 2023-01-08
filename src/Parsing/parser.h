@@ -62,8 +62,10 @@ namespace AST {
 		std::unordered_map<TokenType, unique_ptr<PrefixParselet>> prefixParselets;
 		std::unordered_map<TokenType, unique_ptr<InfixParselet>> infixParselets;
 
-		void addPrefix(TokenType type, PrefixParselet* parselet, precedence prec);
-		void addInfix(TokenType type, InfixParselet* parselet, precedence prec);
+		template<typename ParsletType>
+		void addPrefix(TokenType type, precedence prec);
+		template<typename ParsletType>
+		void addInfix(TokenType type, precedence prec);
 
 #pragma region Expressions
 		ASTNodePtr expression(int prec);
