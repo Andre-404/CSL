@@ -15,6 +15,7 @@
     <ClCompile Include="src\Codegen\codegenDefs.cpp" />
     <ClCompile Include="src\Codegen\compiler.cpp" />
     <ClCompile Include="src\DebugPrinting\BytecodePrinter.cpp" />
+    <ClCompile Include="src\Parsing\ASTProbe.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Preprocessing\scanner.h" />
@@ -34,5 +35,6 @@
     <ClInclude Include="src\Codegen\codegenDefs.h" />
     <ClInclude Include="src\Codegen\compiler.h" />
     <ClInclude Include="src\DebugPrinting\BytecodePrinter.h" />
+    <ClInclude Include="src\Parsing\ASTProbe.h" />
   </ItemGroup>
 </Project>

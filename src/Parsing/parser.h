@@ -1,6 +1,7 @@
 #pragma once
 #include "../common.h"
 #include "ASTDefs.h"
+#include "ASTProbe.h"
 #include <initializer_list>
 #include <map>
 #include <unordered_map>
@@ -55,6 +56,8 @@ namespace AST {
 		void parse(vector<CSLModule*>& modules);
 
 	private:
+		ASTProbe* probe;
+
 		CSLModule* curUnit;
 		uInt64 current;
 

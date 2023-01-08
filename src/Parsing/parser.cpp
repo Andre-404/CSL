@@ -118,12 +118,13 @@ namespace AST {
 		ASTNodePtr parse(ASTNodePtr left, Token token, int surroundingPrec) {
 
 			if (left->type != ASTType::LITERAL) throw cur->error(token, "Left side is not assignable");
-			LiteralExpr* castLeft = dynamic_cast<LiteralExpr*>(left.get());
-			if (castLeft->token.type != TokenType::IDENTIFIER) throw cur->error(token, "Left side is not assignable");
+
+			left->accept(cur->probe);
+			if (cur->probe->getProbedToken().type != TokenType::IDENTIFIER) throw cur->error(token, "Left side is not assignable");
 
 			//makes it right associative
 			ASTNodePtr right = parseAssign(left, token);
-			return make_shared<AssignmentExpr>(castLeft->token, right);
+			return make_shared<AssignmentExpr>(cur->probe->getProbedToken(), right);
 		}
 
 		//used for parsing assignment tokens(eg. =, +=, *=...)
@@ -196,9 +197,9 @@ namespace AST {
 			if (token.type == TokenType::DOUBLE_COLON) {
 				//dynamic cast B2D is dumb but its the best solution for this outlier
 				if (left->type == ASTType::LITERAL) {
-					LiteralExpr* expr = dynamic_cast<LiteralExpr*>(left.get());
+					left->accept(cur->probe);
 					Token ident = cur->consume(TokenType::IDENTIFIER, "Expected variable name.");
-					return make_shared<ModuleAccessExpr>(expr->token, ident);
+					return make_shared<ModuleAccessExpr>(cur->probe->getProbedToken(), ident);
 				}
 				else throw cur->error(token, "Expected module name identifier.");
 			}
@@ -252,8 +253,8 @@ namespace AST {
 				field = cur->expression();
 				//object["field"] gets optimized to object.field
 				if (field->type == ASTType::LITERAL) {
-					LiteralExpr* expr = dynamic_cast<LiteralExpr*>(field.get());
-					if (expr->token.type == TokenType::STRING) newToken.type = TokenType::DOT;
+					field->accept(cur->probe);
+					if (cur->probe->getProbedToken().type == TokenType::STRING) newToken.type = TokenType::DOT;
 				}
 				cur->consume(TokenType::RIGHT_BRACKET, "Expect ']' after array/map access.");
 			}
@@ -279,6 +280,8 @@ namespace AST {
 }
 
 Parser::Parser() {
+	probe = new ASTProbe;
+
 	current = 0;
 	loopDepth = 0;
 	switchDepth = 0;
@@ -426,7 +429,7 @@ ASTNodePtr Parser::expression(int prec) {
 	unique_ptr<PrefixParselet>& prefix = prefixParselets[token.type];
 	shared_ptr<ASTNode> left = prefix->parse(token);
 
-	//advances only if the next token has a higher associativity than the current one
+	//advances only if the next token has a higher precedence than the current one
 	//eg. 1 + 2 compiles because the base precedence is 0, and '+' has a precedence of 11
 	//loop runs as long as the next operator has a higher precedence than the one that called this function
 	while (prec < getPrec()) {
