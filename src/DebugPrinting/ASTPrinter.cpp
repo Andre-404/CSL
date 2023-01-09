@@ -69,6 +69,11 @@ void ASTPrinter::visitAwaitExpr(AwaitExpr* expr) {
 	expr->expr->accept(this);
 }
 
+void ASTPrinter::visitAsyncExpr(AsyncExpr* expr) {
+	cout << "async";
+	expr->expr->accept(this);
+}
+
 void ASTPrinter::visitArrayLiteralExpr(ArrayLiteralExpr* expr) {
 	cout << "[ ";
 	for (shared_ptr<ASTNode> node : expr->members) {

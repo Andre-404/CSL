@@ -26,6 +26,7 @@ namespace AST {
 		FACTOR,
 		NOT,
 		ALTER,
+		ASYNC,
 		CALL,
 		PRIMARY
 	};

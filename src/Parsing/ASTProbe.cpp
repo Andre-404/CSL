@@ -9,6 +9,7 @@ void AST::ASTProbe::visitCallExpr(CallExpr* expr) {}
 void AST::ASTProbe::visitFieldAccessExpr(FieldAccessExpr* expr) {}
 void AST::ASTProbe::visitGroupingExpr(GroupingExpr* expr) {}
 void AST::ASTProbe::visitAwaitExpr(AwaitExpr* expr) {}
+void AST::ASTProbe::visitAsyncExpr(AsyncExpr* expr) {}
 void AST::ASTProbe::visitArrayLiteralExpr(ArrayLiteralExpr* expr) {}
 void AST::ASTProbe::visitStructLiteralExpr(StructLiteral* expr) {}
 void AST::ASTProbe::visitLiteralExpr(LiteralExpr* expr) { probedToken = expr->token; }

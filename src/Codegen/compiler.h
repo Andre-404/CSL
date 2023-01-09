@@ -92,6 +92,7 @@ namespace compileCore {
 		void visitFieldAccessExpr(AST::FieldAccessExpr* expr);
 		void visitGroupingExpr(AST::GroupingExpr* expr);
 		void visitAwaitExpr(AST::AwaitExpr* expr);
+		void visitAsyncExpr(AST::AsyncExpr* expr);
 		void visitArrayLiteralExpr(AST::ArrayLiteralExpr* expr);
 		void visitStructLiteralExpr(AST::StructLiteral* expr);
 		void visitLiteralExpr(AST::LiteralExpr* expr);

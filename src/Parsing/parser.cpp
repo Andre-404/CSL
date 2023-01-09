@@ -6,9 +6,9 @@
 using std::make_shared;
 using namespace AST;
 
-//have to define this in the AST namespace because parselets are c++ friend classes
+// Have to define this in the AST namespace because parselets are c++ friend classes
 namespace AST {
-	//!, -, ~, ++a and --a
+	//!, -, ~, ++a, --a, async and await
 	class UnaryPrefixParselet : public PrefixParselet {
 	public:
 		UnaryPrefixParselet(Parser* _cur, int _prec) {
@@ -17,7 +17,15 @@ namespace AST {
 		}
 		ASTNodePtr parse(Token token) {
 			ASTNodePtr expr = cur->expression(prec);
-			return make_shared<UnaryExpr>(token, expr, true);
+			switch (token.type) {
+			case TokenType::AWAIT:
+				return make_shared<AwaitExpr>(token, expr);
+			case TokenType::ASYNC:
+				if (expr->type != ASTType::CALL) throw cur->error(token, "Expected a call after 'async'.");
+				return make_shared<AsyncExpr>(token, expr);
+			default:
+				return make_shared<UnaryExpr>(token, expr, true);
+			}
 		}
 	};
 
@@ -277,6 +285,7 @@ namespace AST {
 			return make_shared<FieldAccessExpr>(left, newToken, field);
 		}
 	};
+
 }
 
 Parser::Parser() {
@@ -288,7 +297,7 @@ Parser::Parser() {
 	curUnit = nullptr;
 
 	#pragma region Parselets
-	//Prefix
+	// Prefix
 	addPrefix<LiteralParselet>(TokenType::THIS, Precedence::NONE);
 
 	addPrefix<UnaryPrefixParselet>(TokenType::BANG, Precedence::NOT);
@@ -298,6 +307,8 @@ Parser::Parser() {
 	addPrefix<UnaryPrefixParselet>(TokenType::INCREMENT, Precedence::ALTER);
 	addPrefix<UnaryPrefixParselet>(TokenType::DECREMENT, Precedence::ALTER);
 
+	addPrefix<UnaryPrefixParselet>(TokenType::ASYNC, Precedence::ASYNC);
+	addPrefix<UnaryPrefixParselet>(TokenType::AWAIT, Precedence::ASYNC);
 
 	addPrefix<LiteralParselet>(TokenType::IDENTIFIER, Precedence::PRIMARY);
 	addPrefix<LiteralParselet>(TokenType::STRING, Precedence::PRIMARY);
@@ -311,7 +322,7 @@ Parser::Parser() {
 	addPrefix<LiteralParselet>(TokenType::SUPER, Precedence::PRIMARY);
 	addPrefix<LiteralParselet>(TokenType::FUNC, Precedence::PRIMARY);
 
-	//Infix
+	// Infix
 	addInfix<AssignmentParselet>(TokenType::EQUAL, Precedence::ASSIGNMENT);
 	addInfix<AssignmentParselet>(TokenType::PLUS_EQUAL, Precedence::ASSIGNMENT);
 	addInfix<AssignmentParselet>(TokenType::MINUS_EQUAL, Precedence::ASSIGNMENT);

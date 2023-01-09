@@ -406,6 +406,10 @@ void Compiler::visitAwaitExpr(AST::AwaitExpr* expr) {
 
 }
 
+void Compiler::visitAsyncExpr(AST::AsyncExpr* expr) {
+
+}
+
 
 
 void Compiler::visitVarDecl(AST::VarDecl* decl) {
