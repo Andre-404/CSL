@@ -5,6 +5,7 @@
 #include "../DataStructures/gcArray.h"
 #include <fstream>
 #include <stdio.h>
+#include <shared_mutex>
 
 namespace runtime {
 	class VM;
@@ -22,8 +23,9 @@ namespace object {
 		CLASS,
 		INSTANCE,
 		BOUND_METHOD,
-		THREAD,
-		FILE
+		FILE,
+		MUTEX,
+		PROMISE
 	};
 
 	class Obj : public memory::HeapObject{
@@ -33,10 +35,8 @@ namespace object {
 		virtual string toString() = 0;
 	};
 
-	class ObjThread;
-
 	//pointer to a native C++ function
-	using NativeFn = bool(*)(ObjThread* fiber, int argCount, Value* args);
+	using NativeFn = bool(*)(runtime::VM* vm, int argCount, Value* args);
 
 
 	//this is a header which is followed by the bytes of the string
@@ -46,6 +46,7 @@ namespace object {
 		uInt64 hash;//only computed on string creation
 
 		ObjString(uInt64 length);
+		~ObjString() {}
 
 		static ObjString* createString(char* from, uInt64 length, HashMap& interned);
 
@@ -74,6 +75,7 @@ namespace object {
 		uInt numOfHeapPtr;
 		ObjArray();
 		ObjArray(size_t size);
+		~ObjArray() {}
 
 		void move(byte* to);
 		size_t getSize() { return sizeof(ObjArray); }
@@ -94,6 +96,7 @@ namespace object {
 		byte arity;
 		int upvalueCount;
 		ObjFunc();
+		~ObjFunc() {}
 
 		void move(byte* to);
 		size_t getSize() { return sizeof(ObjFunc); }
@@ -110,6 +113,7 @@ namespace object {
 		NativeFn func;
 		byte arity;
 		ObjNativeFunc(NativeFn _func, byte _arity);
+		~ObjNativeFunc() {}
 
 		void move(byte* to);
 		size_t getSize() { return sizeof(ObjNativeFunc); }
@@ -128,6 +132,7 @@ namespace object {
 		Value closed;
 		bool isOpen;
 		ObjUpval(Value* _location);
+		~ObjUpval() {}
 
 		void move(byte* to);
 		size_t getSize() { return sizeof(ObjUpval); }
@@ -145,6 +150,7 @@ namespace object {
 		ObjFunc* func;
 		ManagedArray<ObjUpval*> upvals;
 		ObjClosure(ObjFunc* _func);
+		~ObjClosure() {}
 
 		void move(byte* to);
 		size_t getSize() { return sizeof(ObjClosure); }
@@ -162,6 +168,7 @@ namespace object {
 		ObjString* name;
 		HashMap methods;
 		ObjClass(ObjString* _name);
+		~ObjClass() {}
 
 		void move(byte* to);
 		size_t getSize() { return sizeof(ObjClass); }
@@ -180,6 +187,7 @@ namespace object {
 		Value receiver;
 		ObjClosure* method;
 		ObjBoundMethod(Value _receiver, ObjClosure* _method);
+		~ObjBoundMethod() {}
 
 		void move(byte* to);
 		size_t getSize() { return sizeof(ObjBoundMethod); }
@@ -197,6 +205,7 @@ namespace object {
 		ObjClass* klass;
 		HashMap fields;
 		ObjInstance(ObjClass* _klass);
+		~ObjInstance() {};
 
 		void move(byte* to);
 		size_t getSize() { return sizeof(ObjInstance); }
@@ -208,33 +217,6 @@ namespace object {
 		#endif
 	};
 
-	class ObjThread : public Obj {
-	public:
-		Value stack[STACK_MAX];
-		Value* stackTop;
-		ManagedArray<ObjUpval*> openUpvals;
-		CallFrame frames[FRAMES_MAX];
-		int frameCount;
-		ObjClosure* codeBlock;
-		 
-		//execution stuff
-		ThreadState state;
-		//this thread is blocked until blocker has completed
-		ObjThread* blocker;
-		//thread priority 1-10
-		int priority;
-
-		ObjThread(ObjClosure* _codeBlock);
-
-		void move(byte* to);
-		size_t getSize() { return sizeof(ObjThread); }
-		void updateInternalPointers();
-		void mark();
-		string toString();
-		#ifdef GC_PRINT_HEAP
-		string gcDebugToStr() { return "ObjThread"; }
-		#endif
-	};
 	//using C-style file accessing since the reference to the file is a pointer rather than a file stream object
 	//this is done because stream objects can't be copied/moved, and all Obj objects are moved in memory on the managed heap
 	class ObjFile : public Obj {
@@ -243,6 +225,7 @@ namespace object {
 		ObjString* path;
 
 		ObjFile(FILE* file);
+		~ObjFile();
 
 		void move(byte* to);
 		size_t getSize() { return sizeof(ObjFile); }
@@ -254,4 +237,38 @@ namespace object {
 		#endif
 	};
 
+	//language representation of a mutex object
+	class ObjMutex : public Obj {
+		std::shared_mutex* mtx;
+
+		ObjMutex();
+		~ObjMutex();
+
+		void move(byte* to);
+		size_t getSize() { return sizeof(ObjMutex); }
+		void updateInternalPointers();
+		void mark();
+		string toString();
+		#ifdef GC_PRINT_HEAP
+		string gcDebugToStr() { return "ObjMutex"; }
+		#endif
+	};
+
+	//returned by "async func()" call, when the thread finishes it will populate returnVal and delete the vm
+	class ObjPromise : public Obj {
+		runtime::VM* vm;
+		Value returnVal;
+
+		ObjPromise(runtime::VM* vm);
+		~ObjPromise();
+
+		void move(byte* to);
+		size_t getSize() { return sizeof(ObjPromise); }
+		void updateInternalPointers();
+		void mark();
+		string toString();
+		#ifdef GC_PRINT_HEAP
+		string gcDebugToStr() { return "ObjPromise"; }
+		#endif
+	};
 }

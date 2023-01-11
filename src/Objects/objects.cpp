@@ -344,62 +344,49 @@ string ObjBoundMethod::toString() {
 }
 #pragma endregion
 
-#pragma region ObjThread
-ObjThread::ObjThread(ObjClosure* _codeBlock) {
-	codeBlock = _codeBlock;
-	stackTop = stack;
-	frameCount = 0;
-	blocker = nullptr;
-	priority = 0;
-	state = ThreadState::NOT_STARTED;
+#pragma region ObjMutex
+ObjMutex::ObjMutex() {
+	mtx = new std::shared_mutex;
+	type = ObjType::MUTEX;
+}
+ObjMutex::~ObjMutex() {
+	delete mtx;
 }
 
-void ObjThread::move(byte* to) {
-	memmove(to, this, sizeof(ObjThread));
+void ObjMutex::move(byte* to) {
+	memmove(to, this, sizeof(ObjMutex));
 }
-
-void ObjThread::updateInternalPointers() {
-	//only open upvalues, closed upvalues are handled by closures that contain them
-	for (int i = 0; i < openUpvals.size(); i++) {
-		ObjUpval* upval = openUpvals[i];
-		//since position of the stack is bound to the position of ObjThread everytime the thread is moved, so is the stack
-		//every open upvals 'location' must be updated to new stack position
-		//we take the diff between current and next memory location, and then add the diff to 'location' field
-		uInt64 diff = reinterpret_cast<byte*>(moveTo) - reinterpret_cast<byte*>(this);
-		upval->location += diff;
-		//updates the ptr to upvalues
-		if (upval != nullptr) openUpvals[i] = reinterpret_cast<ObjUpval*>(upval->moveTo);
-
-	}
-	//update pointers for all values on stack
-	for (Value* i = stack; i < stackTop; i++) {
-		i->updatePtr();
-	}
-	for (int i = 0; i < frameCount; i++) {
-		CallFrame* frame = &frames[i];
-		frame->closure = reinterpret_cast<ObjClosure*>(frame->closure->moveTo);
-	}
-	codeBlock = reinterpret_cast<ObjClosure*>(codeBlock->moveTo);
-	openUpvals.updateInternalPtr();
+void ObjMutex::updateInternalPointers() {
+	//nothing
 }
-
-void ObjThread::mark() {
-	for (Value* i = stack; i < stackTop; i++) {
-		(*i).mark();
-	}
-	//no need to mark the values in open upvalues since they are on the stack and get marked before
-	for (int i = 0; i < openUpvals.size(); i++) {
-		gc.markObj(openUpvals[i]);
-	}
-	for (int i = 0; i < frameCount; i++) {
-		CallFrame* frame = &frames[i];
-		gc.markObj(frame->closure);
-	}
-	gc.markObj(codeBlock);
-	openUpvals.mark();
+void ObjMutex::mark() {
+	//nothing
 }
-
-string ObjThread::toString() {
-	return "<thread>";
+string ObjMutex::toString() {
+	return "<mutex>";
 }
 #pragma endregion
+
+#pragma region ObjPromise
+ObjPromise::ObjPromise(runtime::VM* _vm) {
+	vm = _vm;
+	type = ObjType::PROMISE;
+}
+ObjPromise::~ObjPromise() {
+	if(vm) delete vm;
+}
+
+void ObjPromise::move(byte* to) {
+	memmove(to, this, sizeof(ObjPromise));
+}
+void ObjPromise::updateInternalPointers() {
+	//nothing
+}
+void ObjPromise::mark() {
+	//nothing
+}
+string ObjPromise::toString() {
+	return "<promise>";
+}
+#pragma endregion
+

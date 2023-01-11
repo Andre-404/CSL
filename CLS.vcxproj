@@ -187,6 +187,7 @@
     <ClInclude Include="src\Parsing\parser.h" />
     <ClInclude Include="src\Preprocessing\preprocessor.h" />
     <ClInclude Include="src\Preprocessing\scanner.h" />
+    <ClInclude Include="src\Runtime\vm.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

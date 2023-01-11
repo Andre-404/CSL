@@ -1,6 +1,7 @@
 #pragma once
 #include "heapObject.h"
 #include <memory>
+#include <mutex>
 
 namespace runtime {
 	class VM;
@@ -15,6 +16,8 @@ namespace compileCore {
 namespace memory {
 	class GarbageCollector {
 	public:
+		//used when allocating memory, only 1 thread may allocate memory at a time
+		std::mutex mtx;
 		void* alloc(uInt64 size);
 		void collect(runtime::VM* vm);
 		void collect(compileCore::Compiler* compiler);

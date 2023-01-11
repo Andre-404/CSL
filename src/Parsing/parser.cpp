@@ -105,10 +105,6 @@ namespace AST {
 				cur->switchDepth = tempSwitchDepth;
 				return make_shared<FuncLiteral>(args, body);
 			}
-			case TokenType::AWAIT: {
-				ASTNodePtr expr = cur->expression();
-				return make_shared<AwaitExpr>(expr);
-			}
 			//number, string, boolean or nil
 			default:
 				return make_shared<LiteralExpr>(token);

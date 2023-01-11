@@ -13,6 +13,9 @@ class ArrHeader : public memory::HeapObject {
 			size = _size;
 			sizeOfType = _sizeOfType;
 		}
+		~ArrHeader() {
+
+		}
 
 		static ArrHeader* createArr(uInt64 sizeOfType, uInt64 length) {
 			void* ptr = memory::__allocObj(sizeof(ArrHeader) + length * sizeOfType);
@@ -67,6 +70,14 @@ public:
 		for (int i = 0; i < size; i++) arr[i] = val;
 	}
 
+	~ManagedArray() {
+		T* arr = reinterpret_cast<T*>(header->getPtr());
+		for (int i = 0; i < count; i++) {
+			arr->~T();
+			arr++;
+		}
+	}
+
 	void push(T item) {
 		checkSize(count + 1);
 		T* arr = reinterpret_cast<T*>(header->getPtr()) + count;
@@ -112,7 +123,7 @@ public:
 	T operator[](uInt64 index) const {
 		if (index >= count) {
 			std::cout << std::format("Tried accessing item at index {}, array size is {}.", index, count);
-			exit(64);
+			throw 20;
 		}
 
 		return *(reinterpret_cast<T*>(header->getPtr()) + index);
@@ -121,7 +132,7 @@ public:
 	T& operator[](uInt64 index) {
 		if (index >= count) {
 			std::cout << std::format("Tried accessing item at index {}, array size is {}.", index, count);
-			exit(64);
+			throw 20;
 		}
 
 		return *(reinterpret_cast<T*>(header->getPtr()) + index);

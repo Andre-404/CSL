@@ -147,13 +147,13 @@ enum class OpCode {
 	PRINT,
 	//Variables
 	//all module level variables(including class and function declarations) are treated as global variables
-	//compiler adds <module name>:: to the front of the variable name to make it distinct
-	DEFINE_GLOBAL,//arg: 8-bit constant index
-	DEFINE_GLOBAL_LONG,//arg: 16-bit constant index
-	GET_GLOBAL,//arg: 8-bit constant index
-	GET_GLOBAL_LONG,//arg: 16-bit constant index
-	SET_GLOBAL,//arg: 8-bit constant index
-	SET_GLOBAL_LONG,//arg: 16-bit constant index
+	//compiler has an array of all globals, and access to globals is done through an array
+	DEFINE_GLOBAL,//arg: 8-bit  index
+	DEFINE_GLOBAL_LONG,//arg: 16-bit index
+	GET_GLOBAL,//arg: 8-bit index
+	GET_GLOBAL_LONG,//arg: 16-bit index
+	SET_GLOBAL,//arg: 8-bit index
+	SET_GLOBAL_LONG,//arg: 16-bit index
 
 	GET_LOCAL,//arg: 8-bit stack position
 	SET_LOCAL,//arg: 8-bit stack position

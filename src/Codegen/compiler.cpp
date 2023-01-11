@@ -41,11 +41,18 @@ Compiler::Compiler(vector<CSLModule*>& _units) {
 	currentClass = nullptr;
 	vector<File*> sourceFiles;
 	curUnitIndex = 0;
+	curGlobalIndex = 0;
 	units = _units;
 
 	for (CSLModule* unit : units) {
 		curUnit = unit;
 		sourceFiles.push_back(unit->file);
+		for (Token token : unit->topDeclarations) {
+			string tmp = token.getLexeme();
+			char* ptr = new char[tmp.size() + 1];
+			memcpy(ptr, tmp.c_str(), tmp.size() + 1);
+			globals.push(Globalvar(ptr, Value::nil()));
+		}
 		for (int i = 0; i < unit->stmts.size(); i++) {
 			//doing this here so that even if a error is detected, we go on and possibly catch other(valid) errors
 			try {
@@ -55,8 +62,14 @@ Compiler::Compiler(vector<CSLModule*>& _units) {
 				int a = 1;
 			}
 		}
+		curGlobalIndex += unit->topDeclarations.size();
 		curUnitIndex++;
 	}
+	std::cout << "=======global var array=======\n";
+	for (int i = 0; i < globals.size(); i++) {
+		std::cout << std::format("|{} {}| ", i, globals[i].name);
+	}
+	std::cout << "\n";
 	memory::gc.collect(this);
 	for (CSLModule* unit : units) delete unit;
 }
@@ -178,8 +191,7 @@ void Compiler::visitUnaryExpr(AST::UnaryExpr* expr) {
 			else if ((arg = resolveUpvalue(current, left->token)) != -1) type = 1;
 			else {
 				//all global variables have a numerical prefix which indicates which source file they came from, used for scoping
-				string temp = resolveGlobal(left->token, true);
-				arg = makeConstant(Value(ObjString::createString((char*)temp.c_str(), temp.length(), internedStrings)));
+				arg = resolveGlobal(left->token, true);
 
 				type = arg > SHORT_CONSTANT_LIMIT ? 3 : 2;
 			}
@@ -390,9 +402,8 @@ void Compiler::visitFuncLiteral(AST::FuncLiteral* expr) {;
 }
 
 void Compiler::visitModuleAccessExpr(AST::ModuleAccessExpr* expr) {
-	//tries to get the appropriate prefix index for a variable given the module alias
-	string temp = resolveModuleVariable(expr->moduleName, expr->ident);
-	uInt16 arg = makeConstant(Value(ObjString::createString((char*)temp.c_str(), temp.length(), internedStrings)));
+	
+	uInt16 arg = resolveModuleVariable(expr->moduleName, expr->ident);
 
 	if (arg > SHORT_CONSTANT_LIMIT) {
 		emitByteAnd16Bit(+OpCode::GET_GLOBAL_LONG, arg);
@@ -1006,9 +1017,8 @@ void Compiler::namedVar(Token token, bool canAssign) {
 		setOp = +OpCode::SET_UPVALUE;
 	}
 	else {
-		//all global variables have a numerical prefix which indicates which source file they came from, used for scoping
-		string temp = resolveGlobal(token, canAssign);
-		arg = makeConstant(Value(ObjString::createString((char*)temp.c_str(), temp.length(), internedStrings)));
+		//all global variables are stored in an array, resolveGlobal gets the array
+		arg = resolveGlobal(token, canAssign);
 
 		getOp = +OpCode::GET_GLOBAL;
 		setOp = +OpCode::SET_GLOBAL;
@@ -1032,8 +1042,13 @@ uInt16 Compiler::parseVar(Token name) {
 	//used to differentiate variables of the same name from different souce files
 
 	//tacking on the current index since parseVar is only used for declaring a variable, which can only be done in the current source file
-	string temp = std::to_string(curUnitIndex) +  name.getLexeme();
-	return makeConstant(Value(ObjString::createString((char*)temp.c_str(), temp.length(), internedStrings)));
+	int index = curGlobalIndex;
+	for (Token token : curUnit->topDeclarations) {
+		if (name.compare(token)) return index;
+		index++;
+	}
+	error(name, "Couldn't find variable.");
+	return 0;
 }
 
 //makes sure the compiler is aware that a stack slot is occupied by this local variable
@@ -1296,10 +1311,19 @@ uInt Compiler::checkSymbol(Token symbol) {
 			for (Token token : dep.module->exports) {
 				
 				if (token.compare(symbol)) {
-					//if the correct symbol is found, find the index of the unit in the sorted array, this index will be appended
-					//as a prefix to the variable name
+					//if the correct symbol is found, find the index of the global variable inside of globals array
+					int globalIndex = 0;
 					for (int i = 0; i < units.size(); i++) {
-						if (units[i] == dep.module) return i;
+						if (units[i] != dep.module) {
+							globalIndex += units[i]->topDeclarations.size();
+							continue;
+						}
+						for (Token token : units[i]->topDeclarations) {
+							if (token.compare(symbol)) {
+								return globalIndex;
+							}
+							globalIndex++;
+						}
 					}
 					error(symbol, "Couldn't find source file of the definition.");
 				}
@@ -1311,22 +1335,23 @@ uInt Compiler::checkSymbol(Token symbol) {
 }
 
 //finds the correct module from which a given top level variable originated, and appends the correct index as a prefix
-string Compiler::resolveGlobal(Token name, bool canAssign) {
+uInt Compiler::resolveGlobal(Token name, bool canAssign) {
 	bool inThisFile = false;
+	int index = curGlobalIndex;
 	for (Token token : curUnit->topDeclarations) {
 		if (name.getLexeme().compare(token.getLexeme()) == 0) {
 			inThisFile = true;
 			break;
 		}
+		index++;
 	}
 	if (canAssign) {
-		if (inThisFile) return std::to_string(curUnitIndex) + name.getLexeme();
+		if (inThisFile) return index;
 	}
 	else {
-		if (inThisFile) return std::to_string(curUnitIndex) + name.getLexeme();
+		if (inThisFile) return index;
 		else {
-			uInt i = checkSymbol(name);
-			return std::to_string(i) + name.getLexeme();
+			return checkSymbol(name);
 		}
 	}
 	error(name, "Variable isn't declared.");
@@ -1334,7 +1359,7 @@ string Compiler::resolveGlobal(Token name, bool canAssign) {
 
 //checks if 'variable' exists in a module which was imported with the alias 'moduleAlias', 
 //if it exists append that modules index to the variable
-string Compiler::resolveModuleVariable(Token moduleAlias, Token variable) {
+uInt Compiler::resolveModuleVariable(Token moduleAlias, Token variable) {
 	//first find the module with the correct alias
 	Dependency* depPtr = nullptr;
 	for (Dependency dep : curUnit->deps) {
@@ -1348,14 +1373,19 @@ string Compiler::resolveModuleVariable(Token moduleAlias, Token variable) {
 	}
 
 	CSLModule* unit = depPtr->module;
-	int i = 0;
-	for (i = 0; i < units.size(); i++) if (units[i] == unit) break;
-	//compare every export of said module against 'variable'
-	for (Token& token : unit->exports) {
-		if (token.compare(variable)) {
-			return std::to_string(i) + variable.getLexeme();
+	int index = 0;
+	for (int i = 0; i < units.size(); i++) {
+		if (units[i] != unit) {
+			index += units[i]->topDeclarations.size();
+			continue;
+		}
+		//compare every export of said module against 'variable'
+		for (Token& token : unit->exports) {
+			if (token.compare(variable)) return index;
+			index++;
 		}
 	}
+	
 	error(variable, std::format("Module {} doesn't export this symbol.", depPtr->alias.getLexeme()));
 }
 #pragma endregion

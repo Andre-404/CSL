@@ -27,5 +27,8 @@ namespace memory {
 		void operator delete(void* memoryBlock) {
 			delete memoryBlock;
 		}
+		virtual ~HeapObject() {
+
+		}
 	};
 }

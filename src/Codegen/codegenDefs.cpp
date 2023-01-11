@@ -75,7 +75,7 @@ string valueToStr(Value* val) {
 		return std::to_string(num).substr(0, std::to_string(num).find(".") + prec);
 		break;
 	}
-	case ValueType::OBJ: return val->asObj()->toString(); break;
+	case ValueType::OBJ: return val->asObj()->toString();; break;
 	default:
 		std::cout << "Error printing object";
 		return "";
@@ -109,9 +109,6 @@ bool Value::isInstance() {
 }
 bool Value::isBoundMethod() {
 	return isObj() && asObj()->type == ObjType::BOUND_METHOD;
-}
-bool Value::isThread() {
-	return isObj() && asObj()->type == ObjType::THREAD;
 }
 bool Value::isFile() {
 	return isObj() && asObj()->type == ObjType::FILE;

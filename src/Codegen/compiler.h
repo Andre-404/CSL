@@ -69,6 +69,17 @@ namespace compileCore {
 
 	};
 
+	struct Globalvar {
+		char* name;
+		Value val;
+		bool isDefined;
+		Globalvar(char* _name, Value _val) {
+			name = _name;
+			val = _val;
+			isDefined = false;
+		}
+	};
+
 	class Compiler : public AST::Visitor {
 	public:
 		//compiler only ever emits the code for a single function, top level code is considered a function
@@ -81,6 +92,7 @@ namespace compileCore {
 		Compiler(vector<CSLModule*>& units);
 		Chunk* getChunk();
 		object::ObjFunc* endFuncDecl();
+		ManagedArray<Globalvar> globals;
 
 		#pragma region Visitor pattern
 		void visitAssignmentExpr(AST::AssignmentExpr* expr);
@@ -120,6 +132,7 @@ namespace compileCore {
 	private:
 		CSLModule* curUnit;
 		int curUnitIndex;
+		int curGlobalIndex;
 		vector<CSLModule*> units;
 
 		#pragma region Helpers
@@ -162,9 +175,9 @@ namespace compileCore {
 		//checks all imports to see if the symbol 'token' is imported
 		uInt checkSymbol(Token token);
 		//given a token and whether the operation is assigning or reading a variable, determines the correct symbol to use
-		string resolveGlobal(Token token, bool canAssign);
+		uInt resolveGlobal(Token token, bool canAssign);
 		//given a token for module alias and a token for variable name, returns correct symbol to use 
-		string resolveModuleVariable(Token moduleAlias, Token variable);
+		uInt resolveModuleVariable(Token moduleAlias, Token variable);
 		#pragma endregion
 	};
 }

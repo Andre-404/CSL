@@ -24,6 +24,14 @@ static int constantInstruction(string name, Chunk* chunk, int offset, bool isLon
 	return offset + (isLong ? 3 : 2);
 }
 
+static int globalInstruction(string name, Chunk* chunk, int offset, bool isLong) {
+	uInt constant = 0;
+	if (!isLong) constant = chunk->code[offset + 1];
+	else constant = ((chunk->code[offset + 1] << 8) | chunk->code[offset + 2]);
+	std::cout << std::format("{:16} {:4d} \n", name, constant);
+	return offset + (isLong ? 3 : 2);
+}
+
 static int doubleConstantInstruction(string name, Chunk* chunk, int offset, bool isLong) {
 	uInt constant1 = 0;
 	uInt constant2 = 0;
@@ -122,17 +130,13 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 		}
 		case 2: {
 			uInt constant = chunk->code[offset++];
-			std::cout << std::format("OP INCREMENT {} {} global: {} ", sign, fix, constant);
-			chunk->constants[constant].print();
-			std::cout << std::endl;
+			std::cout << std::format("OP INCREMENT {} {} global: {} \n", sign, fix, constant);
 			break;
 		}
 		case 3: {
 			uInt constant = chunk->code[offset++];
 			constant |= chunk->code[offset++];
-			std::cout << std::format("OP INCREMENT {} {} global 16-bit: {} ", sign, fix, constant);
-			chunk->constants[constant].print();
-			std::cout << std::endl;
+			std::cout << std::format("OP INCREMENT {} {} global 16-bit: {} \n", sign, fix, constant);
 			break;
 		}
 		case 4: {
@@ -193,17 +197,17 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 	case +OpCode::PRINT:
 		return simpleInstruction("OP PRINT", offset);
 	case +OpCode::DEFINE_GLOBAL:
-		return constantInstruction("OP DEFINE GLOBAL", chunk, offset, false);
+		return globalInstruction("OP DEFINE GLOBAL", chunk, offset, false);
 	case +OpCode::DEFINE_GLOBAL_LONG:
-		return constantInstruction("OP DEFINE GLOBAL LONG", chunk, offset, true);
+		return globalInstruction("OP DEFINE GLOBAL LONG", chunk, offset, true);
 	case +OpCode::GET_GLOBAL:
-		return constantInstruction("OP GET GLOBAL", chunk, offset, false);
+		return globalInstruction("OP GET GLOBAL", chunk, offset, false);
 	case +OpCode::GET_GLOBAL_LONG:
-		return constantInstruction("OP GET GLOBAL LONG", chunk, offset, true);
+		return globalInstruction("OP GET GLOBAL LONG", chunk, offset, true);
 	case +OpCode::SET_GLOBAL:
-		return constantInstruction("OP SET GLOBAL", chunk, offset, false);
+		return globalInstruction("OP SET GLOBAL", chunk, offset, false);
 	case +OpCode::SET_GLOBAL_LONG:
-		return constantInstruction("OP SET GLOBAL LONG", chunk, offset, true);
+		return globalInstruction("OP SET GLOBAL LONG", chunk, offset, true);
 	case +OpCode::GET_LOCAL:
 		return byteInstruction("OP GET LOCAL", chunk, offset);
 	case +OpCode::SET_LOCAL:

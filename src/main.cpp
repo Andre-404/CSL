@@ -14,6 +14,5 @@ int main(int argc, char* argv[]) {
 	pa.parse(modules);
 	compileCore::Compiler c(modules);
 	errorHandler::showCompileErrors();
-
 	return 0;
 }
