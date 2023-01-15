@@ -87,7 +87,6 @@ struct Value {
 	bool isClass();
 	bool isInstance();
 	bool isBoundMethod();
-	bool isThread();
 	bool isFile();
 
 	object::ObjString* asString();
@@ -103,7 +102,19 @@ struct Value {
 
 	void mark();
 	void updatePtr();
+	string typeToStr();
 	#pragma endregion
+};
+
+struct Globalvar {
+	char* name;
+	Value val;
+	bool isDefined;
+	Globalvar(char* _name, Value _val) {
+		name = _name;
+		val = _val;
+		isDefined = false;
+	}
 };
 
 enum class OpCode {
@@ -220,6 +231,10 @@ struct codeLine {
 		end = 0;
 		fileIndex = _fileIndex;
 	}
+
+	string getFileName(vector<File*>& files) {
+		return files[fileIndex]->name;
+	}
 };
 
 class Chunk {
@@ -247,7 +262,6 @@ struct CallFrame {
 enum class RuntimeResult {
 	OK,
 	RUNTIME_ERROR,
-	PAUSED,
 };
 
 enum class ThreadState {

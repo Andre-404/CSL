@@ -152,3 +152,26 @@ void Value::mark() {
 void Value::updatePtr() {
 	if (isObj()) as.object = reinterpret_cast<Obj*>(as.object->moveTo);
 }
+
+string Value::typeToStr() {
+	switch (type) {
+	case ValueType::NIL: return "nil";
+	case ValueType::NUM: return "number";
+	case ValueType::BOOL: return "bool";
+	case ValueType::OBJ: {
+		object::Obj* temp = asObj();
+		switch (temp->type) {
+		case object::ObjType::ARRAY: return "array";
+		case object::ObjType::BOUND_METHOD: return "method";
+		case object::ObjType::CLASS: return "class " + string(asClass()->name->getString());
+		case object::ObjType::CLOSURE: return "function";
+		case object::ObjType::FUNC: return "function";
+		case object::ObjType::INSTANCE: return asInstance()->klass == nullptr ? "struct" : "instance";
+		case object::ObjType::NATIVE: return "native function";
+		case object::ObjType::STRING: return "string";
+		case object::ObjType::UPVALUE: return "upvalue";
+		}
+	}
+	}
+	return "error, couldn't determine type of value";
+}

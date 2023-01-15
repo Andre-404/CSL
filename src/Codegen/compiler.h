@@ -69,17 +69,6 @@ namespace compileCore {
 
 	};
 
-	struct Globalvar {
-		char* name;
-		Value val;
-		bool isDefined;
-		Globalvar(char* _name, Value _val) {
-			name = _name;
-			val = _val;
-			isDefined = false;
-		}
-	};
-
 	class Compiler : public AST::Visitor {
 	public:
 		//compiler only ever emits the code for a single function, top level code is considered a function
