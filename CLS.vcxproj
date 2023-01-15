@@ -167,8 +167,10 @@
     <ClCompile Include="src\Parsing\parser.cpp" />
     <ClCompile Include="src\Preprocessing\preprocessor.cpp" />
     <ClCompile Include="src\Preprocessing\scanner.cpp" />
+    <ClCompile Include="src\Runtime\vm.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\CodeFlow\codeFlowAnalyzer.h" />
     <ClInclude Include="src\Codegen\codegenDefs.h" />
     <ClInclude Include="src\Codegen\compiler.h" />
     <ClInclude Include="src\common.h" />
