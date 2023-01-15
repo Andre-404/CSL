@@ -74,7 +74,7 @@ bool runtime::VM::callValue(Value callee, int argCount) {
 			int arity = callee.asNativeFn()->arity;
 			//if arity is -1 it means that the function takes in a variable number of args
 			if (arity != -1 && argCount != arity) {
-				runtimeError("Expected %d arguments for function call but got %d.", arity, argCount);
+				runtimeError(std::format("Expected {} arguments for function call but got {}.", arity, argCount));
 				return false;
 			}
 			object::NativeFn native = callee.asNativeFn()->func;
@@ -95,8 +95,7 @@ bool runtime::VM::callValue(Value callee, int argCount) {
 			catch (string str) {
 				//globals are guaranteed not to change after the native funcs have been defined
 				if (str == "") return false;
-				const char* name = globals.getKey(callee)->str;//gets the name of the native func
-				runtimeError("Error in %s: %s", name, str.c_str());
+				runtimeError(std::format("Error: {}", str));
 				return false;
 			}
 			//native functions take care of pushing results themselves, so we just return true
@@ -112,7 +111,7 @@ bool runtime::VM::callValue(Value callee, int argCount) {
 				return call(initializer.asClosure(), argCount);
 			}
 			else if (argCount != 0) {
-				runtimeError("Class constructor expects 0 arguments but got %d.", argCount);
+				runtimeError(std::format("Class constructor expects 0 arguments but got {}.", argCount));
 				return false;
 			}
 			return true;
@@ -133,7 +132,7 @@ bool runtime::VM::callValue(Value callee, int argCount) {
 
 bool runtime::VM::call(object::ObjClosure* closure, int argCount) {
 	if (argCount != closure->func->arity) {
-		runtimeError("Expected %d arguments for function call but got %d.", closure->func->arity, argCount);
+		runtimeError(std::format("Expected {} arguments for function call but got {}.", closure->func->arity, argCount));
 		return false;
 	}
 
@@ -191,7 +190,7 @@ bool runtime::VM::bindMethod(object::ObjClass* klass, object::ObjString* name) {
 	//At the start the instance whose method we're binding needs to be on top of the stack
 	Value method;
 	if (!klass->methods.get(name, &method)) {
-		runtimeError("%s doesn't contain method '%s'.", klass->name->str, name->str);
+		runtimeError(std::format("{} doesn't contain method '{}'.", klass->name->getString(), name->getString()));
 		return false;
 	}
 	//we need to push the method to the stack because if a GC collection happens the ptr inside of method becomes invalid
@@ -211,7 +210,7 @@ bool runtime::VM::bindMethod(object::ObjClass* klass, object::ObjString* name) {
 bool runtime::VM::invoke(object::ObjString* fieldName, int argCount) {
 	Value receiver = peek(argCount);
 	if (!receiver.isInstance()) {
-		runtimeError("Only instances can call methods, got %s.", valueTypeToStr(receiver).c_str());
+		runtimeError(std::format("Only instances can call methods, got {}.", receiver.typeToStr()));
 		return false;
 	}
 
@@ -225,7 +224,7 @@ bool runtime::VM::invoke(object::ObjString* fieldName, int argCount) {
 	//this check is used because we also use objInstance to represent struct literals
 	//and if this instance is a struct it can only contain functions inside it's field table
 	if (instance->klass == nullptr) {
-		runtimeError("Undefined property '%s'.", fieldName->str);
+		runtimeError(std::format( "Undefined property '{}'.", fieldName->getString()));
 		return false;
 	}
 
@@ -235,7 +234,7 @@ bool runtime::VM::invoke(object::ObjString* fieldName, int argCount) {
 bool runtime::VM::invokeFromClass(object::ObjClass* klass, object::ObjString* name, int argCount) {
 	Value method;
 	if (!klass->methods.get(name, &method)) {
-		runtimeError("Class '%s' doesn't contain '%s'.", klass->name->str, name->str);
+		runtimeError(std::format("Class '{}' doesn't contain '{}'.", klass->name->getString(), name->getString()));
 		return false;
 	}
 	//the bottom of the call stack will contain the receiver instance
@@ -254,22 +253,22 @@ RuntimeResult runtime::VM::execute() {
 #define READ_STRING_LONG() READ_CONSTANT_LONG().asString()
 #define BINARY_OP(valueType, op) \
 		do { \
-			if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) { \
-			return runtimeError("Operands must be numbers, got '%s' and '%s'.", valueTypeToStr(peek(1)).c_str(), valueTypeToStr(peek(0)).c_str()); \
+			if (!peek(0).isNumber() || !peek(1).isNumber()) { \
+			return runtimeError(std::format("Operands must be numbers, got '{}' and '{}'.", peek(1).typeToStr(), peek(0).typeToStr())); \
 			} \
-			double b = AS_NUMBER(pop()); \
-			double a = AS_NUMBER(pop()); \
-			push(valueType(a op b)); \
+			double b = pop().asNum(); \
+			double a = pop().asNum(); \
+			push(Value(a op b)); \
 		} while (false)
 
 #define INT_BINARY_OP(valueType, op)\
 		do {\
-			if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) { \
-			return runtimeError("Operands must be numbers, got '%s' and '%s'.", valueTypeToStr(peek(1)).c_str(), valueTypeToStr(peek(0)).c_str()); \
+			if (!peek(0).isNumber() || !peek(1).isNumber()) { \
+			return runtimeError(std::format("Operands must be numbers, got '{}' and '{}'.", peek(1).typeToStr(), peek(0).typeToStr())); \
 			} \
-			double b = AS_NUMBER(pop()); \
-			double a = AS_NUMBER(pop()); \
-			push(valueType((double)((uInt64)a op (uInt64)b))); \
+			double b = pop().asNum(); \
+			double a = pop().asNum(); \
+			push(Value((double)((uInt64)a op (uInt64)b))); \
 		} while (false)
 
 #ifdef DEBUG_TRACE_EXECUTION
@@ -282,7 +281,7 @@ RuntimeResult runtime::VM::execute() {
 		std::cout << "          ";
 		for (Value* slot = stack; slot < stackTop; slot++) {
 			std::cout << "[";
-			printValue(*slot);
+			(*slot).print();
 			std::cout << "] ";
 		}
 		std::cout << "\n";
@@ -304,223 +303,195 @@ RuntimeResult runtime::VM::execute() {
 #pragma endregion
 
 #pragma region Constants
-		case OP_CONSTANT: {
+		case +OpCode::CONSTANT: {
 			Value constant = READ_CONSTANT();
 			push(constant);
 			break;
 		}
-		case OP_CONSTANT_LONG: {
+		case +OpCode::CONSTANT_LONG: {
 			Value constant = READ_CONSTANT_LONG();
 			push(constant);
 			break;
 		}
-		case OP_NIL: push(NIL_VAL()); break;
-		case OP_TRUE: push(BOOL_VAL(true)); break;
-		case OP_FALSE: push(BOOL_VAL(false)); break;
+		case +OpCode::NIL: push(Value::nil()); break;
+		case +OpCode::TRUE: push(Value(true)); break;
+		case +OpCode::FALSE: push(Value(false)); break;
 #pragma endregion
 
 #pragma region Unary
-		case OP_NEGATE:
-			if (!IS_NUMBER(peek(0))) {
-				return runtimeError("Operand must be a number, got %s.", valueTypeToStr(peek(0)).c_str());
+		case +OpCode::NEGATE:
+			if (!peek(0).isNumber()) {
+				return runtimeError(std::format("Operand must be a number, got {}.", peek(0).typeToStr()));
 			}
-			push(NUMBER_VAL(-AS_NUMBER(pop())));
+			push(Value(-pop().asNum()));
 			break;
-		case OP_NOT:
-			push(BOOL_VAL(isFalsey(pop())));
+		case +OpCode::NOT:
+			push(Value(isFalsey(pop())));
 			break;
-		case OP_BIN_NOT: {
-			if (!IS_NUMBER(peek(0))) {
-				return runtimeError("Operand must be a number, got %s.", valueTypeToStr(peek(0)).c_str());
+		case +OpCode::BIN_NOT: {
+			if (!peek(0).isNumber()) {
+				return runtimeError(std::format("Operand must be a number, got {}.", peek(0).typeToStr()));
 			}
-			int num = AS_NUMBER(pop());
+			int num = pop().asNum();
 			num = ~num;
-			push(NUMBER_VAL((double)num));
+			push(Value((double)num));
 			break;
 		}
 #pragma endregion
 
 #pragma region Binary
-		case OP_ADD: {
-			if (IS_STRING(peek(0)) && IS_STRING(peek(1))) {
+		case +OpCode::ADD: {
+			if (peek(0).isString() && peek(1).isString()) {
 				concatenate();
 			}
-			else if (IS_NUMBER(peek(0)) && IS_NUMBER(peek(1))) {
-				double b = AS_NUMBER(pop());
-				double a = AS_NUMBER(pop());
-				push(NUMBER_VAL(a + b));
+			else if (peek(0).isNumber() && peek(1).isNumber()) {
+				double b = pop().asNum();
+				double a = pop().asNum();
+				push(Value(a + b));
 			}
 			else {
-				return runtimeError("Operands must be two numbers or two strings, got %s and %s.",
-					valueTypeToStr(peek(1)).c_str(), valueTypeToStr(peek(0)));
+				return runtimeError(std::format("Operands must be two numbers or two strings, got {} and {}.",
+					peek(1).typeToStr(), peek(0).typeToStr()));
 			}
 			break;
 		}
-		case OP_SUBTRACT: BINARY_OP(NUMBER_VAL, -); break;
-		case OP_MULTIPLY: BINARY_OP(NUMBER_VAL, *); break;
-		case OP_DIVIDE:   BINARY_OP(NUMBER_VAL, / ); break;
-		case OP_MOD:	  INT_BINARY_OP(NUMBER_VAL, %); break;
-		case OP_BITSHIFT_LEFT: INT_BINARY_OP(NUMBER_VAL, << ); break;
-		case OP_BITSHIFT_RIGHT: INT_BINARY_OP(NUMBER_VAL, >> ); break;
-		case OP_BITWISE_AND: INT_BINARY_OP(NUMBER_VAL, &); break;
-		case OP_BITWISE_OR: INT_BINARY_OP(NUMBER_VAL, | ); break;
-		case OP_BITWISE_XOR: INT_BINARY_OP(NUMBER_VAL, ^); break;
-		case OP_ADD_1: {
-			if (IS_NUMBER(peek(0))) {
-				Value num = pop();
-				num.as.num++;
-				push(num);
-			}
-			else return runtimeError("Operands must be two numbers, got %s and number.", valueTypeToStr(peek(0)).c_str());
-			break;
-		}
-		case OP_SUBTRACT_1: {
-			if (IS_NUMBER(peek(0))) {
-				Value num = pop();
-				num.as.num--;
-				push(num);
-			}
-			else return runtimeError("Operands must be two numbers, got %s and number.", valueTypeToStr(peek(0)).c_str());
-			break;
-		}
+		case +OpCode::SUBTRACT: BINARY_OP(NUMBER_VAL, -); break;
+		case +OpCode::MULTIPLY: BINARY_OP(NUMBER_VAL, *); break;
+		case +OpCode::DIVIDE:   BINARY_OP(NUMBER_VAL, / ); break;
+		case +OpCode::MOD:	  INT_BINARY_OP(NUMBER_VAL, %); break;
+		case +OpCode::BITSHIFT_LEFT: INT_BINARY_OP(NUMBER_VAL, << ); break;
+		case +OpCode::BITSHIFT_RIGHT: INT_BINARY_OP(NUMBER_VAL, >> ); break;
+		case +OpCode::BITWISE_AND: INT_BINARY_OP(NUMBER_VAL, &); break;
+		case +OpCode::BITWISE_OR: INT_BINARY_OP(NUMBER_VAL, | ); break;
+		case +OpCode::BITWISE_XOR: INT_BINARY_OP(NUMBER_VAL, ^); break;
 #pragma endregion
 
 #pragma region Binary that returns bools
-		case OP_EQUAL: {
+		case +OpCode::EQUAL: {
 			Value b = pop();
 			Value a = pop();
-			push(BOOL_VAL(valuesEqual(a, b)));
+			push(Value(a.equals(b)));
 			break;
 		}
-		case OP_NOT_EQUAL: {
+		case +OpCode::NOT_EQUAL: {
 			Value b = pop();
 			Value a = pop();
-			push(BOOL_VAL(!valuesEqual(a, b)));
+			push(Value(!a.equals(b)));
 			break;
 		}
-		case OP_GREATER: BINARY_OP(BOOL_VAL, > ); break;
-		case OP_LESS: {
-			Value a = peek(1);
-			Value b = peek(0);
-			BINARY_OP(BOOL_VAL, < ); break; }
-		case OP_GREATER_EQUAL: {
+		case +OpCode::GREATER: BINARY_OP(BOOL_VAL, > ); break;
+		case +OpCode::LESS: BINARY_OP(BOOL_VAL, < ); break; 
+		case +OpCode::GREATER_EQUAL: {
 			//Have to do this because of floating point comparisons
-			if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) {
-				return runtimeError("Operands must be two numbers, got %s and %s.",
-					valueTypeToStr(peek(1)).c_str(), valueTypeToStr(peek(0)).c_str());
+			if (!peek(0).isNumber() || !peek(1).isNumber()) {
+				return runtimeError(std::format("Operands must be two numbers, got {} and {}.",
+					peek(1).typeToStr(), peek(0).typeToStr()));
 			}
-			double b = AS_NUMBER(pop());
-			double a = AS_NUMBER(pop());
-			if (a > b || FLOAT_EQ(a, b)) push(BOOL_VAL(true));
-			else push(BOOL_VAL(false));
+			double b = pop().asNum();
+			double a = pop().asNum();
+			if (a > b || FLOAT_EQ(a, b)) push(Value(true));
+			else push(Value(false));
 			break;
 		}
-		case OP_LESS_EQUAL: {
-			if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) {
-				return runtimeError("Operands must be two numbers, got %s and %s.",
-					valueTypeToStr(peek(1)).c_str(), valueTypeToStr(peek(0)).c_str());
+		case +OpCode::LESS_EQUAL: {
+			//Have to do this because of floating point comparisons
+			if (!peek(0).isNumber() || !peek(1).isNumber()) {
+				return runtimeError(std::format("Operands must be two numbers, got {} and {}.",
+					peek(1).typeToStr(), peek(0).typeToStr()));
 			}
-			double b = AS_NUMBER(pop());
-			double a = AS_NUMBER(pop());
-			if (a < b || FLOAT_EQ(a, b)) push(BOOL_VAL(true));
-			else push(BOOL_VAL(false));
+			double b = pop().asNum();
+			double a = pop().asNum();
+			if (a < b || FLOAT_EQ(a, b)) push(Value(true));
+			else push(Value(false));
 			break;
 		}
 #pragma endregion
 
 #pragma region Statements and vars
-		case OP_PRINT: {
-			printValue(pop());
+		case +OpCode::PRINT: {
+			pop().print();
 			std::cout << "\n";
 			break;
 		}
 
-		case OP_TO_STRING: {
-			if (!pushValToStr(this, pop())) return RUNTIME_ERROR;
-			//in case pushValToStr encountered a instance of a class that has defined a toString method
-			//we need to update the frame pointer
-			frame = &frames[frameCount - 1];
+		case +OpCode::DEFINE_GLOBAL: {
+			byte index = READ_BYTE();
+			globals[index].val = pop();
+			globals[index].isDefined = true;
+			break;
+		}
+		case +OpCode::DEFINE_GLOBAL_LONG: {
+			uInt index = READ_SHORT();
+			globals[index].val = pop();
+			globals[index].isDefined = true;
 			break;
 		}
 
-		case OP_DEFINE_GLOBAL: {
-			objString* name = READ_STRING();
-			VM->curModule->vars.set(name, peek(0));
-			pop();
-			break;
-		}
-		case OP_DEFINE_GLOBAL_LONG: {
-			objString* name = READ_STRING_LONG();
-			VM->curModule->vars.set(name, peek(0));
-			pop();
-			break;
-		}
-
-		case OP_GET_GLOBAL: {
-			objString* name = READ_STRING();
-			objModule* mod = AS_MODULE(READ_CONSTANT());
+		case +OpCode::GET_GLOBAL: {
+			byte index = READ_BYTE();
+			Globalvar& var = globals[index];
 			Value value;
-			if (!mod->vars.get(name, &value)) {
-				if (!VM->globals.get(name, &value)) return runtimeError("Undefined variable '%s'.", name->str);
+			if (!var.isDefined) {
+				return runtimeError(std::format("Undefined variable '{}'.", var.name));
 			}
-			push(value);
+			push(var.val);
 			break;
 		}
-		case OP_GET_GLOBAL_LONG: {
-			objString* name = READ_STRING_LONG();
-			objModule* mod = AS_MODULE(READ_CONSTANT_LONG());
+		case +OpCode::GET_GLOBAL_LONG: {
+			uInt index = READ_SHORT();
+			Globalvar& var = globals[index];
 			Value value;
-			if (!mod->vars.get(name, &value)) {
-				if (!VM->globals.get(name, &value)) return runtimeError("Undefined variable '%s'.", name->str);
+			if (!var.isDefined) {
+				return runtimeError(std::format("Undefined variable '{}'.", var.name));
 			}
-			push(value);
+			push(var.val);
 			break;
 		}
 
-		case OP_SET_GLOBAL: {
-			objString* name = READ_STRING();
-			objModule* mod = AS_MODULE(READ_CONSTANT());
-			if (mod->vars.set(name, peek(0))) {
-				mod->vars.del(name);
-				return runtimeError("Undefined variable '%s'.", name->str);
+		case +OpCode::SET_GLOBAL: {
+			byte index = READ_BYTE();
+			Globalvar& var = globals[index];
+			if (!var.isDefined) {
+				return runtimeError(std::format("Undefined variable '{}'.", var.name));
 			}
+			var.val = peek(0);
 			break;
 		}
-		case OP_SET_GLOBAL_LONG: {
-			objString* name = READ_STRING_LONG();
-			objModule* mod = AS_MODULE(READ_CONSTANT_LONG());
-			if (mod->vars.set(name, peek(0))) {
-				mod->vars.del(name);
-				return runtimeError("Undefined variable '%s'.", name->str);
+		case +OpCode::SET_GLOBAL_LONG: {
+			uInt index = READ_SHORT();
+			Globalvar& var = globals[index];
+			if (!var.isDefined) {
+				return runtimeError(std::format("Undefined variable '{}'.", var.name));
 			}
+			var.val = peek(0);
 			break;
 		}
 
-		case OP_GET_LOCAL: {
+		case +OpCode::GET_LOCAL: {
 			uint8_t slot = READ_BYTE();
 			push(frame->slots[slot]);
 			break;
 		}
 
-		case OP_SET_LOCAL: {
+		case +OpCode::SET_LOCAL: {
 			uint8_t slot = READ_BYTE();
 			frame->slots[slot] = peek(0);
 			break;
 		}
 						 //upvals[slot]->location can be a pointer to either a stack slot, or a closed upvalue in a functions closure
-		case OP_GET_UPVALUE: {
+		case +OpCode::GET_UPVALUE: {
 			uint8_t slot = READ_BYTE();
 			push(*frame->closure->upvals[slot]->location);
 			break;
 		}
 
-		case OP_SET_UPVALUE: {
+		case +OpCode::SET_UPVALUE: {
 			uint8_t slot = READ_BYTE();
 			*frame->closure->upvals[slot]->location = peek(0);
 			break;
 		}
 
-		case OP_CLOSE_UPVALUE: {
+		case +OpCode::CLOSE_UPVALUE: {
 			closeUpvalues(stackTop - 1);
 			pop();
 			break;
@@ -528,49 +499,45 @@ RuntimeResult runtime::VM::execute() {
 #pragma endregion
 
 #pragma region Control flow
-		case OP_JUMP_IF_TRUE: {
+		case +OpCode::JUMP_IF_TRUE: {
 			uint16_t offset = READ_SHORT();
 			if (!isFalsey(peek(0))) frame->ip += offset;
 			break;
 		}
 
-		case OP_JUMP_IF_FALSE: {
+		case +OpCode::JUMP_IF_FALSE: {
 			uint16_t offset = READ_SHORT();
 			if (isFalsey(peek(0))) frame->ip += offset;
 			break;
 		}
 
-		case OP_JUMP_IF_FALSE_POP: {
+		case +OpCode::JUMP_IF_FALSE_POP: {
 			uint16_t offset = READ_SHORT();
 			if (isFalsey(pop())) frame->ip += offset;
 			break;
 		}
 
-		case OP_JUMP: {
+		case +OpCode::JUMP: {
 			uint16_t offset = READ_SHORT();
 			frame->ip += offset;
 			break;
 		}
 
-		case OP_LOOP: {
+		case +OpCode::LOOP: {
 			uint16_t offset = READ_SHORT();
 			frame->ip -= offset;
 			break;
 		}
 
-		case OP_JUMP_POPN: {
+		case +OpCode::JUMP_POPN: {
 			uint16_t toPop = READ_SHORT();
-			int i = 0;
-			while (i < toPop) {
-				pop();
-				i++;
-			}
+			stackTop -= toPop;
 			uint16_t offset = READ_SHORT();
 			frame->ip += offset;
 			break;
 		}
 
-		case OP_SWITCH: {
+		case +OpCode::SWITCH: {
 			if (IS_STRING(peek(0)) || IS_NUMBER(peek(0))) {
 				int pos = READ_BYTE();
 				switchTable& _table = frames[frameCount - 1].closure->func->body.switchTables[pos];
@@ -629,34 +596,25 @@ RuntimeResult runtime::VM::execute() {
 #pragma endregion
 
 #pragma region Functions
-		case OP_CALL: {
+		case +OpCode::CALL: {
 			//how many values are on the stack right now
 			int argCount = READ_BYTE();
 			if (!callValue(peek(argCount), argCount)) {
-				return RUNTIME_ERROR;
+				return RuntimeResult::RUNTIME_ERROR;
 			}
 			//if the call is succesful, there is a new call frame, so we need to update the pointer
 			frame = &frames[frameCount - 1];
 			break;
 		}
 
-		case OP_RETURN: {
+		case +OpCode::RETURN: {
 			Value result = pop();
 			closeUpvalues(frame->slots);
 			frameCount--;
 			//if we're returning from the implicit funcition
 			if (frameCount == 0) {
 				Value val = pop();
-				//implcit yielding once a fiber has finished running through all it's code
-				if (prevFiber != nullptr) {
-					prevFiber->transferValue(result);
-					VM->switchToFiber(prevFiber);
-					//overwrites the paused state set by switchToFiber, this flag means that if we try to run this fiber again we get nil back
-					state = fiberState::FINSIHED;
-					//returns paused in order to switch to the previous fiber
-					return interpretResult::INTERPRETER_PAUSED;
-				}
-				return interpretResult::INTERPRETER_OK;
+				return RuntimeResult::OK;
 			}
 
 			stackTop = frame->slots;
@@ -666,10 +624,8 @@ RuntimeResult runtime::VM::execute() {
 			break;
 		}
 
-		case OP_CLOSURE: {
-			//doing this to avoid cached pointers
-			objClosure* closure = new objClosure(AS_FUNCTION(READ_CONSTANT()));
-			push(OBJ_VAL(closure));
+		case +OpCode::CLOSURE: {
+			object::ObjClosure* closure = new object::ObjClosure(READ_CONSTANT().asFunction());
 			for (int i = 0; i < closure->upvals.size(); i++) {
 				uint8_t isLocal = READ_BYTE();
 				uint8_t index = READ_BYTE();
@@ -679,15 +635,12 @@ RuntimeResult runtime::VM::execute() {
 				else {
 					closure->upvals[i] = frame->closure->upvals[index];
 				}
-				//this serves to satisfy the GC, since we can't have any cached pointers when we collect
-				closure = AS_CLOSURE(peek(0));
 			}
+			push(Value(closure));
 			break;
 		}
-		case OP_CLOSURE_LONG: {
-			//doing this to avoid cached pointers
-			objClosure* closure = new objClosure(AS_FUNCTION(READ_CONSTANT_LONG()));
-			push(OBJ_VAL(closure));
+		case +OpCode::CLOSURE_LONG: {
+			object::ObjClosure* closure = new object::ObjClosure(READ_CONSTANT_LONG().asFunction());
 			for (int i = 0; i < closure->upvals.size(); i++) {
 				uint8_t isLocal = READ_BYTE();
 				uint8_t index = READ_BYTE();
@@ -697,137 +650,108 @@ RuntimeResult runtime::VM::execute() {
 				else {
 					closure->upvals[i] = frame->closure->upvals[index];
 				}
-				//this serves to satisfy the GC, since we can't have any cached pointers when we collect
-				closure = AS_CLOSURE(peek(0));
 			}
+			push(Value(closure));
 			break;
 		}
 #pragma endregion
 
 #pragma region Objects, arrays and maps
-		case OP_CREATE_ARRAY: {
+		case +OpCode::CREATE_ARRAY: {
 			uInt64 size = READ_BYTE();
 			uInt64 i = 0;
-			objArray* arr = new objArray(size);
+			object::ObjArray* arr = new object::ObjArray(size);
 			while (i < size) {
 				//size-i to because the values on the stack are in reverse order compared to how they're supposed to be in a array
 				Value val = pop();
 				//if numOfHeapPtr is 0 we don't trace or update the array when garbage collecting
-				if (IS_OBJ(val)) arr->numOfHeapPtr++;
+				if (val.isObj()) arr->numOfHeapPtr++;
 
 				arr->values[size - i - 1] = val;
 				i++;
 			}
-			push(OBJ_VAL(arr));
+			push(Value(arr));
 			break;
 		}
 
-		case OP_GET: {
-			//structs and objects also get their own OP_GET_PROPERTY operator for access using '.'
+		case +OpCode::GET: {
+			//structs and objects also get their own +OpCode::GET_PROPERTY operator for access using '.'
 			//use peek because in case this is a get call to a instance that has a defined "access" method
 			//we want to use these 2 values as args and receiver
-			Value field = peek(0);
-			Value callee = peek(1);
-			if (!IS_ARRAY(callee) && !IS_INSTANCE(callee))
-				return runtimeError("Expected a array or struct, got %s.", valueTypeToStr(callee).c_str());
+			Value field = pop();
+			Value callee = pop();
+			if (!callee.isArray() && !callee.isInstance())
+				return runtimeError(std::format("Expected a array or struct, got {}.", callee.typeToStr()));
 
-			switch (AS_OBJ(callee)->type) {
-			case OBJ_ARRAY: {
-				//we don't pop above because this might be a get call to a class that has a defined access method
-				//but in order to maintain stack balance we need to get rid of these 2 vars if this is not a get call to a access method
-				pop();
-				pop();
-				if (!IS_NUMBER(field)) return runtimeError("Index must be a number, got %s.", valueTypeToStr(field).c_str());
-				double index = AS_NUMBER(field);
-				objArray* arr = AS_ARRAY(callee);
+			switch (callee.asObj()->type) {
+			case object::ObjType::ARRAY: {
+				if (!field.isNumber()) return runtimeError(std::format("Index must be a number, got {}.", callee.typeToStr()));
+				double index = field.asNum();
+				object::ObjArray* arr = callee.asArray();
 				//Trying to access a variable using a float is a error
-				if ((uInt64)index != index) return runtimeError("Expected interger, got float.");
-				if (index < 0 || index > arr->values.count() - 1)
-					return runtimeError("Index %d outside of range [0, %d].", (uInt64)index, AS_ARRAY(callee)->values.count() - 1);
+				if (IS_INT(index)) return runtimeError("Expected interger, got float.");
+				if (index < 0 || index > arr->values.size() - 1)
+					return runtimeError(std::format("Index {} outside of range [0, {}].", (uInt64)index, callee.asArray()->values.size() - 1));
 
 				push(arr->values[(uInt64)index]);
 				break;
 			}
-			case OBJ_INSTANCE: {
-				//check if this instance has a access method, and if it does it transfer control over to the user defined method
-				//the 'field' value becomes the argument for the method 
-				objString* temp = copyString("access", 6);
-				if (!invoke(temp, 1)) {
-					return RUNTIME_ERROR;
-				}
-				else {
-					frame = &frames[frameCount - 1];
-					break;
-				}
-				//pop if this instance doesn't contain a access method to maintain stack balance
-				pop();
-				pop();
-				if (!IS_STRING(field)) return runtimeError("Expected a string for field name, got %s.", valueTypeToStr(field).c_str());
+			case object::ObjType::INSTANCE: {
+				if (!field.isString()) return runtimeError(std::format("Expected a string for field name, got {}.", field.typeToStr()));
 
-				objInstance* instance = AS_INSTANCE(callee);
-				objString* name = AS_STRING(field);
+				object::ObjInstance* instance = callee.asInstance();
+				object::ObjString* name = field.asString();
 				Value value;
 
-				if (instance->table.get(name, &value)) {
+				if (instance->fields.get(name, &value)) {
 					push(value);
 					break;
 				}
 
 				if (instance->klass && bindMethod(instance->klass, name)) break;
 				//if the field doesn't exist, we push nil as a sentinel value, since this is not considered a runtime error
-				push(NIL_VAL());
+				push(Value::nil());
 				break;
 			}
 			}
 			break;
 		}
 
-		case OP_SET: {
-			//structs and objects also get their own OP_SET_PROPERTY operator for setting using '.'
+		case +OpCode::SET: {
+			//structs and objects also get their own +OpCode::SET_PROPERTY operator for setting using '.'
 			Value val = peek(0);
 			Value field = peek(1);
 			Value callee = peek(2);
 			//if we encounter a user defined set expr, we will want to exit early and not pop all of the above values as they will be used as args
 			bool earlyExit = false;
 
-			if (!IS_ARRAY(callee) && !IS_INSTANCE(callee))
-				return runtimeError("Expected a array or struct, got %s.", valueTypeToStr(callee).c_str());
+			if (!callee.isArray() && !callee.isInstance())
+				return runtimeError(std::format("Expected a array or struct, got {}.", callee.typeToStr()));
 
-			switch (AS_OBJ(callee)->type) {
-			case OBJ_ARRAY: {
-				objArray* arr = AS_ARRAY(callee);
+			switch (callee.asObj()->type) {
+			case object::ObjType::ARRAY: {
+				object::ObjArray* arr = callee.asArray();
 
-				if (!IS_NUMBER(field)) return runtimeError("Index has to be a number, got %s.", valueTypeToStr(field).c_str());
-				double index = AS_NUMBER(field);
+				if (!field.isNumber()) return runtimeError(std::format("Index has to be a number, got {}.", field.typeToStr()));
+				double index = field.asNum();
 				//accessing array with a float is a error
-				if (index != (uInt64)index) return runtimeError("Index has to be a integer.");
-				if (index < 0 || index > arr->values.count() - 1)
-					return runtimeError("Index %d outside of range [0, %d].", (uInt64)index, arr->values.count() - 1);
+				if (IS_INT(index)) return runtimeError("Index has to be a integer.");
+				if (index < 0 || index > arr->values.size() - 1)
+					return runtimeError(std::format("Index {} outside of range [0, {}].", (uInt64)index, arr->values.size() - 1));
 
 				//if numOfHeapPtr is 0 we don't trace or update the array when garbage collecting
-				if (IS_OBJ(val)) arr->numOfHeapPtr++;
-				else if (IS_OBJ(arr->values[index])) arr->numOfHeapPtr--;
+				if (val.isObj() && !arr->values[index].isObj()) arr->numOfHeapPtr++;
+				else if (!val.isObj() && arr->values[index].isObj()) arr->numOfHeapPtr--;
 				arr->values[(uInt64)index] = val;
 				break;
 			}
-			case OBJ_INSTANCE: {
-				//check if this instance has a defined set method, if it does, transfer control to it and set the field and value as args to the method
-				objString* temp = copyString("set", 3);
-				if (!invoke(temp, 2)) {
-					return RUNTIME_ERROR;
-				}
-				else {
-					frame = &frames[frameCount - 1];
-					earlyExit = true;
-					break;
-				}
-				//if the instance doesn't have a defined set method, proceed as normal
-				if (!IS_STRING(field)) return runtimeError("Expected a string for field name, got %s.", valueTypeToStr(field).c_str());
+			case object::ObjType::INSTANCE: {
+				if (!field.isString()) return runtimeError(std::format("Expected a string for field name, got {}.", field.typeToStr()));
 
-				objInstance* instance = AS_INSTANCE(callee);
-				objString* str = AS_STRING(field);
+				object::ObjInstance* instance = callee.asInstance();
+				object::ObjString* str = field.asString();
 				//settting will always succeed, and we don't care if we're overriding an existing field, or creating a new one
-				instance->table.set(str, val);
+				instance->fields.set(str, val);
 				break;
 			}
 			}
@@ -840,12 +764,12 @@ RuntimeResult runtime::VM::execute() {
 			break;
 		}
 
-		case OP_CLASS: {
-			push(OBJ_VAL(new objClass(READ_STRING_LONG())));
+		case +OpCode::CLASS: {
+			push(Value(new object::ObjClass(READ_STRING_LONG())));
 			break;
 		}
 
-		case OP_GET_PROPERTY: {
+		case +OpCode::GET_PROPERTY: {
 			if (!IS_INSTANCE(peek(0))) {
 				return runtimeError("Only instances/structs have properties, got %s.", valueTypeToStr(peek(0)).c_str());
 			}
@@ -865,7 +789,7 @@ RuntimeResult runtime::VM::execute() {
 			push(NIL_VAL());
 			break;
 		}
-		case OP_GET_PROPERTY_LONG: {
+		case +OpCode::GET_PROPERTY_LONG: {
 			if (!IS_INSTANCE(peek(0))) {
 				return runtimeError("Only instances/structs have properties, got %s.", valueTypeToStr(peek(0)).c_str());
 			}
@@ -886,28 +810,28 @@ RuntimeResult runtime::VM::execute() {
 			break;
 		}
 
-		case OP_SET_PROPERTY: {
-			if (!IS_INSTANCE(peek(1))) {
-				return runtimeError("Only instances/structs have properties, got %s.", valueTypeToStr(peek(1)).c_str());
+		case +OpCode::SET_PROPERTY: {
+			if (!peek(1).isInstance()) {
+				return runtimeError(std::format("Only instances/structs have properties, got {}.", peek(1).typeToStr()));
 			}
 
-			objInstance* instance = AS_INSTANCE(peek(1));
+			object::ObjInstance* instance = peek(1).asInstance();
 			//we don't care if we're overriding or creating a new field
-			instance->table.set(READ_STRING(), peek(0));
+			instance->fields.set(READ_STRING(), peek(0));
 
 			Value value = pop();
 			pop();
 			push(value);
 			break;
 		}
-		case OP_SET_PROPERTY_LONG: {
-			if (!IS_INSTANCE(peek(1))) {
-				return runtimeError("Only instances/structs have properties, got %s.", valueTypeToStr(peek(1)).c_str());
+		case +OpCode::SET_PROPERTY_LONG: {
+			if (!peek(1).isInstance()) {
+				return runtimeError(std::format("Only instances/structs have properties, got {}.", peek(1).typeToStr()));
 			}
 
-			objInstance* instance = AS_INSTANCE(peek(1));
+			object::ObjInstance* instance = peek(1).asInstance();
 			//we don't care if we're overriding or creating a new field
-			instance->table.set(READ_STRING_LONG(), peek(0));
+			instance->fields.set(READ_STRING_LONG(), peek(0));
 
 			Value value = pop();
 			pop();
@@ -915,114 +839,114 @@ RuntimeResult runtime::VM::execute() {
 			break;
 		}
 
-		case OP_CREATE_STRUCT: {
+		case +OpCode::CREATE_STRUCT: {
 			int numOfFields = READ_BYTE();
 
 			//passing null instead of class signals to the VM that this is a struct, and not a instance of a class
-			objInstance* inst = new objInstance(nullptr);
+			object::ObjInstance* inst = new object::ObjInstance(nullptr);
 
 			//the compiler emits the fields in reverse order, so we can loop through them normally and pop the values on the stack
 			for (int i = 0; i < numOfFields; i++) {
-				objString* name = READ_STRING();
-				inst->table.set(name, pop());
+				object::ObjString* name = READ_STRING();
+				inst->fields.set(name, pop());
 			}
-			push(OBJ_VAL(inst));
+			push(Value(inst));
 			break;
 		}
-		case OP_CREATE_STRUCT_LONG: {
+		case +OpCode::CREATE_STRUCT_LONG: {
 			int numOfFields = READ_BYTE();
 
 			//passing null instead of class signals to the VM that this is a struct, and not a instance of a class
-			objInstance* inst = new objInstance(nullptr);
+			object::ObjInstance* inst = new object::ObjInstance(nullptr);
 
 			//the compiler emits the fields in reverse order, so we can loop through them normally and pop the values on the stack
 			for (int i = 0; i < numOfFields; i++) {
-				objString* name = READ_STRING_LONG();
-				inst->table.set(name, pop());
+				object::ObjString* name = READ_STRING_LONG();
+				inst->fields.set(name, pop());
 			}
-			push(OBJ_VAL(inst));
+			push(Value(inst));
 			break;
 		}
 
-		case OP_METHOD: {
+		case +OpCode::METHOD: {
 			//class that this method binds too
 			defineMethod(READ_STRING_LONG());
 			break;
 		}
 
-		case OP_INVOKE: {
+		case +OpCode::INVOKE: {
 			//gets the method and calls it immediatelly, without converting it to a objBoundMethod
-			objString* method = READ_STRING();
+			object::ObjString* method = READ_STRING();
 			int argCount = READ_BYTE();
 			if (!invoke(method, argCount)) {
-				return RUNTIME_ERROR;
+				return RuntimeResult::RUNTIME_ERROR;
 			}
 			frame = &frames[frameCount - 1];
 			break;
 		}
-		case OP_INVOKE_LONG: {
+		case +OpCode::INVOKE_LONG: {
 			//gets the method and calls it immediatelly, without converting it to a objBoundMethod
-			objString* method = READ_STRING_LONG();
+			object::ObjString* method = READ_STRING_LONG();
 			int argCount = READ_BYTE();
 			if (!invoke(method, argCount)) {
-				return RUNTIME_ERROR;
+				return RuntimeResult::RUNTIME_ERROR;
 			}
 			frame = &frames[frameCount - 1];
 			break;
 		}
 
-		case OP_INHERIT: {
+		case +OpCode::INHERIT: {
 			Value superclass = peek(1);
-			if (!IS_CLASS(superclass)) {
-				return runtimeError("Superclass must be a class, got %s.", valueTypeToStr(superclass).c_str());
+			if (!superclass.isClass()) {
+				return runtimeError(std::format("Superclass must be a class, got {}.", superclass.typeToStr()));
 			}
-			objClass* subclass = AS_CLASS(peek(0));
+			object::ObjClass* subclass = peek(0).asClass();
 			//copy down inheritance
 			subclass->methods.tableAddAll(&subclass->methods);
 			break;
 		}
 
-		case OP_GET_SUPER: {
-			//super is ALWAYS followed by a field and is a call expr
-			objString* name = READ_STRING();
-			objClass* superclass = AS_CLASS(pop());
+		case +OpCode::GET_SUPER: {
+			//super is ALWAYS followed by a field
+			object::ObjString* name = READ_STRING();
+			object::ObjClass* superclass = pop().asClass();
 
 			if (!bindMethod(superclass, name)) {
-				return RUNTIME_ERROR;
+				return RuntimeResult::RUNTIME_ERROR;
 			}
 			break;
 		}
-		case OP_GET_SUPER_LONG: {
-			//super is ALWAYS followed by a field and is a call expr
-			objString* name = READ_STRING_LONG();
-			objClass* superclass = AS_CLASS(pop());
+		case +OpCode::GET_SUPER_LONG: {
+			//super is ALWAYS followed by a field
+			object::ObjString* name = READ_STRING_LONG();
+			object::ObjClass* superclass = pop().asClass();
 
 			if (!bindMethod(superclass, name)) {
-				return RUNTIME_ERROR;
+				return RuntimeResult::RUNTIME_ERROR;
 			}
 			break;
 		}
 
-		case OP_SUPER_INVOKE: {
-			//works same as OP_INVOKE, but uses invokeFromClass() to specify the superclass
-			objString* method = READ_STRING();
+		case +OpCode::SUPER_INVOKE: {
+			//works same as +OpCode::INVOKE, but uses invokeFromClass() to specify the superclass
+			object::ObjString* method = READ_STRING();
 			int argCount = READ_BYTE();
-			objClass* superclass = AS_CLASS(pop());
+			object::ObjClass* superclass = pop().asClass();
 
 			if (!invokeFromClass(superclass, method, argCount)) {
-				return RUNTIME_ERROR;
+				return RuntimeResult::RUNTIME_ERROR;
 			}
 			frame = &frames[frameCount - 1];
 			break;
 		}
-		case OP_SUPER_INVOKE_LONG: {
-			//works same as OP_INVOKE, but uses invokeFromClass() to specify the superclass
-			objString* method = READ_STRING_LONG();
+		case +OpCode::SUPER_INVOKE_LONG: {
+			//works same as +OpCode::INVOKE, but uses invokeFromClass() to specify the superclass
+			object::ObjString* method = READ_STRING_LONG();
 			int argCount = READ_BYTE();
-			objClass* superclass = AS_CLASS(pop());
+			object::ObjClass* superclass = pop().asClass();
 
 			if (!invokeFromClass(superclass, method, argCount)) {
-				return RUNTIME_ERROR;
+				return RuntimeResult::RUNTIME_ERROR;
 			}
 			frame = &frames[frameCount - 1];
 			break;
