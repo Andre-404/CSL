@@ -291,18 +291,18 @@ RuntimeResult runtime::VM::execute() {
 		uint8_t instruction;
 		switch (instruction = READ_BYTE()) {
 
-#pragma region Helpers
+		#pragma region Helpers
 		case +OpCode::POP:
-			pop();
+			stackTop--;
 			break;
 		case +OpCode::POPN: {
 			uint8_t nToPop = READ_BYTE();
 			stackTop -= nToPop;
 			break;
 		}
-#pragma endregion
+		#pragma endregion
 
-#pragma region Constants
+		#pragma region Constants
 		case +OpCode::CONSTANT: {
 			Value constant = READ_CONSTANT();
 			push(constant);
@@ -316,28 +316,35 @@ RuntimeResult runtime::VM::execute() {
 		case +OpCode::NIL: push(Value::nil()); break;
 		case +OpCode::TRUE: push(Value(true)); break;
 		case +OpCode::FALSE: push(Value(false)); break;
-#pragma endregion
+		#pragma endregion
 
-#pragma region Unary
+		#pragma region Unary
 		case +OpCode::NEGATE:
-			if (!peek(0).isNumber()) {
-				return runtimeError(std::format("Operand must be a number, got {}.", peek(0).typeToStr()));
+			Value val = pop();
+			if (!val.isNumber()) {
+				return runtimeError(std::format("Operand must be a number, got {}.", val.typeToStr()));
 			}
-			push(Value(-pop().asNum()));
+			push(Value(-val.asNum()));
 			break;
 		case +OpCode::NOT:
 			push(Value(isFalsey(pop())));
 			break;
 		case +OpCode::BIN_NOT: {
-			if (!peek(0).isNumber()) {
+			//doing implicit conversion from double to long long, could end up with precision errors
+			Value val = pop();
+			if (!val.isNumber()) {
 				return runtimeError(std::format("Operand must be a number, got {}.", peek(0).typeToStr()));
 			}
-			int num = pop().asNum();
-			num = ~num;
-			push(Value((double)num));
+			if (!IS_INT(val.asNum())) {
+				return runtimeError("Number must be a integer, got a float.");
+			}
+			double num = pop().asNum();
+			long long temp = static_cast<long long>(num);
+			temp = ~temp;
+			push(Value(static_cast<double>(temp)));
 			break;
 		}
-#pragma endregion
+		#pragma endregion
 
 #pragma region Binary
 		case +OpCode::ADD: {
