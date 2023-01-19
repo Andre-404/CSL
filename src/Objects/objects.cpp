@@ -33,6 +33,7 @@ ObjString* ObjString::createString(char* from, uInt64 length, HashMap& interned)
 	ObjString* str = new(ptr) ObjString(length);
 	memcpy(reinterpret_cast<byte*>(ptr) + sizeof(ObjString), from, length + 1);
 	str->hash = hash;
+	interned.set(str, Value::nil());
 	return str;
 }
 
@@ -76,13 +77,13 @@ bool ObjString::compare(string other) {
 }
 
 ObjString* ObjString::concat(ObjString* other, HashMap& interned) {
-	uInt64 len = other->size + size + 1;
+	uInt64 len = other->size + size;
 	ObjString* finalStr = createEmptyString(len);
 	memcpy(finalStr->getString(), getString(), size);
 	//+1 for null terminator
 	memcpy(finalStr->getString() + size, other->getString(), other->size + 1);
 	//compute hash from concated strings
-	finalStr->hash = hashString(finalStr->getString(), len - 1);
+	finalStr->hash = hashString(finalStr->getString(), len);
 	//a bit inefficient, but we need to have the whole string in order to check if it already exists or not
 	//this is faster than doing new char[] and then deleteing it if we find the interned string
 	ObjString* possibleInterned = findInternedString(interned, finalStr->getString(), finalStr->size, finalStr->hash);

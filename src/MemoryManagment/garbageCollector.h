@@ -18,6 +18,7 @@ namespace memory {
 	public:
 		//used when allocating memory, only 1 thread may allocate memory at a time
 		std::mutex mtx;
+		bool shouldCompact;
 		void* alloc(uInt64 size);
 		void collect(runtime::VM* vm);
 		void collect(compileCore::Compiler* compiler);
@@ -28,7 +29,6 @@ namespace memory {
 		byte* heapTop;
 		uInt64 memoryBlockSize;
 
-		bool shouldCompact;
 		//reset after each heap collection, calculated in 'markObj'
 		//used before 'computeCompactedAddress' to allocated a new heap
 		uInt64 shrinkedHeapSize;

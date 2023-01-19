@@ -256,10 +256,11 @@ namespace AST {
 			if (token.type == TokenType::LEFT_BRACKET) {//array/struct with string access
 				field = cur->expression();
 				//object["field"] gets optimized to object.field
-				if (field->type == ASTType::LITERAL) {
+				//TODO: this makes field a string, fix that
+				/*if (field->type == ASTType::LITERAL) {
 					field->accept(cur->probe);
 					if (cur->probe->getProbedToken().type == TokenType::STRING) newToken.type = TokenType::DOT;
-				}
+				}*/
 				cur->consume(TokenType::RIGHT_BRACKET, "Expect ']' after array/map access.");
 			}
 			else if (token.type == TokenType::DOT) {//struct/object access

@@ -39,7 +39,6 @@ CurrentChunkInfo::CurrentChunkInfo(CurrentChunkInfo* _enclosing, FuncType _type)
 Compiler::Compiler(vector<CSLModule*>& _units) {
 	current = new CurrentChunkInfo(nullptr, FuncType::TYPE_SCRIPT);
 	currentClass = nullptr;
-	vector<File*> sourceFiles;
 	curUnitIndex = 0;
 	curGlobalIndex = 0;
 	units = _units;
@@ -240,8 +239,8 @@ void Compiler::visitUnaryExpr(AST::UnaryExpr* expr) {
 void Compiler::visitArrayLiteralExpr(AST::ArrayLiteralExpr* expr) {
 	//we need all of the array member values to be on the stack prior to executing "OP_CREATE_ARRAY"
 	//compiling members in reverse order because we add to the array by popping from the stack
-	for (int i = expr->members.size() - 1; i >= 0; --i) {
-		expr->members[i]->accept(this);
+	for (AST::ASTNodePtr field : expr->members) {
+		field->accept(this);
 	}
 	emitBytes(+OpCode::CREATE_ARRAY, expr->members.size());
 }
@@ -884,7 +883,7 @@ void Compiler::visitReturnStmt(AST::ReturnStmt* stmt) {
 
 void Compiler::emitByte(byte byte) {
 	//line is incremented whenever we find a statement/expression that contains tokens
-	getChunk()->writeData(byte, current->line, sourceFiles.size() - 1);
+	getChunk()->writeData(byte, current->line, curUnitIndex);
 }
 
 void Compiler::emitBytes(byte byte1, byte byte2) {
@@ -966,11 +965,12 @@ void Compiler::patchScopeJumps(ScopeJumpType type) {
 			if (toPop > UINT8_MAX) error("Too many variables to pop.");
 
 			getChunk()->code[jumpPatchPos - 1] = +OpCode::JUMP_POPN;
-			//variables declared by the time we hit the break whose depth is lower or equal to this break stmt
-			getChunk()->code[jumpPatchPos] = toPop;
 			//amount to jump
-			getChunk()->code[jumpPatchPos + 1] = (jumpLenght >> 8) & 0xff;
-			getChunk()->code[jumpPatchPos + 2] = jumpLenght & 0xff;
+			getChunk()->code[jumpPatchPos] = (jumpLenght >> 8) & 0xff;
+			getChunk()->code[jumpPatchPos + 1] = jumpLenght & 0xff;
+
+			//variables declared by the time we hit the break whose depth is lower or equal to this break stmt
+			getChunk()->code[jumpPatchPos + 2] = toPop;
 
 			current->scopeJumps.erase(current->scopeJumps.begin() + i);
 		}

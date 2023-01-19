@@ -1,14 +1,45 @@
 #include "vm.h"
 #include "../Codegen/compiler.h"
+#include "../MemoryManagment/garbageCollector.h"
+#include "../DebugPrinting/BytecodePrinter.h"
 
 runtime::VM::VM(compileCore::Compiler* compiler) {
 	globals = compiler->globals;
 	sourceFiles = compiler->sourceFiles;
-	push(Value(compiler->endFuncDecl()));
+	internedStrings = compiler->internedStrings;
+	stackTop = stack;
+	frameCount = 0;
+
+
+	object::ObjClosure* closure = new object::ObjClosure(compiler->endFuncDecl());
+	push(Value(closure));
+	call(closure, 0);
 }
 
 
 #pragma region Helpers
+void runtime::VM::mark(memory::GarbageCollector* gc) {
+	for (Value* i = stack; i < stackTop; i++) {
+		i->mark();
+	}
+	for (int i = 0; i < frameCount; i++) gc->markObj(frames[i].closure);
+	for (int i = 0; i < openUpvals.size(); i++) gc->markObj(openUpvals[i]);
+	for (int i = 0; i < globals.size(); i++) globals[i].val.mark();
+	internedStrings.mark();
+	globals.mark();
+}
+
+void runtime::VM::updateInternalPtrs(memory::GarbageCollector* gc) {
+	for (Value* i = stack; i < stackTop; i++) {
+		i->updatePtr();
+	}
+	for (int i = 0; i < frameCount; i++) frames[i].closure = reinterpret_cast<object::ObjClosure*>(frames[i].closure->moveTo);
+	for (int i = 0; i < openUpvals.size(); i++) openUpvals[i] = reinterpret_cast<object::ObjUpval*>(openUpvals[i]->moveTo);
+	for (int i = 0; i < globals.size(); i++) globals[i].val.updatePtr();
+	internedStrings.updateInternalPtrs();
+	globals.updateInternalPtr();
+}
+
 string runtime::expectedType(string msg, Value val) {
 	return msg + val.typeToStr() + ".";
 }
@@ -53,7 +84,7 @@ RuntimeResult runtime::VM::runtimeError(string err) {
 		uInt64 instruction = frame->ip - 1;
 		codeLine line = function->body.getLine(instruction);
 		//fileName:line | in <func name>()
-		string temp = yellow + line.getFileName(sourceFiles) + black + ":" + cyan + std::to_string(line.line) + " | " + black;
+		string temp = yellow + line.getFileName(sourceFiles) + black + ":" + cyan + std::to_string(line.line + 1) + " | " + black;
 		std::cout << temp << "in ";
 		std::cout << (function->name == nullptr ? "script" : function->name->getString()) << "()\n";
 	}
@@ -287,17 +318,22 @@ RuntimeResult runtime::VM::execute() {
 		std::cout << "\n";
 		disassembleInstruction(&frame->closure->func->body, frames[frameCount - 1].ip);
 #endif
-
+		if (memory::gc.shouldCompact) memory::gc.collect(this);
 		uint8_t instruction;
 		switch (instruction = READ_BYTE()) {
 
 		#pragma region Helpers
-		case +OpCode::POP:
+		case +OpCode::POP: {
 			stackTop--;
 			break;
+		}
 		case +OpCode::POPN: {
 			uint8_t nToPop = READ_BYTE();
 			stackTop -= nToPop;
+			break;
+		}
+		case +OpCode::LOAD_INT: {
+			push(Value(static_cast<double>(READ_BYTE())));
 			break;
 		}
 		#pragma endregion
@@ -319,16 +355,18 @@ RuntimeResult runtime::VM::execute() {
 		#pragma endregion
 
 		#pragma region Unary
-		case +OpCode::NEGATE:
+		case +OpCode::NEGATE: {
 			Value val = pop();
 			if (!val.isNumber()) {
 				return runtimeError(std::format("Operand must be a number, got {}.", val.typeToStr()));
 			}
 			push(Value(-val.asNum()));
 			break;
-		case +OpCode::NOT:
+		}
+		case +OpCode::NOT: {
 			push(Value(isFalsey(pop())));
 			break;
+		}
 		case +OpCode::BIN_NOT: {
 			//doing implicit conversion from double to long long, could end up with precision errors
 			Value val = pop();
@@ -344,12 +382,205 @@ RuntimeResult runtime::VM::execute() {
 			push(Value(static_cast<double>(temp)));
 			break;
 		}
+		case +OpCode::INCREMENT: {
+			byte arg = READ_BYTE();
+			int8_t sign = (arg & 0b00000001) == 1 ? 1 : -1;
+			//true: prefix, false: postfix
+			bool fix = (arg & 0b00000010) == 1;
+
+			byte type = arg >> 2;
+			switch (type) {
+			case 0: {
+				byte slot = READ_BYTE();
+				Value* num = &frame->slots[slot];
+				if (num->type != ValueType::NUM) {
+					return runtimeError(std::format("Operand must be a number, got {}.", num->typeToStr()));
+				}
+				if (fix) {
+					num->as.number += sign;
+					push(*num);
+				}
+				else {
+					push(*num);
+					num->as.number += sign;
+				}
+				break;
+			}
+			case 1: {
+				byte slot = READ_BYTE();
+				Value* num = frame->closure->upvals[slot]->location;
+				if (num->type != ValueType::NUM) {
+					return runtimeError(std::format("Operand must be a number, got {}.", num->typeToStr()));
+				}
+				if (fix) {
+					num->as.number += sign;
+					push(*num);
+				}
+				else {
+					push(*num);
+					num->as.number += sign;
+				}
+				break;
+			}
+			case 2: {
+				byte index = READ_BYTE();
+				Globalvar& var = globals[index];
+				if (!var.isDefined) {
+					return runtimeError(std::format("Undefined variable '{}'.", var.name));
+				}
+				if (var.val.type != ValueType::NUM) {
+					return runtimeError(std::format("Operand must be a number, got {}.", var.val.typeToStr()));
+				}
+				if (fix) {
+					var.val.as.number += sign;
+					push(var.val);
+				}
+				else {
+					push(var.val);
+					var.val.as.number += sign;
+				}
+				break;
+			}
+			case 3: {
+				byte index = READ_SHORT();
+				Globalvar& var = globals[index];
+				if (!var.isDefined) {
+					return runtimeError(std::format("Undefined variable '{}'.", var.name));
+				}
+				if (var.val.type != ValueType::NUM) {
+					return runtimeError(std::format("Operand must be a number, got {}.", var.val.typeToStr()));
+				}
+				if (fix) {
+					var.val.as.number += sign;
+					push(var.val);
+				}
+				else {
+					push(var.val);
+					var.val.as.number += sign;
+				}
+				break;
+			}
+			case 4: {
+				Value inst = pop();
+				if (!inst.isInstance()) {
+					return runtimeError(std::format("Only instances/structs have properties, got {}.", inst.typeToStr()));
+				}
+
+				object::ObjInstance* instance = inst.asInstance();
+				object::ObjString* str = READ_STRING();
+				Value val;
+				instance->fields.get(str, &val);
+				if (val.type != ValueType::NUM) {
+					return runtimeError(std::format("Operand must be a number, got {}.", val.typeToStr()));
+				}
+				if (fix) {
+					val.as.number += sign;
+					instance->fields.set(str, val);
+					push(val);
+				}
+				else {
+					push(val);
+					val.as.number += sign;
+					instance->fields.set(str, val);
+				}
+				break;
+			}
+			case 5: {
+				Value inst = pop();
+				if (!inst.isInstance()) {
+					return runtimeError(std::format("Only instances/structs have properties, got {}.", inst.typeToStr()));
+				}
+
+				object::ObjInstance* instance = inst.asInstance();
+				object::ObjString* str = READ_STRING_LONG();
+				Value val;
+				instance->fields.get(str, &val);
+				if (val.type != ValueType::NUM) {
+					return runtimeError(std::format("Operand must be a number, got {}.", val.typeToStr()));
+				}
+				if (fix) {
+					val.as.number += sign;
+					instance->fields.set(str, val);
+					push(val);
+				}
+				else {
+					push(val);
+					val.as.number += sign;
+					instance->fields.set(str, val);
+				}
+				break;
+			}
+			case 6: {
+				Value field = pop();
+				Value callee = pop();
+				if (!callee.isArray() && !callee.isInstance())
+					return runtimeError(std::format("Expected a array or struct, got {}.", callee.typeToStr()));
+				switch (callee.asObj()->type) {
+				case object::ObjType::ARRAY: {
+					if (!field.isNumber()) return runtimeError(std::format("Index must be a number, got {}.", callee.typeToStr()));
+					double index = field.asNum();
+					object::ObjArray* arr = callee.asArray();
+					//Trying to access a variable using a float is a error
+					if (!IS_INT(index)) return runtimeError("Expected interger, got float.");
+					if (index < 0 || index > arr->values.size() - 1)
+						return runtimeError(std::format("Index {} outside of range [0, {}].", (uInt64)index, callee.asArray()->values.size() - 1));
+					
+					Value* num;
+					num = &arr->values[(uInt64)index];
+					if (num->type != ValueType::NUM) {
+						return runtimeError(std::format("Operand must be a number, got {}.", num->typeToStr()));
+					}
+					if (fix) {
+						num->as.number += sign;
+						push(*num);
+					}
+					else {
+						push(*num);
+						num->as.number += sign;
+					}
+					break;
+				}
+				case object::ObjType::INSTANCE: {
+					if (!field.isString()) return runtimeError(std::format("Expected a string for field name, got {}.", field.typeToStr()));
+
+					object::ObjInstance* instance = callee.asInstance();
+					object::ObjString* name = field.asString();
+					Value num;
+					if (!instance->fields.get(name, &num)) num = Value::nil();
+					if (num.type != ValueType::NUM) {
+						return runtimeError(std::format("Operand must be a number, got {}.", num.typeToStr()));
+					}
+					if (fix) {
+						num.as.number += sign;
+						instance->fields.set(name, num);
+						push(num);
+					}
+					else {
+						push(num);
+						num.as.number += sign;
+						instance->fields.set(name, num);
+					}
+					break;
+				}
+				}
+
+				break;
+			}
+			}
+			break;
+		}
 		#pragma endregion
 
-#pragma region Binary
+		#pragma region Binary
+		case +OpCode::BITWISE_XOR: INT_BINARY_OP(NUMBER_VAL, ^); break;
+		case +OpCode::BITWISE_OR: INT_BINARY_OP(NUMBER_VAL, | ); break;
+		case +OpCode::BITWISE_AND: INT_BINARY_OP(NUMBER_VAL, &); break;
 		case +OpCode::ADD: {
 			if (peek(0).isString() && peek(1).isString()) {
-				concatenate();
+				object::ObjString* b = pop().asString();
+				object::ObjString* a = pop().asString();
+
+				push(Value(a->concat(b, internedStrings)));
 			}
 			else if (peek(0).isNumber() && peek(1).isNumber()) {
 				double b = pop().asNum();
@@ -368,12 +599,9 @@ RuntimeResult runtime::VM::execute() {
 		case +OpCode::MOD:	  INT_BINARY_OP(NUMBER_VAL, %); break;
 		case +OpCode::BITSHIFT_LEFT: INT_BINARY_OP(NUMBER_VAL, << ); break;
 		case +OpCode::BITSHIFT_RIGHT: INT_BINARY_OP(NUMBER_VAL, >> ); break;
-		case +OpCode::BITWISE_AND: INT_BINARY_OP(NUMBER_VAL, &); break;
-		case +OpCode::BITWISE_OR: INT_BINARY_OP(NUMBER_VAL, | ); break;
-		case +OpCode::BITWISE_XOR: INT_BINARY_OP(NUMBER_VAL, ^); break;
-#pragma endregion
+		#pragma endregion
 
-#pragma region Binary that returns bools
+		#pragma region Binary that returns bools
 		case +OpCode::EQUAL: {
 			Value b = pop();
 			Value a = pop();
@@ -387,7 +615,6 @@ RuntimeResult runtime::VM::execute() {
 			break;
 		}
 		case +OpCode::GREATER: BINARY_OP(BOOL_VAL, > ); break;
-		case +OpCode::LESS: BINARY_OP(BOOL_VAL, < ); break; 
 		case +OpCode::GREATER_EQUAL: {
 			//Have to do this because of floating point comparisons
 			if (!peek(0).isNumber() || !peek(1).isNumber()) {
@@ -400,6 +627,7 @@ RuntimeResult runtime::VM::execute() {
 			else push(Value(false));
 			break;
 		}
+		case +OpCode::LESS: BINARY_OP(BOOL_VAL, < ); break; 
 		case +OpCode::LESS_EQUAL: {
 			//Have to do this because of floating point comparisons
 			if (!peek(0).isNumber() || !peek(1).isNumber()) {
@@ -412,7 +640,7 @@ RuntimeResult runtime::VM::execute() {
 			else push(Value(false));
 			break;
 		}
-#pragma endregion
+		#pragma endregion
 
 #pragma region Statements and vars
 		case +OpCode::PRINT: {
@@ -437,7 +665,6 @@ RuntimeResult runtime::VM::execute() {
 		case +OpCode::GET_GLOBAL: {
 			byte index = READ_BYTE();
 			Globalvar& var = globals[index];
-			Value value;
 			if (!var.isDefined) {
 				return runtimeError(std::format("Undefined variable '{}'.", var.name));
 			}
@@ -447,7 +674,6 @@ RuntimeResult runtime::VM::execute() {
 		case +OpCode::GET_GLOBAL_LONG: {
 			uInt index = READ_SHORT();
 			Globalvar& var = globals[index];
-			Value value;
 			if (!var.isDefined) {
 				return runtimeError(std::format("Undefined variable '{}'.", var.name));
 			}
@@ -485,7 +711,7 @@ RuntimeResult runtime::VM::execute() {
 			frame->slots[slot] = peek(0);
 			break;
 		}
-						 //upvals[slot]->location can be a pointer to either a stack slot, or a closed upvalue in a functions closure
+		//upvals[slot]->location can be a pointer to either a stack slot, or a closed upvalue in a functions closure
 		case +OpCode::GET_UPVALUE: {
 			uint8_t slot = READ_BYTE();
 			push(*frame->closure->upvals[slot]->location);
@@ -506,9 +732,9 @@ RuntimeResult runtime::VM::execute() {
 #pragma endregion
 
 #pragma region Control flow
-		case +OpCode::JUMP_IF_TRUE: {
+		case +OpCode::JUMP: {
 			uint16_t offset = READ_SHORT();
-			if (!isFalsey(peek(0))) frame->ip += offset;
+			frame->ip += offset;
 			break;
 		}
 
@@ -518,15 +744,21 @@ RuntimeResult runtime::VM::execute() {
 			break;
 		}
 
+		case +OpCode::JUMP_IF_TRUE: {
+			uint16_t offset = READ_SHORT();
+			if (!isFalsey(peek(0))) frame->ip += offset;
+			break;
+		}
+
 		case +OpCode::JUMP_IF_FALSE_POP: {
 			uint16_t offset = READ_SHORT();
 			if (isFalsey(pop())) frame->ip += offset;
 			break;
 		}
 
-		case +OpCode::JUMP: {
+		case +OpCode::LOOP_IF_TRUE: {
 			uint16_t offset = READ_SHORT();
-			frame->ip += offset;
+			if (!isFalsey(pop())) frame->ip -= offset;
 			break;
 		}
 
@@ -537,67 +769,44 @@ RuntimeResult runtime::VM::execute() {
 		}
 
 		case +OpCode::JUMP_POPN: {
-			uint16_t toPop = READ_SHORT();
-			stackTop -= toPop;
-			uint16_t offset = READ_SHORT();
+			uInt16 offset = READ_SHORT();
+			stackTop -= READ_BYTE();
 			frame->ip += offset;
 			break;
 		}
 
 		case +OpCode::SWITCH: {
-			if (IS_STRING(peek(0)) || IS_NUMBER(peek(0))) {
-				int pos = READ_BYTE();
-				switchTable& _table = frames[frameCount - 1].closure->func->body.switchTables[pos];
-				//default jump exists for every switch, and if it's not user defined it jumps to the end of switch
-				switch (_table.type) {
-				case switchType::NUM: {
-					//if it's a all number switch stmt, and we have something that isn't a number, we immediatelly jump to default
-					if (IS_NUMBER(peek(0))) {
-						int num = AS_NUMBER(pop());
-						long jumpLength = _table.getJump(num);
-						if (jumpLength != -1) {
-							frame->ip += jumpLength;
-							break;
-						}
-					}
-					frame->ip += _table.defaultJump;
+			Value val = pop();
+			uInt caseNum = READ_SHORT();
+			uInt offset = frame->ip + caseNum;
+			int jumpOffset = -1;
+			for (int i = 0; i < caseNum; i++) {
+				if (val.equals(READ_CONSTANT())) {
+					jumpOffset = offset + (i * 2);
 					break;
-				}
-				case switchType::STRING: {
-					if (IS_STRING(peek(0))) {
-						objString* str = AS_STRING(pop());
-						string key;
-						key.assign(str->str, str->length + 1);
-						long jumpLength = _table.getJump(key);
-						if (jumpLength != -1) {
-							frame->ip += jumpLength;
-							break;
-						}
-					}
-					frame->ip += _table.defaultJump;
-					break;
-				}
-				case switchType::MIXED: {
-					string str;
-					//this can be either a number or a string, so we need more checks
-					if (IS_STRING(peek(0))) {
-						objString* key = AS_STRING(pop());
-						str.assign(key->str, key->length + 1);
-					}
-					else str = std::to_string((int)AS_NUMBER(pop()));
-					long jumpLength = _table.getJump(str);
-					if (jumpLength != -1) {
-						frame->ip += jumpLength;
-						break;
-					}
-					frame->ip += _table.defaultJump;
-					break;
-				}
 				}
 			}
-			else {
-				return runtimeError("Switch expression can be only string or number, got %s.", valueTypeToStr(peek(0)).c_str());
+			if (jumpOffset == -1) jumpOffset = offset + caseNum * 2;
+			frame->ip = jumpOffset;
+			uInt jmp = READ_SHORT();
+			frame->ip += jmp;
+			break;
+		}
+		case +OpCode::SWITCH_LONG: {
+			Value val = pop();
+			uInt caseNum = READ_SHORT();
+			uInt offset = frame->ip + caseNum * 2;
+			int jumpOffset = -1;
+			for (int i = 0; i < caseNum; i++) {
+				if (val.equals(READ_CONSTANT_LONG())) {
+					jumpOffset = offset + (i * 2);
+					break;
+				}
 			}
+			if (jumpOffset == -1) jumpOffset = offset + caseNum * 2;
+			frame->ip = jumpOffset;
+			uInt jmp = READ_SHORT();
+			frame->ip += jmp;
 			break;
 		}
 #pragma endregion
@@ -696,7 +905,7 @@ RuntimeResult runtime::VM::execute() {
 				double index = field.asNum();
 				object::ObjArray* arr = callee.asArray();
 				//Trying to access a variable using a float is a error
-				if (IS_INT(index)) return runtimeError("Expected interger, got float.");
+				if (!IS_INT(index)) return runtimeError("Expected interger, got float.");
 				if (index < 0 || index > arr->values.size() - 1)
 					return runtimeError(std::format("Index {} outside of range [0, {}].", (uInt64)index, callee.asArray()->values.size() - 1));
 
@@ -742,7 +951,7 @@ RuntimeResult runtime::VM::execute() {
 				if (!field.isNumber()) return runtimeError(std::format("Index has to be a number, got {}.", field.typeToStr()));
 				double index = field.asNum();
 				//accessing array with a float is a error
-				if (IS_INT(index)) return runtimeError("Index has to be a integer.");
+				if (!IS_INT(index)) return runtimeError("Index has to be a integer.");
 				if (index < 0 || index > arr->values.size() - 1)
 					return runtimeError(std::format("Index {} outside of range [0, {}].", (uInt64)index, arr->values.size() - 1));
 
@@ -777,15 +986,15 @@ RuntimeResult runtime::VM::execute() {
 		}
 
 		case +OpCode::GET_PROPERTY: {
-			if (!IS_INSTANCE(peek(0))) {
-				return runtimeError("Only instances/structs have properties, got %s.", valueTypeToStr(peek(0)).c_str());
+			if (!peek(0).isInstance()) {
+				return runtimeError(std::format("Only instances/structs have properties, got {}.", peek(0).typeToStr()));
 			}
 
-			objInstance* instance = AS_INSTANCE(peek(0));
-			objString* name = READ_STRING();
+			object::ObjInstance* instance = peek(0).asInstance();
+			object::ObjString* name = READ_STRING();
 
 			Value value;
-			if (instance->table.get(name, &value)) {
+			if (instance->fields.get(name, &value)) {
 				pop(); // Instance.
 				push(value);
 				break;
@@ -793,19 +1002,19 @@ RuntimeResult runtime::VM::execute() {
 			//first check is because structs(instances with no class) are also represented using objInstance
 			if (instance->klass && bindMethod(instance->klass, name)) break;
 			//if 'name' isn't a field property, nor is it a method, we push nil as a sentinel value
-			push(NIL_VAL());
+			push(Value::nil());
 			break;
 		}
 		case +OpCode::GET_PROPERTY_LONG: {
-			if (!IS_INSTANCE(peek(0))) {
-				return runtimeError("Only instances/structs have properties, got %s.", valueTypeToStr(peek(0)).c_str());
+			if (!peek(0).isInstance()) {
+				return runtimeError(std::format("Only instances/structs have properties, got {}.", peek(0).typeToStr()));
 			}
 
-			objInstance* instance = AS_INSTANCE(peek(0));
-			objString* name = READ_STRING_LONG();
+			object::ObjInstance* instance = peek(0).asInstance();
+			object::ObjString* name = READ_STRING_LONG();
 
 			Value value;
-			if (instance->table.get(name, &value)) {
+			if (instance->fields.get(name, &value)) {
 				pop(); // Instance.
 				push(value);
 				break;
@@ -813,7 +1022,7 @@ RuntimeResult runtime::VM::execute() {
 			//first check is because structs(instances with no class) are also represented using objInstance
 			if (instance->klass && bindMethod(instance->klass, name)) break;
 			//if 'name' isn't a field property, nor is it a method, we push nil as a sentinel value
-			push(NIL_VAL());
+			push(Value::nil());
 			break;
 		}
 

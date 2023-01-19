@@ -1,6 +1,7 @@
 #include "garbageCollector.h"
 #include "../ErrorHandling/errorHandler.h"
 #include "../Codegen/compiler.h"
+#include "../Runtime/vm.h"
 #include <format>
 #include <immintrin.h>
 
@@ -133,11 +134,18 @@ namespace memory {
 	}
 
 	void GarbageCollector::markRoots(runtime::VM* vm) {
-
+		vm->mark(this);
 	}
 
 	void GarbageCollector::markRoots(compileCore::Compiler* compiler) {
-		markObj(compiler->current->func);
+		compileCore::CurrentChunkInfo* c = compiler->current;
+		while (c->enclosing) {
+			markObj(c->func);
+			c = c->enclosing;
+		}
+		markObj(c->func);
+		compiler->globals.mark();
+		compiler->internedStrings.mark();
 	}
 
 	void GarbageCollector::computeCompactedAddress(byte* start) {
@@ -179,11 +187,18 @@ namespace memory {
 	}
 
 	void GarbageCollector::updateRootPtrs(runtime::VM* vm) {
-
+		vm->updateInternalPtrs(this);
 	}
 
 	void GarbageCollector::updateRootPtrs(compileCore::Compiler* compiler) {
-		compiler->current->func = reinterpret_cast<object::ObjFunc*>(compiler->current->func->moveTo);
+		compileCore::CurrentChunkInfo* c = compiler->current;
+		while (c->enclosing) {
+			c->func = reinterpret_cast<object::ObjFunc*>(c->func->moveTo);
+			c = c->enclosing;
+		}
+		c->func = reinterpret_cast<object::ObjFunc*>(c->func->moveTo);
+		compiler->globals.updateInternalPtr();
+		compiler->internedStrings.updateInternalPtrs();
 	}
 
 	void GarbageCollector::compact(byte* start) {

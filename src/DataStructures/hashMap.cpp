@@ -130,7 +130,7 @@ ObjString* findInternedString(HashMap& table, char* str, uInt length, uInt64 has
 			// Stop if we find an empty non-tombstone entry.
 			return nullptr;
 		}
-		else if (entry->key != TOMBSTONE && entry->key->hash == hash && memcmp(entry->key->getString(), str, length) == 0) {
+		else if (entry->key != TOMBSTONE && entry->key->hash == hash && entry->key->size == length && memcmp(entry->key->getString(), str, length) == 0) {
 			// We found it.
 			return entry->key;
 		}

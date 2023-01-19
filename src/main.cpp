@@ -4,6 +4,7 @@
 #include "ErrorHandling/errorHandler.h"
 #include "Parsing/parser.h"
 #include "Codegen/compiler.h"
+#include "Runtime/vm.h"
 
 
 int main(int argc, char* argv[]) {
@@ -13,6 +14,8 @@ int main(int argc, char* argv[]) {
 	AST::Parser pa;
 	pa.parse(modules);
 	compileCore::Compiler c(modules);
+	runtime::VM* vm = new runtime::VM(&c);
+	vm->execute();
 	errorHandler::showCompileErrors();
 	return 0;
 }

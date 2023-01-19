@@ -97,7 +97,6 @@ struct Value {
 	object::ObjClass* asClass();
 	object::ObjInstance* asInstance();
 	object::ObjBoundMethod* asBoundMethod();
-	object::ObjThread* asThread();
 	object::ObjFile* asFile();
 
 	void mark();
@@ -121,6 +120,7 @@ enum class OpCode {
 	//Helpers
 	POP,
 	POPN,//arg: 8-bit num
+	LOAD_INT,//arg: 8-bit, interger smaller than 256 to load
 	//constants
 	CONSTANT,//arg: 8-bit constant index
 	CONSTANT_LONG,//arg: 8-bit constant index
@@ -144,7 +144,6 @@ enum class OpCode {
 	BITSHIFT_LEFT,
 	BITSHIFT_RIGHT,
 	
-	LOAD_INT,//arg: 8-bit, interger smaller than 256 to load
 	//comparisons and equality
 	EQUAL,
 	NOT_EQUAL,
@@ -171,12 +170,6 @@ enum class OpCode {
 	GET_UPVALUE,//arg: 8-bit upval position
 	SET_UPVALUE,//arg: 8-bit upval position
 	CLOSE_UPVALUE,
-	//Arrays
-	CREATE_ARRAY,//arg: 8-bit array size
-	//get and set is used by both arrays and instances/structs, since struct.field is just syntax sugar for struct["field"] that
-	//gets optimized to use GET_PROPERTY
-	GET,
-	SET,
 	//control flow
 	JUMP,//arg: 16-bit jump offset
 	JUMP_IF_FALSE,//arg: 16-bit jump offset
@@ -193,6 +186,13 @@ enum class OpCode {
 	RETURN,
 	CLOSURE,//arg: 8-bit ObjFunction constant index
 	CLOSURE_LONG,//arg: 16-bit ObjFunction constant index
+
+	//Arrays
+	CREATE_ARRAY,//arg: 8-bit array size
+	//get and set is used by both arrays and instances/structs, since struct.field is just syntax sugar for struct["field"] that
+	//gets optimized to use GET_PROPERTY
+	GET,
+	SET,
 
 	//OOP
 	CLASS,//arg: 16-bit ObjString constant index
@@ -243,7 +243,7 @@ public:
 	ManagedArray<uint8_t> code;
 	ManagedArray<Value> constants;
 	Chunk();
-	void writeData(uint8_t opCode, uInt line, byte name);
+	void writeData(uint8_t opCode, uInt line, byte fileIndex);
 	codeLine getLine(uInt offset);
 	void disassemble(string name);
 	uInt addConstant(Value val);

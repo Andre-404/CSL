@@ -9,6 +9,8 @@ namespace runtime {
 	public:
 		VM(compileCore::Compiler* compiler);
 		RuntimeResult execute();
+		void mark(memory::GarbageCollector* gc);
+		void updateInternalPtrs(memory::GarbageCollector* gc);
 	private:
 		Value stack[STACK_MAX];
 		Value* stackTop;
@@ -16,11 +18,11 @@ namespace runtime {
 		CallFrame frames[FRAMES_MAX];
 		int frameCount;
 		ManagedArray<Globalvar> globals;
+		HashMap internedStrings;
 		vector<File*> sourceFiles;
 
 		//VM stuff
 		byte getOp(long _ip);
-		void concatenate();
 		void push(Value val);
 		Value pop();
 		Value peek(int depth);
