@@ -127,6 +127,30 @@ namespace AST {
 		virtual Token getName() = 0;
 	};
 
+	enum class VarDeclType {
+		LOCAL,
+		UPVALUE,
+		GLOBAL
+	};
+
+	struct Variable {
+		Token name;
+		VarDeclType type;
+
+		Variable(Token _name, VarDeclType _type) {
+			name = _name;
+			type = _type;
+		}
+		Variable(Token _name) {
+			name = _name;
+			type = VarDeclType::LOCAL;
+		}
+		Variable() {
+			type = VarDeclType::LOCAL;
+			name = Token();
+		}
+	};
+
 	#pragma region Expressions
 
 	class AssignmentExpr : public ASTNode {
@@ -353,11 +377,11 @@ namespace AST {
 
 	class FuncLiteral : public ASTNode {
 	public:
-		vector<Token> args;
+		vector<Variable> args;
 		int arity;
 		ASTNodePtr body;
 
-		FuncLiteral(vector<Token> _args, ASTNodePtr _body) {
+		FuncLiteral(vector<Variable> _args, ASTNodePtr _body) {
 			args = _args;
 			arity = _args.size();
 			body = _body;
@@ -418,9 +442,9 @@ namespace AST {
 	class VarDecl : public ASTDecl {
 	public:
 		ASTNodePtr value;
-		Token name;
+		Variable name;
 
-		VarDecl(Token _name, ASTNodePtr _value) {
+		VarDecl(Variable _name, ASTNodePtr _value) {
 			name = _name;
 			value = _value;
 			type = ASTType::VAR;
@@ -428,7 +452,7 @@ namespace AST {
 		void accept(Visitor* vis) {
 			vis->visitVarDecl(this);
 		}
-		Token getName() { return name; }
+		Token getName() { return name.name; }
 	};
 
 	class BlockStmt : public ASTNode {
@@ -569,12 +593,12 @@ namespace AST {
 
 	class FuncDecl : public ASTDecl {
 	public:
-		vector<Token> args;
+		vector<Variable> args;
 		uInt arity;
 		ASTNodePtr body;
 		Token name;
 
-		FuncDecl(Token _name, vector<Token> _args, ASTNodePtr _body) {
+		FuncDecl(Token _name, vector<Variable> _args, ASTNodePtr _body) {
 			name = _name;
 			args = _args;
 			arity = _args.size();
