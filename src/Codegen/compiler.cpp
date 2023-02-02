@@ -651,21 +651,10 @@ void Compiler::visitBreakStmt(AST::BreakStmt* stmt) {
 	//we pop locals until the first local that is in the same scope as the loop
 	//meaning it was declared outside of the loop body and shouldn't be popped
 	//break is a special case because it's used in both loops and switches, so we find either in the scope we're check, we bail
-	if (current->hasCapturedLocals) {
-		for (int i = current->localCount - 1; i >= 0; i--) {
-			Local& local = current->locals[i];
-			if (local.depth != -1 && (CHECK_SCOPE_FOR_LOOP || CHECK_SCOPE_FOR_SWITCH)) break;
-
-			if (local.isCaptured) emitByte(+OpCode::CLOSE_UPVALUE);
-			else emitByte(+OpCode::POP);
-		}
-	}
-	else {
-		for (int i = current->localCount - 1; i >= 0; i--) {
-			Local& local = current->locals[i];
-			if (local.depth != -1 && (CHECK_SCOPE_FOR_LOOP || CHECK_SCOPE_FOR_SWITCH)) break;
-			toPop++;
-		}
+	for (int i = current->localCount - 1; i >= 0; i--) {
+		Local& local = current->locals[i];
+		if (local.depth != -1 && (CHECK_SCOPE_FOR_LOOP || CHECK_SCOPE_FOR_SWITCH)) break;
+		toPop++;
 	}
 	if (toPop > UINT8_MAX) {
 		error(stmt->token, "To many variables to pop.");
@@ -685,21 +674,10 @@ void Compiler::visitContinueStmt(AST::ContinueStmt* stmt) {
 	//since the body of the loop is always in its own scope, and the scope before it is declared as having a loop,
 	//we pop locals until the first local that is in the same scope as the loop
 	//meaning it was declared outside of the loop body and shouldn't be popped
-	if (current->hasCapturedLocals) {
-		for (int i = current->localCount - 1; i >= 0; i--) {
-			Local& local = current->locals[i];
-			if (local.depth != -1 && CHECK_SCOPE_FOR_LOOP) break;
-
-			if (local.isCaptured) emitByte(+OpCode::CLOSE_UPVALUE);
-			else emitByte(+OpCode::POP);
-		}
-	}
-	else {
-		for (int i = current->localCount - 1; i >= 0; i--) {
-			Local& local = current->locals[i];
-			if (local.depth != -1 && CHECK_SCOPE_FOR_LOOP) break;
-			toPop++;
-		}
+	for (int i = current->localCount - 1; i >= 0; i--) {
+		Local& local = current->locals[i];
+		if (local.depth != -1 && CHECK_SCOPE_FOR_LOOP) break;
+		toPop++;
 	}
 	if (toPop > UINT8_MAX) {
 		error(stmt->token, "To many variables to pop.");
@@ -834,21 +812,10 @@ void Compiler::visitAdvanceStmt(AST::AdvanceStmt* stmt) {
 	int toPop = 0;
 	//advance can only be used inside a case of a switch statement, and when jumping, jumps to the next case
 	//case body is compiled in its own scope, so advance is always in a scope higher than it's switch statement
-	if (current->hasCapturedLocals) {
-		for (int i = current->localCount - 1; i >= 0; i--) {
-			Local& local = current->locals[i];
-			if (local.depth != -1 && CHECK_SCOPE_FOR_SWITCH) break;
-
-			if (local.isCaptured) emitByte(+OpCode::CLOSE_UPVALUE);
-			else emitByte(+OpCode::POP);
-		}
-	}
-	else {
-		for (int i = current->localCount - 1; i >= 0; i--) {
-			Local& local = current->locals[i];
-			if (local.depth != -1 && CHECK_SCOPE_FOR_SWITCH) break;
-			toPop++;
-		}
+	for (int i = current->localCount - 1; i >= 0; i--) {
+		Local& local = current->locals[i];
+		if (local.depth != -1 && CHECK_SCOPE_FOR_SWITCH) break;
+		toPop++;
 	}
 	if (toPop > UINT8_MAX) {
 		error(stmt->token, "To many variables to pop.");
@@ -1090,20 +1057,11 @@ void Compiler::endScope() {
 	current->scopeDepth--;//first lower the scope, the check for every var that is deeper than the current scope
 	int toPop = 0;
 	while (current->localCount > 0 && current->locals[current->localCount - 1].depth > current->scopeDepth) {
-		if (!current->hasCapturedLocals) toPop++;
-		else {
-			if (current->locals[current->localCount - 1].isCaptured) {
-				emitByte(+OpCode::CLOSE_UPVALUE);
-			}
-			else {
-				emitByte(+OpCode::POP);
-			}
-		}
+		toPop++;
 		current->localCount--;
 	}
-	if (toPop > 0 && !current->hasCapturedLocals) {
-		if (toPop == 0) return;
-		else if (toPop == 1) {
+	if (toPop > 0) {
+		if (toPop == 1) {
 			emitByte(+OpCode::POP);
 			return;
 		}
