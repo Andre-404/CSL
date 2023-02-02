@@ -23,8 +23,6 @@ namespace object {
 
 	class ObjInstance;
 
-	class ObjThread;
-
 	class ObjFile;
 }
 
@@ -88,7 +86,6 @@ struct Value {
 	object::ObjClass* asClass();
 	object::ObjInstance* asInstance();
 	object::ObjBoundMethod* asBoundMethod();
-	object::ObjThread* asThread();
 	object::ObjFile* asFile();
 
 	void mark();

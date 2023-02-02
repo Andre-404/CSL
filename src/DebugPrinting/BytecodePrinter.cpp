@@ -216,8 +216,6 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 		return byteInstruction("OP GET UPVALUE", chunk, offset);
 	case +OpCode::SET_UPVALUE:
 		return byteInstruction("OP SET UPVALUE", chunk, offset);
-	case +OpCode::CLOSE_UPVALUE:
-		return simpleInstruction("OP CLOSE UPVALUE", offset);
 	case +OpCode::CREATE_ARRAY:
 		return byteInstruction("OP CREATE ARRAY", chunk, offset);
 	case +OpCode::GET:

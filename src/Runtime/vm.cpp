@@ -322,7 +322,6 @@ RuntimeResult runtime::VM::execute() {
 		std::cout << "\n";
 		disassembleInstruction(&frame->closure->func->body, frames[frameCount - 1].ip);
 #endif
-		if (memory::gc.shouldCompact) memory::gc.collect(this);
 		uint8_t instruction;
 		switch (instruction = readByte()) {
 
@@ -675,12 +674,6 @@ RuntimeResult runtime::VM::execute() {
 		case +OpCode::SET_UPVALUE: {
 			uint8_t slot = readByte();
 			*frame->closure->upvals[slot]->location = peek(0);
-			break;
-		}
-
-		case +OpCode::CLOSE_UPVALUE: {
-			closeUpvalues(stackTop - 1);
-			pop();
 			break;
 		}
 #pragma endregion

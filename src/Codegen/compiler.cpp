@@ -115,7 +115,7 @@ void Compiler::visitConditionalExpr(AST::ConditionalExpr* expr) {
 	int elseJump = emitJump(+OpCode::JUMP);
 	patchJump(thenJump);
 	//only emit code if else branch exists, since its optional
-	if(expr->elseBranch) expr->elseBranch->accept(this);
+	if (expr->elseBranch) expr->elseBranch->accept(this);
 	patchJump(elseJump);
 }
 
@@ -146,19 +146,19 @@ void Compiler::visitBinaryExpr(AST::BinaryExpr* expr) {
 
 	uint8_t op = 0;
 	switch (expr->op.type) {
-	//take in double or string(in case of add)
+		//take in double or string(in case of add)
 	case TokenType::PLUS:	op = +OpCode::ADD; break;
 	case TokenType::MINUS:	op = +OpCode::SUBTRACT; break;
 	case TokenType::SLASH:	op = +OpCode::DIVIDE; break;
 	case TokenType::STAR:	op = +OpCode::MULTIPLY; break;
-	//for these operators, a check is preformed to confirm both numbers are integers, not decimals
+		//for these operators, a check is preformed to confirm both numbers are integers, not decimals
 	case TokenType::PERCENTAGE:		op = +OpCode::MOD; break;
 	case TokenType::BITSHIFT_LEFT:	op = +OpCode::BITSHIFT_LEFT; break;
 	case TokenType::BITSHIFT_RIGHT:	op = +OpCode::BITSHIFT_RIGHT; break;
 	case TokenType::BITWISE_AND:	op = +OpCode::BITWISE_AND; break;
 	case TokenType::BITWISE_OR:		op = +OpCode::BITWISE_OR; break;
 	case TokenType::BITWISE_XOR:	op = +OpCode::BITWISE_XOR; break;
-	//these return bools and use an epsilon value when comparing
+		//these return bools and use an epsilon value when comparing
 	case TokenType::EQUAL_EQUAL:	 op = +OpCode::EQUAL; break;
 	case TokenType::BANG_EQUAL:		 op = +OpCode::NOT_EQUAL; break;
 	case TokenType::GREATER:		 op = +OpCode::GREATER; break;
@@ -255,22 +255,22 @@ void Compiler::visitCallExpr(AST::CallExpr* expr) {
 		arg->accept(this);
 	}
 	emitBytes(+OpCode::CALL, expr->args.size());
-	
+
 }
 
 void Compiler::visitFieldAccessExpr(AST::FieldAccessExpr* expr) {
 	updateLine(expr->accessor);
 
 	expr->callee->accept(this);
-	
+
 	switch (expr->accessor.type) {
-	//array[index] or object["propertyAsString"]
+		//array[index] or object["propertyAsString"]
 	case TokenType::LEFT_BRACKET: {
 		expr->field->accept(this);
 		emitByte(+OpCode::GET);
 		break;
 	}
-	//object.property, we can optimize since we know the string in advance
+								//object.property, we can optimize since we know the string in advance
 	case TokenType::DOT:
 		uInt16 name = identifierConstant(dynamic_cast<AST::LiteralExpr*>(expr->field.get())->token);
 		if (name <= SHORT_CONSTANT_LIMIT) emitBytes(+OpCode::GET_PROPERTY, name);
@@ -362,7 +362,8 @@ void Compiler::visitLiteralExpr(AST::LiteralExpr* expr) {
 	}
 }
 
-void Compiler::visitFuncLiteral(AST::FuncLiteral* expr) {;
+void Compiler::visitFuncLiteral(AST::FuncLiteral* expr) {
+	;
 	//creating a new compilerInfo sets us up with a clean slate for writing bytecode, the enclosing functions info
 	//is stored in current->enclosing
 	current = new CurrentChunkInfo(current, FuncType::TYPE_FUNC);
@@ -402,7 +403,7 @@ void Compiler::visitFuncLiteral(AST::FuncLiteral* expr) {;
 }
 
 void Compiler::visitModuleAccessExpr(AST::ModuleAccessExpr* expr) {
-	
+
 	uInt16 arg = resolveModuleVariable(expr->moduleName, expr->ident);
 
 	if (arg > SHORT_CONSTANT_LIMIT) {
@@ -461,7 +462,7 @@ void Compiler::visitFuncDecl(AST::FuncDecl* decl) {
 	current->func->name = ObjString::createString((char*)str.c_str(), str.length(), internedStrings);
 	//have to do this here since endFuncDecl() deletes the compilerInfo
 	std::array<Upvalue, UPVAL_MAX> upvals = current->upvalues;
-	
+
 	ObjFunc* func = endFuncDecl();
 
 	if (func->upvalueCount == 0) {
@@ -486,7 +487,7 @@ void Compiler::visitFuncDecl(AST::FuncDecl* decl) {
 void Compiler::visitClassDecl(AST::ClassDecl* decl) {
 	Token className = decl->getName();
 	uInt16 constant = parseVar(className);
-	
+
 	//name of the class is different than the name of the variable containing the class(global vars get a prefix)
 	emitByteAnd16Bit(+OpCode::CLASS, identifierConstant(className));
 
@@ -499,7 +500,7 @@ void Compiler::visitClassDecl(AST::ClassDecl* decl) {
 	if (decl->inherits) {
 		//if the class inherits from some other class, load the parent class and declare 'super' as a local variable which holds the superclass
 		//decl->inheritedClass is always either a LiteralExpr with an identifier token or a ModuleAccessExpr
-		
+
 		//if a class wants to inherit from a class in another file of the same name, the import has to use an alias, otherwise we get
 		//undefined behavior (eg. class a : a)
 		if (decl->inheritedClass->type == AST::ASTType::LITERAL) {
@@ -523,7 +524,7 @@ void Compiler::visitClassDecl(AST::ClassDecl* decl) {
 		//the class that 'this' refers to is captured as a upvalue inside of methods
 		if (!decl->inherits) namedVar(className, false);
 	}
-	
+
 	for (AST::ASTNodePtr _method : decl->methods) {
 		method(dynamic_cast<AST::FuncDecl*>(_method.get()), className);
 	}
@@ -706,25 +707,25 @@ void Compiler::visitSwitchStmt(AST::SwitchStmt* stmt) {
 			//create constant and add it to the constants array
 			try {
 				switch (constant.type) {
-					case TokenType::NUMBER: {
-						double num = std::stod(constant.getLexeme());//doing this becuase stod doesn't accept string_view
-						val = Value(num);
-						break;
-					}
-					case TokenType::TRUE: val = Value(true); break;
-					case TokenType::FALSE: val = Value(false); break;
-					case TokenType::NIL: val = Value::nil(); break;
-					case TokenType::STRING: {
-						//this gets rid of quotes, "Hello world"->Hello world
-						string temp = constant.getLexeme();
-						temp.erase(0, 1);
-						temp.erase(temp.size() - 1, 1);
-						val = Value(ObjString::createString((char*)temp.c_str(), temp.length(), internedStrings));
-						break;
-					}
-					default: {
-						error(constant, "Case expression can only be a constant.");
-					}
+				case TokenType::NUMBER: {
+					double num = std::stod(constant.getLexeme());//doing this becuase stod doesn't accept string_view
+					val = Value(num);
+					break;
+				}
+				case TokenType::TRUE: val = Value(true); break;
+				case TokenType::FALSE: val = Value(false); break;
+				case TokenType::NIL: val = Value::nil(); break;
+				case TokenType::STRING: {
+					//this gets rid of quotes, "Hello world"->Hello world
+					string temp = constant.getLexeme();
+					temp.erase(0, 1);
+					temp.erase(temp.size() - 1, 1);
+					val = Value(ObjString::createString((char*)temp.c_str(), temp.length(), internedStrings));
+					break;
+				}
+				default: {
+					error(constant, "Case expression can only be a constant.");
+				}
 				}
 				constants.push_back(makeConstant(val));
 				if (constants.back() > SHORT_CONSTANT_LIMIT) isLong = true;
@@ -751,7 +752,7 @@ void Compiler::visitSwitchStmt(AST::SwitchStmt* stmt) {
 			emitByte(constant);
 		}
 	}
-	
+
 	for (int i = 0; i < constants.size(); i++) {
 		jumps.push_back(getChunk()->code.size());
 		emit16Bit(0xffff);
@@ -1230,7 +1231,7 @@ Chunk* Compiler::getChunk() {
 	return &current->func->body;
 }
 
-void Compiler::error(string message){
+void Compiler::error(string message) {
 	errorHandler::addSystemError("System compile error [line " + std::to_string(current->line) + "] in '" + curUnit->file->name + "': \n" + message + "\n");
 	throw CompilerException();
 }
@@ -1246,9 +1247,9 @@ ObjFunc* Compiler::endFuncDecl() {
 	ObjFunc* func = current->func;
 	//for the last line of code
 	func->body.lines[func->body.lines.size() - 1].end = func->body.code.size();
-	#ifdef COMPILER_DEBUG
+#ifdef COMPILER_DEBUG
 	current->func->body.disassemble(current->func->name == nullptr ? "script" : string(current->func->name->getString()));
-	#endif
+#endif
 	CurrentChunkInfo* temp = current->enclosing;
 	delete current;
 	current = temp;
@@ -1267,7 +1268,7 @@ uInt Compiler::checkSymbol(Token symbol) {
 	for (Dependency dep : curUnit->deps) {
 		if (dep.alias.type == TokenType::NONE) {
 			for (Token token : dep.module->exports) {
-				
+
 				if (token.compare(symbol)) {
 					//if the correct symbol is found, find the index of the global variable inside of globals array
 					int globalIndex = 0;
@@ -1343,7 +1344,7 @@ uInt Compiler::resolveModuleVariable(Token moduleAlias, Token variable) {
 			index++;
 		}
 	}
-	
+
 	error(variable, std::format("Module {} doesn't export this symbol.", depPtr->alias.getLexeme()));
 }
 #pragma endregion

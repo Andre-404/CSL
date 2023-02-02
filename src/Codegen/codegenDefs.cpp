@@ -135,9 +135,6 @@ object::ObjInstance* Value::asInstance() {
 object::ObjBoundMethod* Value::asBoundMethod() {
 	return dynamic_cast<ObjBoundMethod*>(get<object::Obj*>(value));
 }
-object::ObjThread* Value::asThread() {
-	return dynamic_cast<ObjThread*>(get<object::Obj*>(value));
-}
 object::ObjFile* Value::asFile() {
 	return dynamic_cast<ObjFile*>(get<object::Obj*>(value));
 }
