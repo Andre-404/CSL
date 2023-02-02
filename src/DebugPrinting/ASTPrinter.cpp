@@ -64,12 +64,12 @@ void ASTPrinter::visitGroupingExpr(GroupingExpr* expr) {
 	cout << ")";
 }
 
-void ASTPrinter::visitAwaitExpr(AwaitExpr* expr) {
+void ASTPrinter::visitThreadExpr(ThreadExpr* expr) {
 	cout << "await ";
 	expr->expr->accept(this);
 }
 
-void ASTPrinter::visitAsyncExpr(AsyncExpr* expr) {
+void ASTPrinter::visitJoinExpr(JoinExpr* expr) {
 	cout << "async";
 	expr->expr->accept(this);
 }
@@ -169,6 +169,12 @@ void ASTPrinter::visitBlockStmt(BlockStmt* stmt) {
 		line->accept(this);
 	}
 	cout << "}" << endl;
+}
+
+void ASTPrinter::visitLockStmt(LockStmt* stmt) {
+	cout << "lock ";
+	stmt->expr->accept(this);
+	stmt->block->accept(this);
 }
 
 void ASTPrinter::visitIfStmt(IfStmt* stmt) {

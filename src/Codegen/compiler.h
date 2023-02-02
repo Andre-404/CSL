@@ -92,8 +92,8 @@ namespace compileCore {
 		void visitCallExpr(AST::CallExpr* expr);
 		void visitFieldAccessExpr(AST::FieldAccessExpr* expr);
 		void visitGroupingExpr(AST::GroupingExpr* expr);
-		void visitAwaitExpr(AST::AwaitExpr* expr);
-		void visitAsyncExpr(AST::AsyncExpr* expr);
+		void visitThreadExpr(AST::ThreadExpr* expr);
+		void visitJoinExpr(AST::JoinExpr* expr);
 		void visitArrayLiteralExpr(AST::ArrayLiteralExpr* expr);
 		void visitStructLiteralExpr(AST::StructLiteral* expr);
 		void visitLiteralExpr(AST::LiteralExpr* expr);
@@ -108,6 +108,7 @@ namespace compileCore {
 		void visitPrintStmt(AST::PrintStmt* stmt);
 		void visitExprStmt(AST::ExprStmt* stmt);
 		void visitBlockStmt(AST::BlockStmt* stmt);
+		void visitLockStmt(AST::LockStmt* stmt);
 		void visitIfStmt(AST::IfStmt* stmt);
 		void visitWhileStmt(AST::WhileStmt* stmt);
 		void visitForStmt(AST::ForStmt* stmt);

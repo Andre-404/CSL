@@ -178,8 +178,15 @@ enum class OpCode {
 	//Functions
 	CALL,//arg: 8-bit argument count
 	RETURN,
+	//TODO: MAKE SURE THAT CLOSURES CONVERT LOCALS TO UPVALUES
 	CLOSURE,//arg: 8-bit ObjFunction constant index
 	CLOSURE_LONG,//arg: 16-bit ObjFunction constant index
+
+	//Multithreading
+	CREATE_THREAD,//arg: 8-bit arg count
+	EXCLUSIVE_LOCK,
+	SHARED_LOCK,
+	JOIN,
 
 	//OOP
 	CLASS,//arg: 16-bit ObjString constant index

@@ -414,11 +414,11 @@ void Compiler::visitModuleAccessExpr(AST::ModuleAccessExpr* expr) {
 }
 
 //TODO: do this when implementing multithreading
-void Compiler::visitAwaitExpr(AST::AwaitExpr* expr) {
+void Compiler::visitThreadExpr(AST::ThreadExpr* expr) {
 
 }
 
-void Compiler::visitAsyncExpr(AST::AsyncExpr* expr) {
+void Compiler::visitJoinExpr(AST::JoinExpr* expr) {
 
 }
 
@@ -476,7 +476,7 @@ void Compiler::visitFuncDecl(AST::FuncDecl* decl) {
 	if (constant <= SHORT_CONSTANT_LIMIT) emitBytes(+OpCode::CLOSURE, constant);
 	else emitByteAnd16Bit(+OpCode::CLOSURE_LONG, constant);
 	//if this function does capture any upvalues, we emit the code for getting them, 
-	//when we execute "OP_CLOSURE" we will check to see how many upvalues the function captures by going directly to the func->upvalueCount
+	//when "OP_CLOSURE" is executed it will check to see how many upvalues the function captures by going directly to the func->upvalueCount
 	for (int i = 0; i < func->upvalueCount; i++) {
 		emitByte(upvals[i].isLocal ? 1 : 0);
 		emitByte(upvals[i].index);

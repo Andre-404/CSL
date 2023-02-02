@@ -28,8 +28,10 @@ std::unordered_map<string, TokenType> keywordToTokenType = {
 	{"this", TokenType::THIS},
 	{"true", TokenType::TRUE},
 	{"as", TokenType::AS},
-	{"await", TokenType::AWAIT},
-	{"async", TokenType::ASYNC},
+	{"join", TokenType::JOIN},
+	{"thread", TokenType::THREAD},
+	{"shared_lock", TokenType::SHARED_LOCK},
+	{"exclusive_lock", TokenType::EXCLUSIVE_LOCK},
 };
 
 using namespace preprocessing;
