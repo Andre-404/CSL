@@ -170,7 +170,6 @@ enum class OpCode {
 	SET_LOCAL,//arg: 8-bit stack position
 	GET_UPVALUE,//arg: 8-bit upval position
 	SET_UPVALUE,//arg: 8-bit upval position
-	CLOSE_UPVALUE,
 	//Arrays
 	CREATE_ARRAY,//arg: 8-bit array size
 	//get and set is used by both arrays and instances/structs, since struct.field is just syntax sugar for struct["field"] that
