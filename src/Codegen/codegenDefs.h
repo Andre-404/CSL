@@ -1,5 +1,6 @@
 #pragma once
 #include "../DataStructures/gcArray.h"
+#include <variant>
 
 namespace object {
 	class Obj;
@@ -28,57 +29,47 @@ namespace object {
 }
 
 enum class ValueType {
-	NUM,
-	BOOL,
-	OBJ,
-	NIL
+	NUM = 0,
+	BOOL = 1,
+	OBJ = 2,
+	NIL = 3
 };
 
 struct Value {
-	ValueType type;
-	union {
-		double number;
-		bool boolean;
-		object::Obj* object;
-	} as;
+	std::variant<double, bool, object::Obj*> value;
+
 	Value() {
-		type = ValueType::NIL;
-		as.object = nullptr;
+		value = nullptr;
 	}
 
 	Value(double num) {
-		type = ValueType::NUM;
-		as.number = num;
+		value = num;
 	}
 
 	Value(bool _bool) {
-		type = ValueType::BOOL;
-		as.boolean = _bool;
+		value = _bool;
 	}
 
 	Value(object::Obj* _object) {
-		type = ValueType::OBJ;
-		as.object = _object;
+		value = _object;
 	}
-	
+
 	static Value nil() {
 		return Value();
 	}
 
-	bool equals(Value other);
+	bool operator== (const Value& other) const;
+	bool operator!= (const Value& other) const;
 
 	void print();
 
 	#pragma region Helpers
-	bool isBool() { return type == ValueType::BOOL; };
-	bool isNumber() { return type == ValueType::NUM; };
-	bool isNil() { return type == ValueType::NIL; };
-	bool isObj() { return type == ValueType::OBJ; };
+	bool isBool() { return std::holds_alternative<bool>(value); };
+	bool isNumber() { return std::holds_alternative<double>(value); };
+	bool isNil() { return std::holds_alternative<object::Obj*>(value) && get<object::Obj*>(value) == nullptr; };
+	bool isObj() { return std::holds_alternative<object::Obj*>(value) && get<object::Obj*>(value) != nullptr; };
 
-	bool asBool() { return as.boolean; }
-	double asNum() { return as.number; }
-	object::Obj* asObj() { return as.object; }
-
+	// Put everything in obj
 	bool isString();
 	bool isFunction();
 	bool isNativeFn();
@@ -143,7 +134,7 @@ enum class OpCode {
 	MOD,
 	BITSHIFT_LEFT,
 	BITSHIFT_RIGHT,
-	
+
 	LOAD_INT,//arg: 8-bit, interger smaller than 256 to load
 	//comparisons and equality
 	EQUAL,
@@ -239,11 +230,11 @@ struct codeLine {
 
 class Chunk {
 public:
-	ManagedArray<codeLine> lines;
-	ManagedArray<uint8_t> code;
-	ManagedArray<Value> constants;
+	vector<codeLine> lines;
+	vector<uint8_t> code;
+	vector<Value> constants;
 	Chunk();
-	void writeData(uint8_t opCode, uInt line, byte name);
+	void writeData(uint8_t opCode, uInt line, byte fileIndex);
 	codeLine getLine(uInt offset);
 	void disassemble(string name);
 	uInt addConstant(Value val);

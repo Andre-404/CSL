@@ -44,7 +44,7 @@ bool HashMap::get(ObjString* key, Value* val) {
 ObjString* HashMap::getKey(Value val) {
 	for (int i = 0; i < entries.size(); i++) {
 		Value& toCompare = entries[i].val;
-		if (val.equals(toCompare)) return entries[i].key;
+		if (val == toCompare) return entries[i].key;
 	}
 	return nullptr;
 }

@@ -7,20 +7,19 @@
 
 using namespace object;
 
-Chunk::Chunk() {
-}
+Chunk::Chunk() {}
 
 void Chunk::writeData(uint8_t opCode, uInt line, byte fileIndex) {
-	code.push(opCode);
+	code.push_back(opCode);
 	if (lines.size() == 0) {
-		lines.push(codeLine(line, fileIndex));
+		lines.push_back(codeLine(line, fileIndex));
 		return;
 	}
 	if (lines[lines.size() - 1].line == line) return;
 	//if we're on a new line, mark the end of the bytecode for this line
 	//when looking up the line of code for a particular OP we check if it's position in 'code' is less than .end of a line
 	lines[lines.size() - 1].end = code.size() - 1;
-	lines.push(codeLine(line, fileIndex));
+	lines.push_back(codeLine(line, fileIndex));
 }
 
 codeLine Chunk::getLine(uInt offset) {
@@ -45,121 +44,118 @@ void Chunk::disassemble(string name) {
 //returns index of the constant
 uInt Chunk::addConstant(Value val) {
 	for (uInt i = 0; i < constants.size(); i++) {
-		if (constants[i].equals(val)) return i;
+		if (constants[i] == val) return i;
 	}
 	uInt size = constants.size();
-	constants.push(val);
+	constants.push_back(val);
 	return size;
 }
 
-
-bool Value::equals(Value other) {
-	if (type != other.type) return false;
-	switch (type) {
-	case ValueType::NUM: return FLOAT_EQ(asNum(), other.asNum());
-	case ValueType::BOOL: return asBool() == other.asBool();
-	case ValueType::OBJ: return asObj() == other.asObj();
-	case ValueType::NIL: return true;
-	}
-}
-
-string valueToStr(Value* val) {
-	switch (val->type) {
-	case ValueType::BOOL:
-		return val->asBool() ? "true" : "false";
-		break;
-	case ValueType::NIL: return "nil"; break;
-	case ValueType::NUM: {
-		double num = val->asNum();
+string valueToStr(Value& val) {
+	switch (val.value.index()) {
+	case 0: {
+		double num = get<double>(val.value);
 		int prec = (num == static_cast<int>(num)) ? 0 : 5;
 		return std::to_string(num).substr(0, std::to_string(num).find(".") + prec);
-		break;
 	}
-	case ValueType::OBJ: return val->asObj()->toString();; break;
+	case 1:
+		return get<bool>(val.value) ? "true" : "false";
+	case 2: 
+		if (get<object::Obj*>(val.value) == nullptr) return "nil";
+		return get<object::Obj*>(val.value)->toString(); 
 	default:
 		std::cout << "Error printing object";
 		return "";
 	}
 }
 
+bool Value::operator== (const Value& other) const {
+	return value == other.value;
+}
+
+bool Value::operator!=(const Value& other) const
+{
+	return !(*this == other);
+}
+
 void Value::print() {
-	std::cout << valueToStr(this);
+	std::cout << valueToStr(*this);
 }
 
 bool Value::isString() {
-	return isObj() && asObj()->type == ObjType::STRING;
+	return isObj() && get<object::Obj*>(value)->type == ObjType::STRING;
 }
 bool Value::isFunction() {
-	return isObj() && asObj()->type == ObjType::FUNC;
+	return isObj() && get<object::Obj*>(value)->type == ObjType::FUNC;
 }
 bool Value::isNativeFn() {
-	return isObj() && asObj()->type == ObjType::NATIVE;
+	return isObj() && get<object::Obj*>(value)->type == ObjType::NATIVE;
 }
 bool Value::isArray() {
-	return isObj() && asObj()->type == ObjType::ARRAY;
+	return isObj() && get<object::Obj*>(value)->type == ObjType::ARRAY;
 }
 bool Value::isClosure() {
-	return isObj() && asObj()->type == ObjType::CLOSURE;
+	return isObj() && get<object::Obj*>(value)->type == ObjType::CLOSURE;
 }
 bool Value::isClass() {
-	return isObj() && asObj()->type == ObjType::CLASS;
+	return isObj() && get<object::Obj*>(value)->type == ObjType::CLASS;
 }
 bool Value::isInstance() {
-	return isObj() && asObj()->type == ObjType::INSTANCE;
+	return isObj() && get<object::Obj*>(value)->type == ObjType::INSTANCE;
 }
 bool Value::isBoundMethod() {
-	return isObj() && asObj()->type == ObjType::BOUND_METHOD;
+	return isObj() && get<object::Obj*>(value)->type == ObjType::BOUND_METHOD;
 }
 bool Value::isFile() {
-	return isObj() && asObj()->type == ObjType::FILE;
+	return isObj() && get<object::Obj*>(value)->type == ObjType::FILE;
 }
 
 object::ObjString* Value::asString() {
-	return dynamic_cast<ObjString*>(asObj());
+	return dynamic_cast<ObjString*>(get<object::Obj*>(value));
 }
+
 object::ObjFunc* Value::asFunction() {
-	return dynamic_cast<ObjFunc*>(asObj());
+	return dynamic_cast<ObjFunc*>(get<object::Obj*>(value));
 }
 object::ObjNativeFunc* Value::asNativeFn() {
-	return dynamic_cast<ObjNativeFunc*>(asObj());
+	return dynamic_cast<ObjNativeFunc*>(get<object::Obj*>(value));
 }
 object::ObjArray* Value::asArray() {
-	return dynamic_cast<ObjArray*>(asObj());
+	return dynamic_cast<ObjArray*>(get<object::Obj*>(value));
 }
 object::ObjClosure* Value::asClosure() {
-	return dynamic_cast<ObjClosure*>(asObj());
+	return dynamic_cast<ObjClosure*>(get<object::Obj*>(value));
 }
 object::ObjClass* Value::asClass() {
-	return dynamic_cast<ObjClass*>(asObj());
+	return dynamic_cast<ObjClass*>(get<object::Obj*>(value));
 }
 object::ObjInstance* Value::asInstance() {
-	return dynamic_cast<ObjInstance*>(asObj());
+	return dynamic_cast<ObjInstance*>(get<object::Obj*>(value));
 }
 object::ObjBoundMethod* Value::asBoundMethod() {
-	return dynamic_cast<ObjBoundMethod*>(asObj());
+	return dynamic_cast<ObjBoundMethod*>(get<object::Obj*>(value));
 }
 object::ObjThread* Value::asThread() {
-	return dynamic_cast<ObjThread*>(asObj());
+	return dynamic_cast<ObjThread*>(get<object::Obj*>(value));
 }
 object::ObjFile* Value::asFile() {
-	return dynamic_cast<ObjFile*>(asObj());
+	return dynamic_cast<ObjFile*>(get<object::Obj*>(value));
 }
 
 void Value::mark() {
-	if (isObj()) memory::gc.markObj(asObj());
+	if (isObj()) memory::gc.markObj(get<object::Obj*>(value));
 }
 
 void Value::updatePtr() {
-	if (isObj()) as.object = reinterpret_cast<Obj*>(as.object->moveTo);
+	if (isObj()) value = reinterpret_cast<Obj*>(get<object::Obj*>(value)->moveTo);
 }
 
 string Value::typeToStr() {
-	switch (type) {
-	case ValueType::NIL: return "nil";
-	case ValueType::NUM: return "number";
-	case ValueType::BOOL: return "bool";
-	case ValueType::OBJ: {
-		object::Obj* temp = asObj();
+	switch (value.index()) {
+	case 0: return "number";
+	case 1: return "bool";
+	case 2:
+		object::Obj* temp = get<object::Obj*>(value);
 		switch (temp->type) {
 		case object::ObjType::ARRAY: return "array";
 		case object::ObjType::BOUND_METHOD: return "method";
@@ -171,7 +167,6 @@ string Value::typeToStr() {
 		case object::ObjType::STRING: return "string";
 		case object::ObjType::UPVALUE: return "upvalue";
 		}
-	}
 	}
 	return "error, couldn't determine type of value";
 }

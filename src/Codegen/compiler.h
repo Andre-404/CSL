@@ -81,7 +81,7 @@ namespace compileCore {
 		Compiler(vector<CSLModule*>& units);
 		Chunk* getChunk();
 		object::ObjFunc* endFuncDecl();
-		ManagedArray<Globalvar> globals;
+		vector<Globalvar> globals;
 
 		#pragma region Visitor pattern
 		void visitAssignmentExpr(AST::AssignmentExpr* expr);

@@ -51,7 +51,7 @@ Compiler::Compiler(vector<CSLModule*>& _units) {
 			string tmp = token.getLexeme();
 			char* ptr = new char[tmp.size() + 1];
 			memcpy(ptr, tmp.c_str(), tmp.size() + 1);
-			globals.push(Globalvar(ptr, Value::nil()));
+			globals.push_back(Globalvar(ptr, Value::nil()));
 		}
 		for (int i = 0; i < unit->stmts.size(); i++) {
 			//doing this here so that even if a error is detected, we go on and possibly catch other(valid) errors

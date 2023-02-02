@@ -110,9 +110,9 @@ void ObjFunc::mark() {
 		Value& val = body.constants[i];
 		val.mark();
 	}
-	body.constants.mark();
-	body.code.mark();
-	body.lines.mark();
+	//body.constants.mark();
+	//body.code.mark();
+	//body.lines.mark();
 }
 
 void ObjFunc::updateInternalPointers() {
@@ -121,9 +121,9 @@ void ObjFunc::updateInternalPointers() {
 	for (int i = 0; i < size; i++) {
 		body.constants[i].updatePtr();
 	}
-	body.constants.updateInternalPtr();
-	body.code.updateInternalPtr();
-	body.lines.updateInternalPtr();
+	//body.constants.updateInternalPtr();
+	//body.code.updateInternalPtr();
+	//body.lines.updateInternalPtr();
 }
 
 string ObjFunc::toString() {
