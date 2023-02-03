@@ -2,6 +2,8 @@
 #include "../MemoryManagment/garbageCollector.h"
 #include "../ErrorHandling/errorHandler.h"
 #include <unordered_set>
+#include <iostream>
+#include <format>
 
 using namespace compileCore;
 using namespace object;
@@ -342,7 +344,7 @@ void Compiler::visitLiteralExpr(AST::LiteralExpr* expr) {
 		string temp = expr->token.getLexeme();
 		temp.erase(0, 1);
 		temp.erase(temp.size() - 1, 1);
-		emitConstant(Value(ObjString::createString((char*)temp.c_str(), temp.length(), internedStrings)));
+		emitConstant(Value(new ObjString(temp)));
 		break;
 	}
 
@@ -363,7 +365,6 @@ void Compiler::visitLiteralExpr(AST::LiteralExpr* expr) {
 }
 
 void Compiler::visitFuncLiteral(AST::FuncLiteral* expr) {
-	;
 	//creating a new compilerInfo sets us up with a clean slate for writing bytecode, the enclosing functions info
 	//is stored in current->enclosing
 	current = new CurrentChunkInfo(current, FuncType::TYPE_FUNC);
@@ -378,8 +379,7 @@ void Compiler::visitFuncLiteral(AST::FuncLiteral* expr) {
 	}
 	expr->body->accept(this);
 	current->func->arity = expr->args.size();
-	char str[] = "Anonymous function";
-	current->func->name = ObjString::createString(str, strlen(str), internedStrings);
+	current->func->name = "Anonymous function";
 	//have to do this here since endFuncDecl() deletes the compilerInfo
 	std::array<Upvalue, UPVAL_MAX> upvals = current->upvalues;
 	ObjFunc* func = endFuncDecl();
@@ -413,13 +413,19 @@ void Compiler::visitModuleAccessExpr(AST::ModuleAccessExpr* expr) {
 	emitBytes(+OpCode::GET_GLOBAL, arg);
 }
 
-//TODO: do this when implementing multithreading
 void Compiler::visitThreadExpr(AST::ThreadExpr* expr) {
-
+	updateLine(expr->token);
+	expr->callee->accept(this);
+	for (AST::ASTNodePtr arg : expr->args) {
+		arg->accept(this);
+	}
+	emitBytes(+OpCode::CREATE_THREAD, expr->args.size());
 }
 
 void Compiler::visitJoinExpr(AST::JoinExpr* expr) {
-
+	updateLine(expr->token);
+	expr->expr->accept(this);
+	emitByte(+OpCode::JOIN);
 }
 
 
@@ -457,9 +463,7 @@ void Compiler::visitFuncDecl(AST::FuncDecl* decl) {
 	}
 	decl->body->accept(this);
 	current->func->arity = decl->args.size();
-	//could get away with using string instead of objString?
-	string str = decl->getName().getLexeme();
-	current->func->name = ObjString::createString((char*)str.c_str(), str.length(), internedStrings);
+	current->func->name = decl->getName().getLexeme();
 	//have to do this here since endFuncDecl() deletes the compilerInfo
 	std::array<Upvalue, UPVAL_MAX> upvals = current->upvalues;
 
@@ -720,7 +724,7 @@ void Compiler::visitSwitchStmt(AST::SwitchStmt* stmt) {
 					string temp = constant.getLexeme();
 					temp.erase(0, 1);
 					temp.erase(temp.size() - 1, 1);
-					val = Value(ObjString::createString((char*)temp.c_str(), temp.length(), internedStrings));
+					val = Value(new ObjString(temp));
 					break;
 				}
 				default: {
@@ -955,7 +959,7 @@ void Compiler::patchScopeJumps(ScopeJumpType type) {
 uInt16 Compiler::identifierConstant(Token name) {
 	updateLine(name);
 	string temp = name.getLexeme();
-	return makeConstant(Value(ObjString::createString((char*)temp.c_str(), temp.length(), internedStrings)));
+	return makeConstant(Value(new ObjString(temp)));
 }
 
 //if this is a local var, mark it as ready and then bail out, otherwise emit code to add the variable to the global table
@@ -1159,8 +1163,7 @@ void Compiler::method(AST::FuncDecl* _method, Token className) {
 	_method->body->accept(this);
 	current->func->arity = _method->arity;
 
-	string str = _method->getName().getLexeme();
-	current->func->name = ObjString::createString((char*)str.c_str(), str.length(), internedStrings);
+	current->func->name = _method->getName().getLexeme();
 	//have to do this here since endFuncDecl() deletes the compilerInfo
 	std::array<Upvalue, UPVAL_MAX> upvals = current->upvalues;
 
@@ -1248,7 +1251,7 @@ ObjFunc* Compiler::endFuncDecl() {
 	//for the last line of code
 	func->body.lines[func->body.lines.size() - 1].end = func->body.code.size();
 #ifdef COMPILER_DEBUG
-	current->func->body.disassemble(current->func->name == nullptr ? "script" : string(current->func->name->getString()));
+	current->func->body.disassemble(current->func->name.length() == 0 ? "script" : current->func->name);
 #endif
 	CurrentChunkInfo* temp = current->enclosing;
 	delete current;

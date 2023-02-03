@@ -1,7 +1,7 @@
 #pragma once
-#include "heapObject.h"
-#include <memory>
+#include "../common.h"
 #include <mutex>
+#include <atomic>
 
 namespace runtime {
 	class VM;
@@ -11,40 +11,34 @@ namespace compileCore {
 	class Compiler;
 }
 
+namespace object {
+	class Obj;
+}
+
 
 //Lisp style mark compact garbage collector with additional non moving allocations
 namespace memory {
 	class GarbageCollector {
 	public:
-		//used when allocating memory, only 1 thread may allocate memory at a time
-		std::mutex mtx;
 		void* alloc(uInt64 size);
 		void collect(runtime::VM* vm);
 		void collect(compileCore::Compiler* compiler);
-		void markObj(HeapObject* obj);
 		GarbageCollector();
+		void markObj(object::Obj* object);
 	private:
-		std::unique_ptr<byte> memoryBlock;
-		byte* heapTop;
-		uInt64 memoryBlockSize;
-
-		bool shouldCompact;
-		//reset after each heap collection, calculated in 'markObj'
-		//used before 'computeCompactedAddress' to allocated a new heap
-		uInt64 shrinkedHeapSize;
+		std::atomic<bool> shouldCollect;
+		std::mutex allocMtx;
+		uInt64 heapSize;
+		uInt64 heapSizeLimit;
 		//static allocations that get transfered to heap at next 'collect'
-		vector<HeapObject*> tempAllocs;
+		vector<object::Obj*> objects;
 
-		vector<HeapObject*> markStack;
+		vector<object::Obj*> markStack;
 
 		void mark();
 		void markRoots(runtime::VM* vm);
 		void markRoots(compileCore::Compiler* compiler);
-		void computeCompactedAddress(byte* start);
-		void updatePtrs();
-		void updateRootPtrs(runtime::VM* vm);
-		void updateRootPtrs(compileCore::Compiler* compiler);
-		void compact(byte* start);
+		void sweep();
 	};
 
 	extern GarbageCollector gc;

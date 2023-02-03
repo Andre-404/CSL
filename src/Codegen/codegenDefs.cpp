@@ -4,6 +4,7 @@
 #include "../MemoryManagment/garbageCollector.h"
 #include "../DebugPrinting/BytecodePrinter.h"
 #include <format>
+#include <iostream>
 
 using namespace object;
 
@@ -109,11 +110,17 @@ bool Value::isBoundMethod() {
 bool Value::isFile() {
 	return isObj() && get<object::Obj*>(value)->type == ObjType::FILE;
 }
+bool Value::isMutex() {
+	return isObj() && get<object::Obj*>(value)->type == ObjType::MUTEX;
+}
+bool Value::isFuture() {
+	return isObj() && get<object::Obj*>(value)->type == ObjType::FUTURE;
+}
+
 
 object::ObjString* Value::asString() {
 	return dynamic_cast<ObjString*>(get<object::Obj*>(value));
 }
-
 object::ObjFunc* Value::asFunction() {
 	return dynamic_cast<ObjFunc*>(get<object::Obj*>(value));
 }
@@ -138,13 +145,15 @@ object::ObjBoundMethod* Value::asBoundMethod() {
 object::ObjFile* Value::asFile() {
 	return dynamic_cast<ObjFile*>(get<object::Obj*>(value));
 }
+object::ObjMutex* Value::asMutex() {
+	return dynamic_cast<ObjMutex*>(get<object::Obj*>(value));
+}
+object::ObjFuture* Value::asFuture() {
+	return dynamic_cast<ObjFuture*>(get<object::Obj*>(value));
+}
 
 void Value::mark() {
 	if (isObj()) memory::gc.markObj(get<object::Obj*>(value));
-}
-
-void Value::updatePtr() {
-	if (isObj()) value = reinterpret_cast<Obj*>(get<object::Obj*>(value)->moveTo);
 }
 
 string Value::typeToStr() {
@@ -156,7 +165,7 @@ string Value::typeToStr() {
 		switch (temp->type) {
 		case object::ObjType::ARRAY: return "array";
 		case object::ObjType::BOUND_METHOD: return "method";
-		case object::ObjType::CLASS: return "class " + string(asClass()->name->getString());
+		case object::ObjType::CLASS: return "class " + asClass()->name;
 		case object::ObjType::CLOSURE: return "function";
 		case object::ObjType::FUNC: return "function";
 		case object::ObjType::INSTANCE: return asInstance()->klass == nullptr ? "struct" : "instance";

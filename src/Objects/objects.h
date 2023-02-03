@@ -1,11 +1,11 @@
 #pragma once
-#include "../MemoryManagment/heapObject.h"
 #include "../Codegen/codegenDefs.h"
-#include "../DataStructures/hashMap.h"
-#include "../DataStructures/gcArray.h"
+#include "../MemoryManagment/garbageCollector.h"
+#include "../Includes/robin_hood.h"
 #include <fstream>
 #include <stdio.h>
 #include <shared_mutex>
+#include <future>
 
 namespace runtime {
 	class VM;
@@ -25,14 +25,23 @@ namespace object {
 		BOUND_METHOD,
 		FILE,
 		MUTEX,
-		PROMISE
+		FUTURE
 	};
 
-	class Obj : public memory::HeapObject{
+	class Obj{
 	public:
 		ObjType type;
+		bool marked;
 
 		virtual string toString() = 0;
+		virtual void trace() = 0;
+		virtual uInt64 getSize() = 0;
+		virtual ~Obj() = 0;
+
+		//this reroutes the new operator to take memory which the GC gives out
+		void* operator new(uInt64 size) {
+			return memory::gc.alloc(size);
+		}
 	};
 
 	//pointer to a native C++ function
@@ -42,70 +51,49 @@ namespace object {
 	//this is a header which is followed by the bytes of the string
 	class ObjString : public Obj {
 	public:
-		uInt64 size;
-		uInt64 hash;//only computed on string creation
+		string str;
 
-		ObjString(uInt64 length);
+		ObjString(string& str);
 		~ObjString() {}
-
-		static ObjString* createString(char* from, uInt64 length, HashMap& interned);
-
-		char* getString();
 
 		bool compare(ObjString* other);
 
 		bool compare(string other);
 
-		ObjString* concat(ObjString* other, HashMap& interned);
+		ObjString* concat(ObjString* other);
 
-		void move(byte* newAddress);
-		void updateInternalPointers();
-		uInt64 getSize();
-		void mark();
+		void trace();
 		string toString();
-		#ifdef GC_PRINT_HEAP
-		string gcDebugToStr() { return "ObjString"; }
-		#endif
+		uInt64 getSize();
 	};
 
 	class ObjArray : public Obj {
 	public:
-		ManagedArray<Value> values;
+		vector<Value> values;
 		//used to decrease marking speed, if an array is filled with eg. numbers there is no need to scan it for ptrs
 		uInt numOfHeapPtr;
 		ObjArray();
 		ObjArray(size_t size);
 		~ObjArray() {}
 
-		void move(byte* to);
-		size_t getSize() { return sizeof(ObjArray); }
-		void updateInternalPointers();
-		void mark();
+		void trace();
 		string toString();
-		#ifdef GC_PRINT_HEAP
-		string gcDebugToStr() { return "ObjArray"; }
-		#endif
+		uInt64 getSize();
 	};
 
 	class ObjFunc : public Obj {
 	public:
 		Chunk body;
-		//GC worries about the string
-		ObjString* name;
+		string name;
 		//function can have a maximum of 255 parameters
 		byte arity;
 		int upvalueCount;
 		ObjFunc();
 		~ObjFunc() {}
 
-		void move(byte* to);
-		size_t getSize() { return sizeof(ObjFunc); }
-		void updateInternalPointers();
-		void mark();
+		void trace();
 		string toString();
-		#ifdef GC_PRINT_HEAP
-		string gcDebugToStr() { return "ObjFunc"; }
-		#endif
+		uInt64 getSize();
 	};
 
 	class ObjNativeFunc : public Obj {
@@ -115,69 +103,46 @@ namespace object {
 		ObjNativeFunc(NativeFn _func, byte _arity);
 		~ObjNativeFunc() {}
 
-		void move(byte* to);
-		size_t getSize() { return sizeof(ObjNativeFunc); }
-		void updateInternalPointers();
-		void mark();
+		void trace();
 		string toString();
-		#ifdef GC_PRINT_HEAP
-		string gcDebugToStr() { return "ObjNativeFunc"; }
-		#endif
+		uInt64 getSize();
 	};
 
 	class ObjUpval : public Obj {
 	public:
-		//'location' pointes either to a stack of some ObjThread or to 'closed'
-		Value* location;
-		Value closed;
-		bool isOpen;
-		ObjUpval(Value* _location);
+		Value val;
+		ObjUpval(Value* _value);
 		~ObjUpval() {}
 
-		void move(byte* to);
-		size_t getSize() { return sizeof(ObjUpval); }
-		void updateInternalPointers();
-		void mark();
+		void trace();
 		string toString();
-		#ifdef GC_PRINT_HEAP
-		string gcDebugToStr() { return "ObjUpval"; }
-		#endif
+		uInt64 getSize();
 	};
 
 	//multiple closures with different upvalues can point to the same function
 	class ObjClosure : public Obj {
 	public:
 		ObjFunc* func;
-		ManagedArray<ObjUpval*> upvals;
+		vector<ObjUpval*> upvals;
 		ObjClosure(ObjFunc* _func);
 		~ObjClosure() {}
 
-		void move(byte* to);
-		size_t getSize() { return sizeof(ObjClosure); }
-		void updateInternalPointers();
-		void mark();
+		void trace();
 		string toString();
-		#ifdef GC_PRINT_HEAP
-		string gcDebugToStr() { return "ObjClosure"; }
-		#endif
+		uInt64 getSize();
 	};
 
 	//parent classes use copy down inheritance, meaning all methods of a superclass are copied into the hash map of this class
 	class ObjClass : public Obj {
 	public:
-		ObjString* name;
-		HashMap methods;
-		ObjClass(ObjString* _name);
+		string name;
+		robin_hood::unordered_node_map<string, Value> methods;
+		ObjClass(string _name);
 		~ObjClass() {}
 
-		void move(byte* to);
-		size_t getSize() { return sizeof(ObjClass); }
-		void updateInternalPointers();
-		void mark();
+		void trace();
 		string toString();
-		#ifdef GC_PRINT_HEAP
-		string gcDebugToStr() { return "ObjClass"; }
-		#endif
+		uInt64 getSize();
 	};
 
 	//method bound to a specific instance of a class
@@ -189,86 +154,58 @@ namespace object {
 		ObjBoundMethod(Value _receiver, ObjClosure* _method);
 		~ObjBoundMethod() {}
 
-		void move(byte* to);
-		size_t getSize() { return sizeof(ObjBoundMethod); }
-		void updateInternalPointers();
-		void mark();
+		void trace();
 		string toString();
-		#ifdef GC_PRINT_HEAP
-		string gcDebugToStr() { return "ObjBoundMethod"; }
-		#endif
+		uInt64 getSize();
 	};
 
 	//used for instances of classes and structs, if 'klass' is null then it's a struct
 	class ObjInstance : public Obj {
 	public:
 		ObjClass* klass;
-		HashMap fields;
+		robin_hood::unordered_map<string, Value> fields;
 		ObjInstance(ObjClass* _klass);
 		~ObjInstance() {};
 
-		void move(byte* to);
-		size_t getSize() { return sizeof(ObjInstance); }
-		void updateInternalPointers();
-		void mark();
+		void trace();
 		string toString();
-		#ifdef GC_PRINT_HEAP
-		string gcDebugToStr() { return "ObjInstance"; }
-		#endif
+		uInt64 getSize();
 	};
 
-	//using C-style file accessing since the reference to the file is a pointer rather than a file stream object
-	//this is done because stream objects can't be copied/moved, and all Obj objects are moved in memory on the managed heap
 	class ObjFile : public Obj {
 	public:
-		FILE* file;
-		ObjString* path;
+		std::fstream stream;
+		string path;
 
-		ObjFile(FILE* file);
+		ObjFile(string& path);
 		~ObjFile();
 
-		void move(byte* to);
-		size_t getSize() { return sizeof(ObjFile); }
-		void updateInternalPointers();
-		void mark();
+		void trace();
 		string toString();
-		#ifdef GC_PRINT_HEAP
-		string gcDebugToStr() { return "ObjFile"; }
-		#endif
+		uInt64 getSize();
 	};
 
 	//language representation of a mutex object
 	class ObjMutex : public Obj {
-		std::shared_mutex* mtx;
+		std::shared_mutex mtx;
 
 		ObjMutex();
 		~ObjMutex();
 
-		void move(byte* to);
-		size_t getSize() { return sizeof(ObjMutex); }
-		void updateInternalPointers();
-		void mark();
+		void trace();
 		string toString();
-		#ifdef GC_PRINT_HEAP
-		string gcDebugToStr() { return "ObjMutex"; }
-		#endif
+		uInt64 getSize();
 	};
 
 	//returned by "async func()" call, when the thread finishes it will populate returnVal and delete the vm
-	class ObjPromise : public Obj {
-		runtime::VM* vm;
-		Value returnVal;
+	class ObjFuture : public Obj {
+		std::future<Value> fut;
 
-		ObjPromise(runtime::VM* vm);
-		~ObjPromise();
+		ObjFuture(std::future<Value>& _fut);
+		~ObjFuture();
 
-		void move(byte* to);
-		size_t getSize() { return sizeof(ObjPromise); }
-		void updateInternalPointers();
-		void mark();
+		void trace();
 		string toString();
-		#ifdef GC_PRINT_HEAP
-		string gcDebugToStr() { return "ObjPromise"; }
-		#endif
+		uInt64 getSize();
 	};
 }

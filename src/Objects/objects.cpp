@@ -4,90 +4,34 @@
 using namespace object;
 using namespace memory;
 
-#define TOMBSTONE (ObjString*)0x000001
-
 #pragma region ObjString
-//FNV-1a hash
-static uInt64 hashString(char* str, uInt length) {
-	uInt64 hash = 14695981039346656037u;
-	for (int i = 0; i < length; i++) {
-		hash ^= (uint8_t)str[i];
-		hash *= 1099511628211;
-	}
-	return hash;
-}
-
-ObjString::ObjString(uInt64 length) {
-	size = length;
-	hash = 0;
+ObjString::ObjString(string& _str) {
+	str = _str;
 	type = ObjType::STRING;
-}
-
-ObjString* ObjString::createString(char* from, uInt64 length, HashMap& interned) {
-	//first we check if a interned string already exists, and if it does we return its pointer
-	uInt64 hash = hashString(from, length);
-	ObjString* possibleInterned = findInternedString(interned, from, length, hash);
-	if (possibleInterned != nullptr) return possibleInterned;
-	//+1 for null terminator
-	void* ptr = memory::__allocObj(sizeof(ObjString) + length + 1);
-	ObjString* str = new(ptr) ObjString(length);
-	memcpy(reinterpret_cast<byte*>(ptr) + sizeof(ObjString), from, length + 1);
-	str->hash = hash;
-	return str;
-}
-
-ObjString* createEmptyString(uInt64 length) {
-	//+1 for null terminator
-	void* ptr = memory::__allocObj(sizeof(ObjString) + length + 1);
-	ObjString* str = new(ptr) ObjString(length);
-	return str;
-}
-
-void ObjString::move(byte* newAddress) {
-	memmove(newAddress, this, getSize());
-}
-void ObjString::updateInternalPointers() {
-	//nothing to update
 }
 uInt64 ObjString::getSize() {
 	//+1 for terminator byte
-	return sizeof(ObjString) + size + 1;
+	return sizeof(ObjString);
 }
-void ObjString::mark() {
+void ObjString::trace() {
 	//nothing to mark
 }
 
 string ObjString::toString() {
-	return string(getString());
-}
-
-char* ObjString::getString() {
-	return reinterpret_cast<char*>(this) + sizeof(ObjString);
+	return str;
 }
 
 bool ObjString::compare(ObjString* other) {
-	if (other->size != size) return false;
-	return memcmp(getString(), other->getString(), size) == 0;
+	return (str.compare(other->str) == 0);
 }
 
 bool ObjString::compare(string other) {
-	if (other.size() != size) return false;
-	return memcmp(getString(), other.c_str(), size) == 0;
+	return (str.compare(other) == 0);
 }
 
-ObjString* ObjString::concat(ObjString* other, HashMap& interned) {
-	uInt64 len = other->size + size + 1;
-	ObjString* finalStr = createEmptyString(len);
-	memcpy(finalStr->getString(), getString(), size);
-	//+1 for null terminator
-	memcpy(finalStr->getString() + size, other->getString(), other->size + 1);
-	//compute hash from concated strings
-	finalStr->hash = hashString(finalStr->getString(), len - 1);
-	//a bit inefficient, but we need to have the whole string in order to check if it already exists or not
-	//this is faster than doing new char[] and then deleteing it if we find the interned string
-	ObjString* possibleInterned = findInternedString(interned, finalStr->getString(), finalStr->size, finalStr->hash);
-	if (possibleInterned != nullptr) return possibleInterned;
-	return finalStr;
+ObjString* ObjString::concat(ObjString* other) {
+	string temp = str + other->str;
+	return new ObjString(temp);
 }
 #pragma endregion
 
@@ -99,146 +43,98 @@ ObjFunc::ObjFunc() {
 	name = nullptr;
 }
 
-void ObjFunc::move(byte* to) {
-	memmove(to, this, sizeof(ObjFunc));
-}
-
-void ObjFunc::mark() {
-	gc.markObj(name);
+void ObjFunc::trace() {
 	int size = body.constants.size();
 	for (int i = 0; i < size; i++) {
 		Value& val = body.constants[i];
 		val.mark();
 	}
-	//body.constants.mark();
-	//body.code.mark();
-	//body.lines.mark();
-}
-
-void ObjFunc::updateInternalPointers() {
-	if (name != nullptr) name = (ObjString*)name->moveTo;
-	int size = body.constants.size();
-	for (int i = 0; i < size; i++) {
-		body.constants[i].updatePtr();
-	}
-	//body.constants.updateInternalPtr();
-	//body.code.updateInternalPtr();
-	//body.lines.updateInternalPtr();
 }
 
 string ObjFunc::toString() {
-	if (!name) {
-		return "<anonymous function>";
-	}
-	return string(name->getString());
+	return "<" + name + ">";
+}
+
+uInt64 ObjFunc::getSize() {
+	return sizeof(ObjFunc);
 }
 #pragma endregion
 
-#pragma region objNativeFn
+#pragma region ObjNativeFn
 ObjNativeFunc::ObjNativeFunc(NativeFn _func, byte _arity) {
 	func = _func;
 	arity = _arity;
 	type = ObjType::NATIVE;
 }
 
-void ObjNativeFunc::move(byte* to) {
-	memmove(to, this, sizeof(ObjNativeFunc));
-}
-
-void ObjNativeFunc::updateInternalPointers() {
-	//nothing
-}
-
-void ObjNativeFunc::mark() {
+void ObjNativeFunc::trace() {
 	//nothing
 }
 
 string ObjNativeFunc::toString() {
 	return "<native function>";
 }
+
+uInt64 ObjNativeFunc::getSize() {
+	return sizeof(ObjNativeFunc);
+}
 #pragma endregion
 
-#pragma region objClosure
+#pragma region ObjClosure
 ObjClosure::ObjClosure(ObjFunc* _func) {
 	func = _func;
-	upvals = ManagedArray<ObjUpval*>(func->upvalueCount, nullptr);
+	upvals = vector<ObjUpval*>(func->upvalueCount);
 	type = ObjType::CLOSURE;
 }
 
-void ObjClosure::move(byte* to) {
-	memmove(to, this, sizeof(ObjClosure));
-}
-
-void ObjClosure::updateInternalPointers() {
-	func = (ObjFunc*)func->moveTo;
-	long size = upvals.size();
-	//upvalues mark the values they refer to
-	for (int i = 0; i < size; i++) {
-		if (upvals[i] != nullptr) upvals[i] = reinterpret_cast<ObjUpval*>(upvals[i]->moveTo);
+void ObjClosure::trace() {
+	for (ObjUpval* upval : upvals) {
+		gc.markObj(upval);
 	}
-	upvals.updateInternalPtr();
-}
-
-void ObjClosure::mark() {
-	gc.markObj(func);
-	for (int i = 0; i < upvals.size(); i++) {
-		gc.markObj(upvals[i]);
-	}
-	upvals.mark();
 }
 
 string ObjClosure::toString() {
 	return func->toString();
 }
+
+uInt64 ObjClosure::getSize() {
+	return sizeof(ObjClosure);
+}
 #pragma endregion
 
-#pragma region objUpval
+#pragma region ObjUpval
 ObjUpval::ObjUpval(Value* slot) {
-	location = slot;//this will have to be updated when moving objUpval
-	closed = Value::nil();
-	isOpen = true;
+	val = Value::nil();
 	type = ObjType::UPVALUE;
 }
 
-void ObjUpval::move(byte* to) {
-	memmove(to, this, sizeof(ObjUpval));
-}
-
-//only updates if the upvalue is closed, no need to update an open upvalue since the value struct it points to gets
-//marked and updated by ObjThread
-void ObjUpval::mark() {
-	if (!isOpen) closed.mark();
-}
-
-void ObjUpval::updateInternalPointers() {
-	if(!isOpen) closed.updatePtr();
+void ObjUpval::trace() {
+	val.mark();
 }
 
 string ObjUpval::toString() {
-	return "upvalue";
+	return "<upvalue>";
+}
+
+uInt64 ObjUpval::getSize() {
+	return sizeof(ObjUpval);
 }
 #pragma endregion
 
-#pragma region objArray
+#pragma region ObjArray
 ObjArray::ObjArray() {
 	type = ObjType::ARRAY;
 	numOfHeapPtr = 0;
 }
-
 ObjArray::ObjArray(size_t size) {
-	values = ManagedArray<Value>(size);
+	values = vector<Value>(size);
 	type = ObjType::ARRAY;
-	moveTo = nullptr;
 	numOfHeapPtr = 0;
-}
-
-void ObjArray::move(byte* to) {
-	memmove(to, this, sizeof(ObjArray));
 }
 
 //small optimization: if numOfHeapPtrs is 0 then we don't even scan the array for objects
 //and if there are objects we only scan until we find all objects
-void ObjArray::mark() {
+void ObjArray::trace() {
 	int temp = 0;
 	int i = 0;
 	uInt64 arrSize = values.size();
@@ -246,147 +142,145 @@ void ObjArray::mark() {
 		values[i].mark();
 		if(values[i].isObj()) temp++;
 	}
-	values.mark();
-}
-
-void ObjArray::updateInternalPointers() {
-	int temp = 0;
-	int i = 0;
-	uInt64 arrSize = values.size();
-	while (i < arrSize && temp < numOfHeapPtr) {
-		values[i].updatePtr();
-		if (values[i].isObj()) temp++;
-	}
-	values.updateInternalPtr();
 }
 
 string ObjArray::toString() {
 	return "<array>";
 }
+
+uInt64 ObjArray::getSize() {
+	return sizeof(ObjArray);
+}
 #pragma endregion
 
-#pragma region objClass
-ObjClass::ObjClass(ObjString* _name) {
+#pragma region ObjClass
+ObjClass::ObjClass(string _name) {
 	name = _name;
 	type = ObjType::CLASS;
 }
 
-void ObjClass::move(byte* to) {
-	memmove(to, this, sizeof(ObjClass));
-}
-
-void ObjClass::mark() {
-	gc.markObj(name);
-	methods.mark();
-}
-
-void ObjClass::updateInternalPointers() {
-	name = reinterpret_cast<ObjString*>(name->moveTo);
-	methods.updateInternalPtrs();
+void ObjClass::trace() {
+	for (auto it = methods.begin(); it != methods.end(); it++) {
+		it->second.mark();
+	}
 }
 
 string ObjClass::toString() {
-	return "<class " + name->toString() + ">";
+	return "<class " + name + ">";
+}
+
+uInt64 ObjClass::getSize() {
+	return sizeof(ObjClass);
 }
 #pragma endregion
 
-#pragma region objInstance
+#pragma region ObjInstance
 ObjInstance::ObjInstance(ObjClass* _klass) {
 	klass = _klass;
 	type = ObjType::INSTANCE;
-	fields = HashMap();
 }
 
-void ObjInstance::move(byte* to) {
-	memmove(to, this, sizeof(ObjInstance));
-}
-
-void ObjInstance::mark() {
-	fields.mark();
+void ObjInstance::trace() {
+	for (auto it = fields.begin(); it != fields.end(); it++) {
+		it->second.mark();
+	}
 	gc.markObj(klass);
-}
-
-void ObjInstance::updateInternalPointers() {
-	//if klass is null then this is a struct and not an instance
-	if (klass != nullptr) klass = reinterpret_cast<ObjClass*>(klass->moveTo);
-	fields.updateInternalPtrs();
 }
 
 string ObjInstance::toString() {
 	if (!klass) return "<struct>";
-	return "<" + klass->name->toString() + " instance>";
+	return "<" + klass->name + " instance>";
+}
+
+uInt64 ObjInstance::getSize() {
+	return sizeof(ObjInstance);
 }
 #pragma endregion
 
-#pragma region objBoundMethod
+#pragma region ObjBoundMethod
 ObjBoundMethod::ObjBoundMethod(Value _receiver, ObjClosure* _method) {
 	receiver = _receiver;
 	method = _method;
 	type = ObjType::BOUND_METHOD;
 }
 
-void ObjBoundMethod::move(byte* to) {
-	memmove(to, this, sizeof(ObjBoundMethod));
-}
-
-void ObjBoundMethod::mark() {
+void ObjBoundMethod::trace() {
 	receiver.mark();
 	gc.markObj(method);
-}
-
-void ObjBoundMethod::updateInternalPointers() {
-	method = (ObjClosure*)method->moveTo;
-	receiver.updatePtr();
 }
 
 string ObjBoundMethod::toString() {
 	return method->func->toString();
 }
+
+uInt64 ObjBoundMethod::getSize() {
+	return sizeof(ObjBoundMethod);
+}
+#pragma endregion
+
+#pragma region ObjFile
+ObjFile::ObjFile(string& _path) {
+	path = _path;
+	stream.open(path);
+	type = ObjType::FILE;
+}
+ObjFile::~ObjFile() {
+	stream.close();
+}
+
+void ObjFile::trace() {
+	//nothing
+}
+
+string ObjFile::toString() {
+	return "<file>";
+}
+
+uInt64 ObjFile::getSize() {
+	return sizeof(ObjFile);
+}
 #pragma endregion
 
 #pragma region ObjMutex
 ObjMutex::ObjMutex() {
-	mtx = new std::shared_mutex;
 	type = ObjType::MUTEX;
 }
 ObjMutex::~ObjMutex() {
-	delete mtx;
+
 }
 
-void ObjMutex::move(byte* to) {
-	memmove(to, this, sizeof(ObjMutex));
-}
-void ObjMutex::updateInternalPointers() {
+void ObjMutex::trace() {
 	//nothing
 }
-void ObjMutex::mark() {
-	//nothing
-}
+
 string ObjMutex::toString() {
 	return "<mutex>";
 }
+
+uInt64 ObjMutex::getSize() {
+	return sizeof(ObjMutex);
+}
 #pragma endregion
 
-#pragma region ObjPromise
-ObjPromise::ObjPromise(runtime::VM* _vm) {
-	vm = _vm;
-	type = ObjType::PROMISE;
+#pragma region ObjFuture
+ObjFuture::ObjFuture(std::future<Value>& _fut) {
+	std::swap(fut, _fut);
+	type = ObjType::FUTURE;
 }
-ObjPromise::~ObjPromise() {
-	if(vm) delete vm;
+ObjFuture::~ObjFuture() {
+
 }
 
-void ObjPromise::move(byte* to) {
-	memmove(to, this, sizeof(ObjPromise));
-}
-void ObjPromise::updateInternalPointers() {
+void ObjFuture::trace() {
 	//nothing
 }
-void ObjPromise::mark() {
-	//nothing
+
+string ObjFuture::toString() {
+	return "<future>";
 }
-string ObjPromise::toString() {
-	return "<promise>";
+
+uInt64 ObjFuture::getSize() {
+	return sizeof(ObjFuture);
 }
 #pragma endregion
 

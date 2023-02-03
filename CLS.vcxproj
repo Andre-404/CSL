@@ -154,7 +154,6 @@
   <ItemGroup>
     <ClCompile Include="src\Codegen\codegenDefs.cpp" />
     <ClCompile Include="src\Codegen\compiler.cpp" />
-    <ClCompile Include="src\DataStructures\hashMap.cpp" />
     <ClCompile Include="src\DebugPrinting\BytecodePrinter.cpp" />
     <ClCompile Include="src\ErrorHandling\errorHandler.cpp" />
     <ClCompile Include="src\files.cpp" />
@@ -173,12 +172,10 @@
     <ClInclude Include="src\Codegen\codegenDefs.h" />
     <ClInclude Include="src\Codegen\compiler.h" />
     <ClInclude Include="src\common.h" />
-    <ClInclude Include="src\DataStructures\hashMap.h" />
     <ClInclude Include="src\DebugPrinting\BytecodePrinter.h" />
     <ClInclude Include="src\ErrorHandling\errorHandler.h" />
     <ClInclude Include="src\files.h" />
     <ClInclude Include="src\MemoryManagment\garbageCollector.h" />
-    <ClInclude Include="src\DataStructures\gcArray.h" />
     <ClInclude Include="src\MemoryManagment\heapObject.h" />
     <ClInclude Include="src\modulesDefs.h" />
     <ClInclude Include="src\Objects\objects.h" />

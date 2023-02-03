@@ -76,8 +76,6 @@ namespace compileCore {
 		ClassChunkInfo* currentClass;
 		//passed to the VM, used for highlighting runtime errors, managed by the VM
 		vector<File*> sourceFiles;
-		//interned strings
-		HashMap internedStrings;
 		Compiler(vector<CSLModule*>& units);
 		Chunk* getChunk();
 		object::ObjFunc* endFuncDecl();
@@ -108,7 +106,6 @@ namespace compileCore {
 		void visitPrintStmt(AST::PrintStmt* stmt);
 		void visitExprStmt(AST::ExprStmt* stmt);
 		void visitBlockStmt(AST::BlockStmt* stmt);
-		void visitLockStmt(AST::LockStmt* stmt);
 		void visitIfStmt(AST::IfStmt* stmt);
 		void visitWhileStmt(AST::WhileStmt* stmt);
 		void visitForStmt(AST::ForStmt* stmt);

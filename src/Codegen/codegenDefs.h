@@ -1,6 +1,6 @@
 #pragma once
-#include "../DataStructures/gcArray.h"
 #include <variant>
+#include "../modulesDefs.h"
 
 namespace object {
 	class Obj;
@@ -24,6 +24,10 @@ namespace object {
 	class ObjInstance;
 
 	class ObjFile;
+
+	class ObjMutex;
+
+	class ObjFuture;
 }
 
 enum class ValueType {
@@ -77,6 +81,8 @@ struct Value {
 	bool isInstance();
 	bool isBoundMethod();
 	bool isFile();
+	bool isMutex();
+	bool isFuture();
 
 	object::ObjString* asString();
 	object::ObjFunc* asFunction();
@@ -87,9 +93,10 @@ struct Value {
 	object::ObjInstance* asInstance();
 	object::ObjBoundMethod* asBoundMethod();
 	object::ObjFile* asFile();
+	object::ObjMutex* asMutex();
+	object::ObjFuture* asFuture();
 
 	void mark();
-	void updatePtr();
 	string typeToStr();
 	#pragma endregion
 };

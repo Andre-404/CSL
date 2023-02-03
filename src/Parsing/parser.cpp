@@ -18,9 +18,9 @@ namespace AST {
 		ASTNodePtr parse(Token token) {
 			ASTNodePtr expr = cur->expression(prec);
 			switch (token.type) {
-			case TokenType::JOIN:
+			case TokenType::AWAIT:
 				return make_shared<JoinExpr>(token, expr);
-			case TokenType::THREAD:
+			case TokenType::ASYNC:
 				if (expr->type != ASTType::CALL) throw cur->error(token, "Expected a call after 'thread'.");
 				CallExpr* call = dynamic_cast<CallExpr*>(expr.get());
 				return make_shared<ThreadExpr>(token, call->callee, call->args);
@@ -304,8 +304,8 @@ Parser::Parser() {
 	addPrefix<UnaryPrefixParselet>(TokenType::INCREMENT, Precedence::ALTER);
 	addPrefix<UnaryPrefixParselet>(TokenType::DECREMENT, Precedence::ALTER);
 
-	addPrefix<UnaryPrefixParselet>(TokenType::THREAD, Precedence::ASYNC);
-	addPrefix<UnaryPrefixParselet>(TokenType::JOIN, Precedence::ASYNC);
+	addPrefix<UnaryPrefixParselet>(TokenType::ASYNC, Precedence::ASYNC);
+	addPrefix<UnaryPrefixParselet>(TokenType::AWAIT, Precedence::ASYNC);
 
 	addPrefix<LiteralParselet>(TokenType::IDENTIFIER, Precedence::PRIMARY);
 	addPrefix<LiteralParselet>(TokenType::STRING, Precedence::PRIMARY);
@@ -572,8 +572,6 @@ ASTNodePtr Parser::statement() {
 		switch (previous().type) {
 		case TokenType::PRINT: return printStmt();
 		case TokenType::LEFT_BRACE: return blockStmt();
-		case TokenType::EXCLUSIVE_LOCK: return lockStmt(true);
-		case TokenType::SHARED_LOCK: return lockStmt(false);
 		case TokenType::IF: return ifStmt();
 		case TokenType::WHILE: return whileStmt();
 		case TokenType::FOR: return forStmt();
@@ -608,15 +606,6 @@ ASTNodePtr Parser::blockStmt() {
 	}
 	consume(TokenType::RIGHT_BRACE, "Expect '}' after block.");
 	return make_shared<BlockStmt>(stmts);
-}
-
-ASTNodePtr Parser::lockStmt(bool exclusive) {
-	consume(TokenType::LEFT_PAREN, "Expect '(' after 'if'.");
-	ASTNodePtr expr = expression();
-	consume(TokenType::RIGHT_PAREN, "Expect ')' after condition.");
-	consume(TokenType::LEFT_BRACE, "Expect '{' to start block of code.");
-	ASTNodePtr stmt = blockStmt();
-	return make_shared<LockStmt>(stmt, expr);
 }
 
 ASTNodePtr Parser::ifStmt() {
