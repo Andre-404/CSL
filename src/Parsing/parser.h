@@ -99,7 +99,6 @@ namespace AST {
 		ASTNodePtr printStmt();
 		ASTNodePtr exprStmt();
 		ASTNodePtr blockStmt();
-		ASTNodePtr lockStmt(bool exclusive);
 		ASTNodePtr ifStmt();
 		ASTNodePtr whileStmt();
 		ASTNodePtr forStmt();

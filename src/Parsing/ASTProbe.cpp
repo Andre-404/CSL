@@ -8,8 +8,8 @@ void AST::ASTProbe::visitUnaryExpr(UnaryExpr* expr) {}
 void AST::ASTProbe::visitCallExpr(CallExpr* expr) {}
 void AST::ASTProbe::visitFieldAccessExpr(FieldAccessExpr* expr) {}
 void AST::ASTProbe::visitGroupingExpr(GroupingExpr* expr) {}
-void AST::ASTProbe::visitThreadExpr(ThreadExpr* expr) {}
-void AST::ASTProbe::visitJoinExpr(JoinExpr* expr) {}
+void AST::ASTProbe::visitAsyncExpr(AsyncExpr* expr) {}
+void AST::ASTProbe::visitAwaitExpr(AwaitExpr* expr) {}
 void AST::ASTProbe::visitArrayLiteralExpr(ArrayLiteralExpr* expr) {}
 void AST::ASTProbe::visitStructLiteralExpr(StructLiteral* expr) {}
 void AST::ASTProbe::visitLiteralExpr(LiteralExpr* expr) { probedToken = expr->token; }
@@ -24,7 +24,6 @@ void AST::ASTProbe::visitClassDecl(ClassDecl* decl) {}
 void AST::ASTProbe::visitPrintStmt(PrintStmt* stmt) {}
 void AST::ASTProbe::visitExprStmt(ExprStmt* stmt) {}
 void AST::ASTProbe::visitBlockStmt(BlockStmt* stmt) {}
-void AST::ASTProbe::visitLockStmt(LockStmt* stmt) {}
 void AST::ASTProbe::visitIfStmt(IfStmt* stmt) {}
 void AST::ASTProbe::visitWhileStmt(WhileStmt* stmt) {}
 void AST::ASTProbe::visitForStmt(ForStmt* stmt) {}

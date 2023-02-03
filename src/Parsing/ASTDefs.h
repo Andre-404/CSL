@@ -16,8 +16,8 @@ namespace AST {
 		CALL,
 		FIELD_ACCESS,
 		GROUPING,
-		THREAD,
-		JOIN,
+		ASYNC,
+		AWAIT,
 		STRUCT,
 		LITERAL,
 		SUPER,
@@ -31,7 +31,6 @@ namespace AST {
 		PRINT,
 		EXPR_STMT,
 		BLOCK,
-		LOCK,
 		IF,
 		WHILE,
 		FOR,
@@ -51,8 +50,8 @@ namespace AST {
 	class CallExpr;
 	class FieldAccessExpr;
 	class GroupingExpr;
-	class ThreadExpr;
-	class JoinExpr;
+	class AsyncExpr;
+	class AwaitExpr;
 	class StructLiteral;
 	class LiteralExpr;
 	class SuperExpr;
@@ -66,7 +65,6 @@ namespace AST {
 	class PrintStmt;
 	class ExprStmt;
 	class BlockStmt;
-	class LockStmt;
 	class IfStmt;
 	class WhileStmt;
 	class ForStmt;
@@ -88,8 +86,8 @@ namespace AST {
 		virtual void visitCallExpr(CallExpr* expr) = 0;
 		virtual void visitFieldAccessExpr(FieldAccessExpr* expr) = 0;
 		virtual void visitGroupingExpr(GroupingExpr* expr) = 0;
-		virtual void visitThreadExpr(ThreadExpr* expr) = 0;
-		virtual void visitJoinExpr(JoinExpr* expr) = 0;
+		virtual void visitAsyncExpr(AsyncExpr* expr) = 0;
+		virtual void visitAwaitExpr(AwaitExpr* expr) = 0;
 		virtual void visitArrayLiteralExpr(ArrayLiteralExpr* expr) = 0;
 		virtual void visitStructLiteralExpr(StructLiteral* expr) = 0;
 		virtual void visitLiteralExpr(LiteralExpr* expr) = 0;
@@ -104,7 +102,6 @@ namespace AST {
 		virtual void visitPrintStmt(PrintStmt* stmt) = 0;
 		virtual void visitExprStmt(ExprStmt* stmt) = 0;
 		virtual void visitBlockStmt(BlockStmt* stmt) = 0;
-		virtual void visitLockStmt(LockStmt* stmt) = 0;
 		virtual void visitIfStmt(IfStmt* stmt) = 0;
 		virtual void visitWhileStmt(WhileStmt* stmt) = 0;
 		virtual void visitForStmt(ForStmt* stmt) = 0;
@@ -292,35 +289,35 @@ namespace AST {
 		}
 	};
 
-	class ThreadExpr : public ASTNode {
+	class AsyncExpr : public ASTNode {
 	public:
 		ASTNodePtr callee;
 		vector<ASTNodePtr> args;
 		Token token;
 
-		ThreadExpr(Token _token, ASTNodePtr _callee, vector<ASTNodePtr>& _args) {
+		AsyncExpr(Token _token, ASTNodePtr _callee, vector<ASTNodePtr>& _args) {
 			callee = _callee;
 			args = _args;
-			type = ASTType::THREAD;
+			type = ASTType::ASYNC;
 			token = _token;
 		}
 		void accept(Visitor* vis) {
-			vis->visitThreadExpr(this);
+			vis->visitAsyncExpr(this);
 		}
 	};
 
-	class JoinExpr : public ASTNode {
+	class AwaitExpr : public ASTNode {
 	public:
 		ASTNodePtr expr;
 		Token token;
 
-		JoinExpr(Token _token, ASTNodePtr _expr) {
+		AwaitExpr(Token _token, ASTNodePtr _expr) {
 			expr = _expr;
-			type = ASTType::JOIN;
+			type = ASTType::AWAIT;
 			token = _token;
 		}
 		void accept(Visitor* vis) {
-			vis->visitJoinExpr(this);
+			vis->visitAwaitExpr(this);
 		}
 	};
 
@@ -446,21 +443,6 @@ namespace AST {
 		}
 		void accept(Visitor* vis) {
 			vis->visitBlockStmt(this);
-		}
-	};
-
-	class LockStmt : public ASTNode {
-	public:
-		ASTNodePtr expr;
-		ASTNodePtr block;
-
-		LockStmt(ASTNodePtr _block, ASTNodePtr _expr) {
-			block = _block;
-			expr = _expr;
-			type = ASTType::LOCK;
-		}
-		void accept(Visitor* vis) {
-			vis->visitLockStmt(this);
 		}
 	};
 

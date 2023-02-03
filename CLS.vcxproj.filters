@@ -8,7 +8,6 @@
     <ClCompile Include="src\ErrorHandling\errorHandler.cpp" />
     <ClCompile Include="src\Parsing\parser.cpp" />
     <ClCompile Include="src\DebugPrinting\ASTPrinter.cpp" />
-    <ClCompile Include="src\MemoryManagment\heapObject.cpp" />
     <ClCompile Include="src\MemoryManagment\garbageCollector.cpp" />
     <ClCompile Include="src\Objects\objects.cpp" />
     <ClCompile Include="src\Codegen\codegenDefs.cpp" />
@@ -27,7 +26,6 @@
     <ClInclude Include="src\Parsing\ASTDefs.h" />
     <ClInclude Include="src\Parsing\parser.h" />
     <ClInclude Include="src\DebugPrinting\ASTPrinter.h" />
-    <ClInclude Include="src\MemoryManagment\heapObject.h" />
     <ClInclude Include="src\MemoryManagment\garbageCollector.h" />
     <ClInclude Include="src\Objects\objects.h" />
     <ClInclude Include="src\Codegen\codegenDefs.h" />
@@ -35,5 +33,6 @@
     <ClInclude Include="src\DebugPrinting\BytecodePrinter.h" />
     <ClInclude Include="src\Parsing\ASTProbe.h" />
     <ClInclude Include="src\Runtime\vm.h" />
+    <ClInclude Include="src\Includes\robin_hood.h" />
   </ItemGroup>
 </Project>

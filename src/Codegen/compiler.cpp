@@ -413,19 +413,19 @@ void Compiler::visitModuleAccessExpr(AST::ModuleAccessExpr* expr) {
 	emitBytes(+OpCode::GET_GLOBAL, arg);
 }
 
-void Compiler::visitThreadExpr(AST::ThreadExpr* expr) {
+void Compiler::visitAsyncExpr(AST::AsyncExpr* expr) {
 	updateLine(expr->token);
 	expr->callee->accept(this);
 	for (AST::ASTNodePtr arg : expr->args) {
 		arg->accept(this);
 	}
-	emitBytes(+OpCode::CREATE_THREAD, expr->args.size());
+	emitBytes(+OpCode::LAUNCH_ASYNC, expr->args.size());
 }
 
-void Compiler::visitJoinExpr(AST::JoinExpr* expr) {
+void Compiler::visitAwaitExpr(AST::AwaitExpr* expr) {
 	updateLine(expr->token);
 	expr->expr->accept(this);
-	emitByte(+OpCode::JOIN);
+	emitByte(+OpCode::AWAIT);
 }
 
 

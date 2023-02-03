@@ -64,12 +64,12 @@ void ASTPrinter::visitGroupingExpr(GroupingExpr* expr) {
 	cout << ")";
 }
 
-void ASTPrinter::visitThreadExpr(ThreadExpr* expr) {
+void ASTPrinter::visitAsyncExpr(AsyncExpr* expr) {
 	cout << "await ";
 	expr->callee->accept(this);
 }
 
-void ASTPrinter::visitJoinExpr(JoinExpr* expr) {
+void ASTPrinter::visitAwaitExpr(AwaitExpr* expr) {
 	cout << "async";
 	expr->expr->accept(this);
 }

@@ -190,10 +190,8 @@ enum class OpCode {
 	CLOSURE_LONG,//arg: 16-bit ObjFunction constant index
 
 	//Multithreading
-	CREATE_THREAD,//arg: 8-bit arg count
-	EXCLUSIVE_LOCK,
-	SHARED_LOCK,
-	JOIN,
+	LAUNCH_ASYNC,//arg: 8-bit arg count
+	AWAIT,
 
 	//OOP
 	CLASS,//arg: 16-bit ObjString constant index
