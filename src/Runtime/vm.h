@@ -1,46 +1,26 @@
 #pragma once
 #include "../Codegen/codegenDefs.h"
-#include "../DataStructures/gcArray.h"
 #include "../Objects/objects.h"
+#include "thread.h"
 
 namespace runtime {
 	string expectedType(string msg, Value val);
+	
 	class VM {
 	public:
 		VM(compileCore::Compiler* compiler);
-		RuntimeResult execute();
+		void execute();
 		void mark(memory::GarbageCollector* gc);
-		void updateInternalPtrs(memory::GarbageCollector* gc);
-	private:
-		Value stack[STACK_MAX];
-		Value* stackTop;
-		ManagedArray<object::ObjUpval*> openUpvals;
-		CallFrame frames[FRAMES_MAX];
-		int frameCount;
+		bool allThreadsPaused();
+		//used by threads
 		vector<Globalvar> globals;
-		HashMap internedStrings;
 		vector<File*> sourceFiles;
-
-		//VM stuff
-		byte getOp(long _ip);
-		void push(Value val);
-		Value pop();
-		Value peek(int depth);
-
-		void resetStack();
-		RuntimeResult runtimeError(string err);
-
-		bool callValue(Value callee, int argCount);
-		bool call(object::ObjClosure* function, int argCount);
-
-
-		object::ObjUpval* captureUpvalue(Value* local);
-		void closeUpvalues(Value* last);
-
-		void defineMethod(object::ObjString* name);
-		bool bindMethod(object::ObjClass* klass, object::ObjString* name);
-		bool invoke(object::ObjString* methodName, int argCount);
-		bool invokeFromClass(object::ObjClass* klass, object::ObjString* fieldName, int argCount);
+		//for adding/removing threads
+		std::mutex mtx;
+		vector<Thread*> childThreads;
+		std::atomic<int> threadsPaused;
+		std::atomic<bool> threadsPauseFlag;
+		Thread* mainThread;
 	};
 
 }

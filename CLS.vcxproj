@@ -165,6 +165,7 @@
     <ClCompile Include="src\Parsing\parser.cpp" />
     <ClCompile Include="src\Preprocessing\preprocessor.cpp" />
     <ClCompile Include="src\Preprocessing\scanner.cpp" />
+    <ClCompile Include="src\Runtime\thread.cpp" />
     <ClCompile Include="src\Runtime\vm.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -184,6 +185,7 @@
     <ClInclude Include="src\Parsing\parser.h" />
     <ClInclude Include="src\Preprocessing\preprocessor.h" />
     <ClInclude Include="src\Preprocessing\scanner.h" />
+    <ClInclude Include="src\Runtime\thread.h" />
     <ClInclude Include="src\Runtime\vm.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

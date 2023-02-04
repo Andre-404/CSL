@@ -1,5 +1,6 @@
 #include "objects.h"
 #include "../MemoryManagment/garbageCollector.h"
+#include "../Runtime/thread.h"
 
 using namespace object;
 using namespace memory;
@@ -103,8 +104,8 @@ uInt64 ObjClosure::getSize() {
 #pragma endregion
 
 #pragma region ObjUpval
-ObjUpval::ObjUpval(Value* slot) {
-	val = Value::nil();
+ObjUpval::ObjUpval(Value& _val) {
+	val = _val;
 	type = ObjType::UPVALUE;
 }
 
@@ -263,8 +264,9 @@ uInt64 ObjMutex::getSize() {
 #pragma endregion
 
 #pragma region ObjFuture
-ObjFuture::ObjFuture(std::future<Value>& _fut) {
-	std::swap(fut, _fut);
+ObjFuture::ObjFuture(runtime::Thread* t) {
+	fut = std::async(std::launch::async, &runtime::Thread::executeBytecode, t, this);
+	thread = t;
 	type = ObjType::FUTURE;
 }
 ObjFuture::~ObjFuture() {

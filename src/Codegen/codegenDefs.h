@@ -36,6 +36,7 @@ enum class ValueType {
 	OBJ = 2,
 	NIL = 3
 };
+inline constexpr unsigned operator+ (ValueType const val) { return static_cast<byte>(val); }
 
 struct Value {
 	std::variant<double, bool, object::Obj*> value;
@@ -66,23 +67,24 @@ struct Value {
 	void print();
 
 	#pragma region Helpers
-	bool isBool() { return std::holds_alternative<bool>(value); };
-	bool isNumber() { return std::holds_alternative<double>(value); };
-	bool isNil() { return std::holds_alternative<object::Obj*>(value) && get<object::Obj*>(value) == nullptr; };
-	bool isObj() { return std::holds_alternative<object::Obj*>(value) && get<object::Obj*>(value) != nullptr; };
+	bool isBool() const { return std::holds_alternative<bool>(value); };
+	bool isNumber() const { return std::holds_alternative<double>(value); };
+	bool isNil() const { return std::holds_alternative<object::Obj*>(value) && get<object::Obj*>(value) == nullptr; };
+	bool isObj() const { return std::holds_alternative<object::Obj*>(value) && get<object::Obj*>(value) != nullptr; };
 
 	// Put everything in obj
-	bool isString();
-	bool isFunction();
-	bool isNativeFn();
-	bool isArray();
-	bool isClosure();
-	bool isClass();
-	bool isInstance();
-	bool isBoundMethod();
-	bool isFile();
-	bool isMutex();
-	bool isFuture();
+	bool isString() const;
+	bool isFunction() const;
+	bool isNativeFn() const;
+	bool isArray() const;
+	bool isClosure() const;
+	bool isClass() const;
+	bool isInstance() const;
+	bool isBoundMethod() const;
+	bool isUpvalue() const;
+	bool isFile() const;
+	bool isMutex() const;
+	bool isFuture() const;
 
 	object::ObjString* asString();
 	object::ObjFunc* asFunction();
@@ -92,6 +94,7 @@ struct Value {
 	object::ObjClass* asClass();
 	object::ObjInstance* asInstance();
 	object::ObjBoundMethod* asBoundMethod();
+	object::ObjUpval* asUpvalue();
 	object::ObjFile* asFile();
 	object::ObjMutex* asMutex();
 	object::ObjFuture* asFuture();
@@ -102,10 +105,10 @@ struct Value {
 };
 
 struct Globalvar {
-	char* name;
+	string name;
 	Value val;
 	bool isDefined;
-	Globalvar(char* _name, Value _val) {
+	Globalvar(string _name, Value _val) {
 		name = _name;
 		val = _val;
 		isDefined = false;

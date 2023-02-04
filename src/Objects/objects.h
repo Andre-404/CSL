@@ -9,6 +9,7 @@
 
 namespace runtime {
 	class VM;
+	class Thread;
 }
 
 namespace object {
@@ -45,7 +46,7 @@ namespace object {
 	};
 
 	//pointer to a native C++ function
-	using NativeFn = bool(*)(runtime::VM* vm, int argCount, Value* args);
+	using NativeFn = bool(*)(runtime::Thread* vm, int argCount, Value* args);
 
 
 	//this is a header which is followed by the bytes of the string
@@ -111,7 +112,7 @@ namespace object {
 	class ObjUpval : public Obj {
 	public:
 		Value val;
-		ObjUpval(Value* _value);
+		ObjUpval(Value& _value);
 		~ObjUpval() {}
 
 		void trace();
@@ -199,9 +200,12 @@ namespace object {
 
 	//returned by "async func()" call, when the thread finishes it will populate returnVal and delete the vm
 	class ObjFuture : public Obj {
-		std::future<Value> fut;
+	public:
+		std::future<void> fut;
+		Value val;
+		runtime::Thread* thread;
 
-		ObjFuture(std::future<Value>& _fut);
+		ObjFuture(runtime::Thread* t);
 		~ObjFuture();
 
 		void trace();

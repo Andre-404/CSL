@@ -25,8 +25,8 @@ namespace memory {
 		void collect(compileCore::Compiler* compiler);
 		GarbageCollector();
 		void markObj(object::Obj* object);
-	private:
 		std::atomic<bool> shouldCollect;
+	private:
 		std::mutex allocMtx;
 		uInt64 heapSize;
 		uInt64 heapSizeLimit;

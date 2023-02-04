@@ -1,6 +1,7 @@
 #include "BytecodePrinter.h"
 #include <format>
 #include "../Objects/objects.h"
+#include <iostream>
 
 
 static int simpleInstruction(string name, int offset) {

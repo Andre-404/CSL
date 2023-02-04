@@ -50,10 +50,7 @@ Compiler::Compiler(vector<CSLModule*>& _units) {
 		curUnit = unit;
 		sourceFiles.push_back(unit->file);
 		for (Token token : unit->topDeclarations) {
-			string tmp = token.getLexeme();
-			char* ptr = new char[tmp.size() + 1];
-			memcpy(ptr, tmp.c_str(), tmp.size() + 1);
-			globals.push_back(Globalvar(ptr, Value::nil()));
+			globals.push_back(Globalvar(token.getLexeme(), Value::nil()));
 		}
 		for (int i = 0; i < unit->stmts.size(); i++) {
 			//doing this here so that even if a error is detected, we go on and possibly catch other(valid) errors
@@ -90,16 +87,16 @@ void Compiler::visitSetExpr(AST::SetExpr* expr) {
 	switch (expr->accessor.type) {
 	case TokenType::LEFT_BRACKET: {
 		//allows for things like object["field" + "name"]
+		expr->value->accept(this);
 		expr->callee->accept(this);
 		expr->field->accept(this);
-		expr->value->accept(this);
 		emitByte(+OpCode::SET);
 		break;
 	}
 	case TokenType::DOT: {
 		//the "." is always followed by a field name as a string, emitting a constant speeds things up and avoids unnecessary stack manipulation
-		expr->callee->accept(this);
 		expr->value->accept(this);
+		expr->callee->accept(this);
 		uInt16 name = identifierConstant(dynamic_cast<AST::LiteralExpr*>(expr->field.get())->token);
 		if (name <= SHORT_CONSTANT_LIMIT) emitBytes(+OpCode::SET_PROPERTY, name);
 		else emitByteAnd16Bit(+OpCode::SET_PROPERTY_LONG, name);
@@ -1191,13 +1188,14 @@ bool Compiler::invoke(AST::CallExpr* expr) {
 	if (expr->callee->type == AST::ASTType::FIELD_ACCESS) {
 		//currently we only optimizes field invoking(struct.field() or array[field]())
 		AST::FieldAccessExpr* call = dynamic_cast<AST::FieldAccessExpr*>(expr->callee.get());
+
+		call->callee->accept(this);
+
 		int argCount = 0;
 		for (AST::ASTNodePtr arg : expr->args) {
 			arg->accept(this);
 			argCount++;
 		}
-		//pop these and only leave the arguments on the stack
-		call->callee->accept(this);
 		call->field->accept(this);
 		emitBytes(+OpCode::INVOKE, argCount);
 		return true;

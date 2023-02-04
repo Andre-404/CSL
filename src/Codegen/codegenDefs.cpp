@@ -7,6 +7,7 @@
 #include <iostream>
 
 using namespace object;
+using std::get;
 
 Chunk::Chunk() {}
 
@@ -71,11 +72,15 @@ string valueToStr(Value& val) {
 }
 
 bool Value::operator== (const Value& other) const {
-	return value == other.value;
+	if (this->value.index() != other.value.index()) return false;
+	switch (this->value.index()) {
+	case +ValueType::NUM: return FLOAT_EQ(get<double>(this->value), get<double>(other.value));
+	case +ValueType::BOOL: return this->value == other.value;
+	case +ValueType::OBJ: return this->value == other.value;
+	}
 }
 
-bool Value::operator!=(const Value& other) const
-{
+bool Value::operator!=(const Value& other) const {
 	return !(*this == other);
 }
 
@@ -83,37 +88,40 @@ void Value::print() {
 	std::cout << valueToStr(*this);
 }
 
-bool Value::isString() {
+bool Value::isString() const {
 	return isObj() && get<object::Obj*>(value)->type == ObjType::STRING;
 }
-bool Value::isFunction() {
+bool Value::isFunction() const {
 	return isObj() && get<object::Obj*>(value)->type == ObjType::FUNC;
 }
-bool Value::isNativeFn() {
+bool Value::isNativeFn() const {
 	return isObj() && get<object::Obj*>(value)->type == ObjType::NATIVE;
 }
-bool Value::isArray() {
+bool Value::isArray() const {
 	return isObj() && get<object::Obj*>(value)->type == ObjType::ARRAY;
 }
-bool Value::isClosure() {
+bool Value::isClosure() const {
 	return isObj() && get<object::Obj*>(value)->type == ObjType::CLOSURE;
 }
-bool Value::isClass() {
+bool Value::isClass() const {
 	return isObj() && get<object::Obj*>(value)->type == ObjType::CLASS;
 }
-bool Value::isInstance() {
+bool Value::isInstance() const {
 	return isObj() && get<object::Obj*>(value)->type == ObjType::INSTANCE;
 }
-bool Value::isBoundMethod() {
+bool Value::isBoundMethod() const {
 	return isObj() && get<object::Obj*>(value)->type == ObjType::BOUND_METHOD;
 }
-bool Value::isFile() {
+bool Value::isUpvalue() const {
+	return isObj() && get<object::Obj*>(value)->type == ObjType::UPVALUE;
+}
+bool Value::isFile() const {
 	return isObj() && get<object::Obj*>(value)->type == ObjType::FILE;
 }
-bool Value::isMutex() {
+bool Value::isMutex() const {
 	return isObj() && get<object::Obj*>(value)->type == ObjType::MUTEX;
 }
-bool Value::isFuture() {
+bool Value::isFuture() const {
 	return isObj() && get<object::Obj*>(value)->type == ObjType::FUTURE;
 }
 
@@ -141,6 +149,9 @@ object::ObjInstance* Value::asInstance() {
 }
 object::ObjBoundMethod* Value::asBoundMethod() {
 	return dynamic_cast<ObjBoundMethod*>(get<object::Obj*>(value));
+}
+object::ObjUpval* Value::asUpvalue() {
+	return dynamic_cast<ObjUpval*>(get<object::Obj*>(value));
 }
 object::ObjFile* Value::asFile() {
 	return dynamic_cast<ObjFile*>(get<object::Obj*>(value));
