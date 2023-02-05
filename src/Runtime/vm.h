@@ -2,6 +2,7 @@
 #include "../Codegen/codegenDefs.h"
 #include "../Objects/objects.h"
 #include "thread.h"
+#include <condition_variable>
 
 namespace runtime {
 	string expectedType(string msg, Value val);
@@ -18,8 +19,12 @@ namespace runtime {
 		//for adding/removing threads
 		std::mutex mtx;
 		vector<Thread*> childThreads;
-		std::atomic<int> threadsPaused;
-		std::atomic<bool> threadsPauseFlag;
+
+		// For pausing threads during gc run
+		std::mutex pauseMtx;
+		std::condition_variable mainThreadCv;
+		std::condition_variable childThreadsCv;
+		std::atomic<byte> threadsPaused;
 		Thread* mainThread;
 	};
 

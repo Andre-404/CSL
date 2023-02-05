@@ -2,6 +2,7 @@
 #include "../ErrorHandling/errorHandler.h"
 #include "../Codegen/compiler.h"
 #include "../Objects/objects.h"
+#include "../Runtime/vm.h"
 #include <format>
 
 //start size of heap in KB
@@ -15,11 +16,11 @@ namespace memory {
 		heapSize = 0;
 		heapSizeLimit = HEAP_START_SIZE*1024;
 
-		shouldCollect = false;
+		shouldCollect.store(false);
 	}
 
 	void* GarbageCollector::alloc(uInt64 size) {
-		std::scoped_lock<std::mutex> lk(allocMtx);
+		std::lock_guard<std::mutex> lk(allocMtx);
 		heapSize += size;
 		if (heapSize > heapSizeLimit) shouldCollect = true;
 		byte* block = nullptr;
@@ -39,7 +40,12 @@ namespace memory {
 		mark();
 		sweep();
 		if (heapSize > heapSizeLimit) heapSizeLimit << 1;
-		shouldCollect = false;
+		// After sweeping the heap all sleeping child threads are awakened
+		{
+			std::scoped_lock<std::mutex> lk(vm->pauseMtx);
+			shouldCollect.store(false);
+		}
+		vm->childThreadsCv.notify_all();
 	}
 
 	void GarbageCollector::collect(compileCore::Compiler* compiler) {
@@ -62,7 +68,7 @@ namespace memory {
 	}
 
 	void GarbageCollector::markRoots(runtime::VM* vm) {
-
+		vm->mark(this);
 	}
 
 	void GarbageCollector::markRoots(compileCore::Compiler* compiler) {

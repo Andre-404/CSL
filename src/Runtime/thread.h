@@ -8,10 +8,10 @@ namespace runtime {
 	class Thread {
 	public:
 		Thread(VM* _vm);
-		void executeBytecode(object::ObjFuture* fut);
+		void executeBytecode();
 		void startThread(Value* otherStack, int num);
 		void mark(memory::GarbageCollector* gc);
-		std::atomic<bool> paused;
+		void copyVal(Value val);
 	private:
 		Value stack[STACK_MAX];
 		Value* stackTop;

@@ -10,23 +10,27 @@ using std::get;
 runtime::VM::VM(compileCore::Compiler* compiler) {
 	globals = compiler->globals;
 	sourceFiles = compiler->sourceFiles;
-	threadsPauseFlag.store(false);
 	Value val = Value(new object::ObjClosure(compiler->endFuncDecl()));
 	mainThread = new Thread(this);
+	// First value on the stack is the future holding the thread, mainThread has nil
+	mainThread->copyVal(Value::nil());
 	mainThread->startThread(&val, 1);
 }
 
 void runtime::VM::mark(memory::GarbageCollector* gc) {
 	for (Globalvar& var : globals) var.val.mark();
+	// All threads in vector are active, finished threads get deleted automatically
 	for (Thread* t : childThreads) t->mark(gc);
 	mainThread->mark(gc);
 }
 
 void runtime::VM::execute() {
-	mainThread->executeBytecode(nullptr);
+	mainThread->executeBytecode();
 }
 
 bool runtime::VM::allThreadsPaused() {
-	return false;
+	// Another thread might try to add/remove a Thread object while the main thread is waiting for all threads to pause
+	std::scoped_lock<std::mutex> lk(mtx);
+	return threadsPaused == childThreads.size();
 }
 

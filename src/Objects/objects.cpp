@@ -266,11 +266,14 @@ uInt64 ObjMutex::getSize() {
 ObjFuture::ObjFuture(runtime::Thread* t) {
 	thread = t;
 	val = Value::nil();
-	fut = std::async(std::launch::async, &runtime::Thread::executeBytecode, t, this);
 	type = ObjType::FUTURE;
 }
 ObjFuture::~ObjFuture() {
 
+}
+
+void ObjFuture::startParallelExecution() {
+	fut = std::async(std::launch::async, &runtime::Thread::executeBytecode, thread);
 }
 
 void ObjFuture::trace() {

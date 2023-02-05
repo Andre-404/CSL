@@ -10,7 +10,6 @@ using std::get;
 runtime::Thread::Thread(VM* _vm){
 	stackTop = stack;
 	frameCount = 0;
-	paused.store(false);
 	vm = _vm;
 }
 // Copies the callee and all arguments, otherStack points to the callee, arguments are on top of it on the stack
@@ -18,6 +17,11 @@ void runtime::Thread::startThread(Value* otherStack, int num) {
 	memcpy(stackTop, otherStack, sizeof(Value) * num);
 	stackTop += num;
 	callValue(*otherStack, num - 1);
+}
+
+// Copies value to the stack
+void runtime::Thread::copyVal(Value val) {
+	push(val);
 }
 
 
@@ -235,8 +239,10 @@ bool runtime::Thread::invokeFromClass(object::ObjClass* klass, string& methodNam
 }
 #pragma endregion
 
-void runtime::Thread::executeBytecode(object::ObjFuture* fut) {
+void runtime::Thread::executeBytecode() {
 	CallFrame* frame = &frames[frameCount - 1];
+	// If this is the main thread fut will be nullptr
+	object::ObjFuture* fut = stack[0].asFuture();
 	#pragma region Helpers and Macros
 
 	auto readByte = [&]() { return getOp(frame->ip++); };
@@ -254,6 +260,18 @@ void runtime::Thread::executeBytecode(object::ObjFuture* fut) {
 		if (index < 0 || index > arr->values.size() - 1)
 			runtimeError(std::format("Index {} outside of range [0, {}].", (uInt64)index, callee.asArray()->values.size() - 1));
 		return index;
+	};
+	auto deleteThread = [](object::ObjFuture* _fut, VM* vm) {
+		std::scoped_lock<std::mutex> lk(vm->mtx);
+		// Immediately delete the thread object to conserve memory
+		for (auto it = vm->childThreads.begin(); it != vm->childThreads.end(); it++) {
+			if (*it == _fut->thread) {
+				delete* it;
+				_fut->thread = nullptr;
+				vm->childThreads.erase(it);
+				break;
+			}
+		}
 	};
 
 	#define BINARY_OP(valueType, op) \
@@ -282,19 +300,39 @@ void runtime::Thread::executeBytecode(object::ObjFuture* fut) {
 	#pragma endregion
 
 	while (true) {
-		// Handles thread pausing
+		#pragma region Thread pausing
 		if (!fut && memory::gc.shouldCollect.load()) {
 			// If fut is null, this is the main thread of execution which runs the GC
-			if (!vm->threadsPauseFlag.load()) vm->threadsPauseFlag.store(true);
-
-		}
-		else if(vm->threadsPauseFlag.load()){
-			paused.store(true);
-			while (vm->threadsPauseFlag.load()) {
-
+			if (vm->allThreadsPaused()) {
+				memory::gc.collect(vm);
+				continue;
 			}
-			paused.store(false);
+			// If some threads aren't sleeping yet, use a cond var to wait, every child thread will notify the var when it goes to sleep
+			std::unique_lock lk(vm->pauseMtx);
+			vm->mainThreadCv.wait(lk, [&] { return vm->allThreadsPaused(); });
+			// Release the mutex here so that GC can aquire it
+			lk.unlock();
+			// After all threads are asleep, run the GC and subsequently awaken all child threads
+			memory::gc.collect(vm);
 		}
+		else if (fut && memory::gc.shouldCollect.load()) {
+			// If this is a child thread and the GC must run, notify the main thread that this one is paused
+			// Main thread sends the notification when to awaken
+			{
+				std::lock_guard<std::mutex> lk(vm->pauseMtx);
+				vm->threadsPaused.fetch_add(1);
+			}
+			// Only the main thread waits for mainThreadCv
+			vm->mainThreadCv.notify_one();
+
+			// No need to propagate this since the main thread won't be listening
+			std::unique_lock lk(vm->pauseMtx);
+			vm->childThreadsCv.wait(lk, [] {return !memory::gc.shouldCollect.load(); });
+			vm->threadsPaused.fetch_sub(1);
+			lk.unlock();
+		}
+		#pragma endregion
+
 		#ifdef DEBUG_TRACE_EXECUTION
 			std::cout << "          ";
 			for (Value* slot = stack; slot < stackTop; slot++) {
@@ -305,8 +343,8 @@ void runtime::Thread::executeBytecode(object::ObjFuture* fut) {
 			std::cout << "\n";
 			disassembleInstruction(&frame->closure->func->body, frames[frameCount - 1].ip);
 		#endif
-		uint8_t instruction;
-		switch (instruction = readByte()) {
+		// Main execution loop
+		switch (readByte()) {
 
 		#pragma region Helpers
 		case +OpCode::POP: {
@@ -710,9 +748,8 @@ void runtime::Thread::executeBytecode(object::ObjFuture* fut) {
 		}
 
 		case +OpCode::JUMP_POPN: {
-			uInt16 offset = readShort();
 			stackTop -= readByte();
-			frame->ip += offset;
+			frame->ip += readShort();
 			break;
 		}
 
@@ -767,17 +804,30 @@ void runtime::Thread::executeBytecode(object::ObjFuture* fut) {
 		case +OpCode::RETURN: {
 			Value result = pop();
 			frameCount--;
-			//if we're returning from the implicit funcition
+			// If we're returning from the implicit funcition
 			if (frameCount == 0) {
-				Value val = pop();
-				//if this is a child thread that has a future attached to it, assign the value to the future
-				if (fut) fut->val = val;
+				// Main thread doesn't have a future nor does it need to delete the thread
+				if (fut == nullptr) return;
+
+				// If this is a child thread that has a future attached to it, assign the value to the future
+				fut->val = result;
+				// Since this thread gets deleted by deleteThread, cond var to notify the main thread must be cached in the function
+				std::condition_variable& cv = vm->mainThreadCv;
+				// If execution is finishing and the main thread is waiting to run the gc
+				// notify the main thread after deleting this thread object
+				{
+					// vm->pauseMtx to notify the main thread that this thread doesn't exist anymore, 
+					std::scoped_lock<std::mutex> lk(vm->pauseMtx);
+					// deleteThread locks vm->mtx to delete itself from the pool
+					deleteThread(fut, vm);
+				}
+				cv.notify_one();
 				return;
 			}
 
 			stackTop = frame->slots;
 			push(result);
-			//if the call is succesful, there is a new call frame, so we need to update the pointer
+			// If the call is succesful, there is a new call frame, so we need to update the pointer
 			frame = &frames[frameCount - 1];
 			break;
 		}
@@ -818,27 +868,32 @@ void runtime::Thread::executeBytecode(object::ObjFuture* fut) {
 		case +OpCode::LAUNCH_ASYNC: {
 			byte argCount = readByte();
 			Thread* t = new Thread(vm);
+			object::ObjFuture* newFut = new object::ObjFuture(t);
+			// Ensures that ObjFuture tied to this thread lives long enough for the thread to finish execution
+			t->copyVal(Value(newFut));
+			// Copies the function being called and the arugments
 			t->startThread(&stackTop[-1 - argCount], argCount + 1);
 			stackTop -= argCount + 1;
-			// Only one thread can add/remove a new child thread at any time
-			std::scoped_lock(vm->mtx);
-			vm->childThreads.push_back(t);
-			push(new object::ObjFuture(t));
+			{
+				// Only one thread can add/remove a new child thread at any time
+				std::lock_guard<std::mutex> lk(vm->mtx);
+				vm->childThreads.push_back(t);
+			}
+			newFut->startParallelExecution();
+			push(Value(newFut));
+			break;
 		}
 
 		case +OpCode::AWAIT: {
 			Value val = pop();
 			if (!val.isFuture()) runtimeError(std::format("Await can only be applied to a future, got {}", val.typeToStr()));
-			object::ObjFuture* fut = val.asFuture();
-			fut->fut.wait();
-			std::scoped_lock(vm->mtx);
-			for (int i = vm->childThreads.size(); i >= 0; i--) {
-				Thread* t = vm->childThreads[i];
-				delete t;
-				vm->childThreads.erase(vm->childThreads.begin() + i);
-			}
+			object::ObjFuture* futToAwait = val.asFuture();
+			futToAwait->fut.wait();
+			// Immediately delete the thread object to conserve memory
+			deleteThread(futToAwait, vm);
 			// Can safely access fut->val from this thread since the value is being read and won't be written to again 
-			push(fut->val);
+			push(futToAwait->val);
+			break;
 		}
 		#pragma endregion
 

@@ -208,6 +208,8 @@ namespace object {
 		ObjFuture(runtime::Thread* t);
 		~ObjFuture();
 
+		void startParallelExecution();
+
 		void trace();
 		string toString();
 		uInt64 getSize();
