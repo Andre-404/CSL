@@ -37,7 +37,7 @@ namespace object {
 		virtual string toString() = 0;
 		virtual void trace() = 0;
 		virtual uInt64 getSize() = 0;
-		virtual ~Obj() = 0;
+		virtual ~Obj() {};
 
 		//this reroutes the new operator to take memory which the GC gives out
 		void* operator new(uInt64 size) {

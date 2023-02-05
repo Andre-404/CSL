@@ -11,7 +11,7 @@ runtime::VM::VM(compileCore::Compiler* compiler) {
 	globals = compiler->globals;
 	sourceFiles = compiler->sourceFiles;
 	threadsPauseFlag.store(false);
-	Value val = Value(compiler->endFuncDecl());
+	Value val = Value(new object::ObjClosure(compiler->endFuncDecl()));
 	mainThread = new Thread(this);
 	mainThread->startThread(&val, 1);
 }
@@ -27,6 +27,6 @@ void runtime::VM::execute() {
 }
 
 bool runtime::VM::allThreadsPaused() {
-
+	return false;
 }
 

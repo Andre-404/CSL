@@ -167,6 +167,7 @@ bool runtime::Thread::call(object::ObjClosure* closure, int argCount) {
 object::ObjUpval* runtime::Thread::captureUpvalue(Value* local) {
 	object::ObjUpval* upval = new object::ObjUpval(*local);
 	*local = Value(upval);
+	return upval;
 }
 
 void runtime::Thread::defineMethod(string& name) {

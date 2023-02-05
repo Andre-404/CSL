@@ -41,13 +41,11 @@ ObjFunc::ObjFunc() {
 	arity = 0;
 	upvalueCount = 0;
 	type = ObjType::FUNC;
-	name = nullptr;
+	name = "";
 }
 
 void ObjFunc::trace() {
-	int size = body.constants.size();
-	for (int i = 0; i < size; i++) {
-		Value& val = body.constants[i];
+	for (Value& val : body.constants) {
 		val.mark();
 	}
 }
@@ -92,6 +90,7 @@ void ObjClosure::trace() {
 	for (ObjUpval* upval : upvals) {
 		gc.markObj(upval);
 	}
+	gc.markObj(func);
 }
 
 string ObjClosure::toString() {
@@ -185,7 +184,7 @@ void ObjInstance::trace() {
 	for (auto it = fields.begin(); it != fields.end(); it++) {
 		it->second.mark();
 	}
-	gc.markObj(klass);
+	if(klass) gc.markObj(klass);
 }
 
 string ObjInstance::toString() {
@@ -265,8 +264,9 @@ uInt64 ObjMutex::getSize() {
 
 #pragma region ObjFuture
 ObjFuture::ObjFuture(runtime::Thread* t) {
-	fut = std::async(std::launch::async, &runtime::Thread::executeBytecode, t, this);
 	thread = t;
+	val = Value::nil();
+	fut = std::async(std::launch::async, &runtime::Thread::executeBytecode, t, this);
 	type = ObjType::FUTURE;
 }
 ObjFuture::~ObjFuture() {
@@ -274,7 +274,8 @@ ObjFuture::~ObjFuture() {
 }
 
 void ObjFuture::trace() {
-	//nothing
+	//when tracing all threads other than the main one are suspended, so there's no way for anything to write to val
+	val.mark();
 }
 
 string ObjFuture::toString() {

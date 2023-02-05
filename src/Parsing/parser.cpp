@@ -20,10 +20,11 @@ namespace AST {
 			switch (token.type) {
 			case TokenType::AWAIT:
 				return make_shared<AwaitExpr>(token, expr);
-			case TokenType::ASYNC:
+			case TokenType::ASYNC: {
 				if (expr->type != ASTType::CALL) throw cur->error(token, "Expected a call after 'thread'.");
 				CallExpr* call = dynamic_cast<CallExpr*>(expr.get());
 				return make_shared<AsyncExpr>(token, call->callee, call->args);
+			}
 			default:
 				return make_shared<UnaryExpr>(token, expr, true);
 			}

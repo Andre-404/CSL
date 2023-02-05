@@ -314,7 +314,10 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 		}
 		return offset;
 	}
-	
+	case +OpCode::LAUNCH_ASYNC:
+		return byteInstruction("OP LAUNCH ASYNC", chunk, offset);
+	case +OpCode::AWAIT:
+		return simpleInstruction("OP AWAIT", offset);
 	case +OpCode::CLASS:
 		return constantInstruction("OP CLASS", chunk, offset, true);
 	case +OpCode::GET_PROPERTY:

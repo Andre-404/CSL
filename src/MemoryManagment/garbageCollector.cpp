@@ -1,6 +1,7 @@
 #include "garbageCollector.h"
 #include "../ErrorHandling/errorHandler.h"
 #include "../Codegen/compiler.h"
+#include "../Objects/objects.h"
 #include <format>
 
 //start size of heap in KB
