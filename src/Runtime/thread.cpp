@@ -37,8 +37,8 @@ string runtime::expectedType(string msg, Value val) {
 	return msg + val.typeToStr() + ".";
 }
 
-byte runtime::Thread::getOp(^uInt64 _ip) {
-	return frames[frameCount - 1].closure->func->body.code[_ip];
+byte runtime::Thread::getOp(uInt64 _ip) {
+	return vm->code.bytecode[_ip];
 }
 
 void runtime::Thread::push(Value val) {
@@ -70,8 +70,9 @@ void runtime::Thread::runtimeError(string err) {
 	for (int i = frameCount - 1; i >= 0; i--) {
 		CallFrame* frame = &frames[i];
 		object::ObjFunc* function = frame->closure->func;
-		uInt64 instruction = frame->ip - 1;
-		codeLine line = function->body.getLine(instruction);
+		// Converts ip from a pointer to a index in the array
+		uInt64 instruction = (frame->ip - 1) - vm->code.bytecode.data();
+		codeLine line = vm->code.getLine(instruction);
 		//fileName:line | in <func name>()
 		string temp = yellow + line.getFileName(vm->sourceFiles) + black + ":" + cyan + std::to_string(line.line + 1) + " | " + black;
 		std::cout << temp << "in ";
@@ -161,7 +162,7 @@ bool runtime::Thread::call(object::ObjClosure* closure, int argCount) {
 
 	CallFrame* frame = &frames[frameCount++];
 	frame->closure = closure;
-	frame->ip = 0;
+	frame->ip = &vm->code.bytecode[closure->func->bytecodeOffset];
 	frame->slots = stackTop - argCount - 1;
 	return true;
 }
@@ -238,15 +239,22 @@ bool runtime::Thread::invokeFromClass(object::ObjClass* klass, string& methodNam
 #pragma endregion
 
 void runtime::Thread::executeBytecode() {
-	CallFrame* frame = &frames[frameCount - 1];
+	#ifdef DEBUG_TRACE_EXECUTION
+	std::cout << "-------------Code execution starts-------------\n";
+	#endif // DEBUG_TRACE_EXECUTION
+	
 	// If this is the main thread fut will be nullptr
 	object::ObjFuture* fut = stack[0].asFuture();
-	#pragma region Helpers and Macros
+	// C++ is more likely to put these locals in registers which speeds things up
+	CallFrame* frame = &frames[frameCount - 1];
+	byte* ip = &vm->code.bytecode[frame->closure->func->bytecodeOffset];
+	Value* slotStart = frame->slots;
 
-	auto readByte = [&]() { return getOp(frame->ip++); };
-	auto readShort = [&]() { return frame->ip += 2, (uint16_t)((getOp(frame->ip - 2) << 8) | getOp(frame->ip - 1)); };
-	auto readConstant = [&]() { return frames[frameCount - 1].closure->func->body.constants[readByte()]; };
-	auto readConstantLong = [&]() { return frames[frameCount - 1].closure->func->body.constants[readShort()]; };
+	#pragma region Helpers and Macros
+	auto readByte = [&]() { return *ip++; };
+	auto readShort = [&]() { return ip += 2, (uint16_t)((ip[-2] << 8) | ip[-1]); };
+	auto readConstant = [&]() { return vm->code.constants[frame->closure->func->constantsOffset + readByte()]; };
+	auto readConstantLong = [&]() { return vm->code.constants[frame->closure->func->constantsOffset + readShort()]; };
 	auto readString = [&]() { return readConstant().asString(); };
 	auto readStringLong = [&]() { return readConstantLong().asString(); };
 	auto checkArrayBounds = [&](Value field, Value callee) {
@@ -272,6 +280,17 @@ void runtime::Thread::executeBytecode() {
 		}
 	};
 
+	// Stores the ip to the current frame before a new one is pushed
+	auto storeFrame = [&]() {
+		frame->ip = ip;
+	};
+	// When a frame is pushed/popped load its variables to the locals
+	auto loadFrame = [&]() {
+		frame = &frames[frameCount - 1];
+		slotStart = frame->slots;
+		ip = frame->ip;
+	};
+
 	#define BINARY_OP(valueType, op) \
 		do { \
 			if (!peek(0).isNumber() || !peek(1).isNumber()) { \
@@ -294,19 +313,16 @@ void runtime::Thread::executeBytecode() {
 			Value* a = stackTop - 1; \
 			a->value = static_cast<double>(static_cast<uInt64>(get<double>(a->value)) op b); \
 		} while (false)
-
-	#ifdef DEBUG_TRACE_EXECUTION
-	std::cout << "-------------Code execution starts-------------\n";
-	#endif // DEBUG_TRACE_EXECUTION
+	#define DISPATCH() goto loop;
 	#pragma endregion
 
-	while (true) {
+	loop:
 		#pragma region Thread pausing
 		if (!fut && memory::gc.shouldCollect.load()) {
 			// If fut is null, this is the main thread of execution which runs the GC
 			if (vm->allThreadsPaused()) {
 				memory::gc.collect(vm);
-				continue;
+				goto loop;
 			}
 			// If some threads aren't sleeping yet, use a cond var to wait, every child thread will notify the var when it goes to sleep
 			std::unique_lock lk(vm->pauseMtx);
@@ -350,16 +366,16 @@ void runtime::Thread::executeBytecode() {
 		#pragma region Helpers
 		case +OpCode::POP: {
 			stackTop--;
-			break;
+			DISPATCH();
 		}
 		case +OpCode::POPN: {
 			uint8_t nToPop = readByte();
 			stackTop -= nToPop;
-			break;
+			DISPATCH();
 		}
 		case +OpCode::LOAD_INT: {
 			push(Value(static_cast<double>(readByte())));
-			break;
+			DISPATCH();
 		}
 		#pragma endregion
 
@@ -367,16 +383,16 @@ void runtime::Thread::executeBytecode() {
 		case +OpCode::CONSTANT: {
 			Value constant = readConstant();
 			push(constant);
-			break;
+			DISPATCH();
 		}
 		case +OpCode::CONSTANT_LONG: {
 			Value constant = readConstantLong();
 			push(constant);
-			break;
+			DISPATCH();
 		}
-		case +OpCode::NIL: push(Value::nil()); break;
-		case +OpCode::TRUE: push(Value(true)); break;
-		case +OpCode::FALSE: push(Value(false)); break;
+		case +OpCode::NIL: push(Value::nil()); DISPATCH();
+		case +OpCode::TRUE: push(Value(true)); DISPATCH();
+		case +OpCode::FALSE: push(Value(false)); DISPATCH();
 		#pragma endregion
 
 		#pragma region Unary
@@ -386,11 +402,11 @@ void runtime::Thread::executeBytecode() {
 				runtimeError(std::format("Operand must be a number, got {}.", val.typeToStr()));
 			}
 			push(Value(-get<double>(val.value)));
-			break;
+			DISPATCH();
 		}
 		case +OpCode::NOT: {
 			push(Value(isFalsey(pop())));
-			break;
+			DISPATCH();
 		}
 		case +OpCode::BIN_NOT: {
 			// Doing implicit conversion from double to long long, could end up with precision errors
@@ -406,7 +422,7 @@ void runtime::Thread::executeBytecode() {
 			long long temp = static_cast<long long>(num);
 			temp = ~temp;
 			push(Value(static_cast<double>(temp)));
-			break;
+			DISPATCH();
 		}
 		case +OpCode::INCREMENT: {
 			byte arg = readByte();
@@ -433,7 +449,7 @@ void runtime::Thread::executeBytecode() {
 			switch (type) {
 			case 0: {
 				byte slot = readByte();
-				Value& num = frame->slots[slot];
+				Value& num = slotStart[slot];
 				// If this is a local upvalue
 				if (num.isUpvalue()) {
 					Value& temp = num.asUpvalue()->val;
@@ -546,14 +562,14 @@ void runtime::Thread::executeBytecode() {
 				break;
 			}
 			}
-			break;
+			DISPATCH();
 		}
 		#pragma endregion
 
 		#pragma region Binary
-		case +OpCode::BITWISE_XOR: INT_BINARY_OP(NUMBER_VAL, ^); break;
-		case +OpCode::BITWISE_OR: INT_BINARY_OP(NUMBER_VAL, | ); break;
-		case +OpCode::BITWISE_AND: INT_BINARY_OP(NUMBER_VAL, &); break;
+		case +OpCode::BITWISE_XOR: INT_BINARY_OP(NUMBER_VAL, ^); DISPATCH();
+		case +OpCode::BITWISE_OR: INT_BINARY_OP(NUMBER_VAL, | ); DISPATCH();
+		case +OpCode::BITWISE_AND: INT_BINARY_OP(NUMBER_VAL, &); DISPATCH();
 		case +OpCode::ADD: {
 			if (peek(0).isString() && peek(1).isString()) {
 				object::ObjString* b = pop().asString();
@@ -570,14 +586,14 @@ void runtime::Thread::executeBytecode() {
 				runtimeError(std::format("Operands must be two numbers or two strings, got {} and {}.",
 					peek(1).typeToStr(), peek(0).typeToStr()));
 			}
-			break;
+			DISPATCH();
 		}
-		case +OpCode::SUBTRACT: BINARY_OP(NUMBER_VAL, -); break;
-		case +OpCode::MULTIPLY: BINARY_OP(NUMBER_VAL, *); break;
-		case +OpCode::DIVIDE:   BINARY_OP(NUMBER_VAL, / ); break;
-		case +OpCode::MOD:	  INT_BINARY_OP(NUMBER_VAL, %); break;
-		case +OpCode::BITSHIFT_LEFT: INT_BINARY_OP(NUMBER_VAL, << ); break;
-		case +OpCode::BITSHIFT_RIGHT: INT_BINARY_OP(NUMBER_VAL, >> ); break;
+		case +OpCode::SUBTRACT: BINARY_OP(NUMBER_VAL, -); DISPATCH();
+		case +OpCode::MULTIPLY: BINARY_OP(NUMBER_VAL, *); DISPATCH();
+		case +OpCode::DIVIDE:   BINARY_OP(NUMBER_VAL, / ); DISPATCH();
+		case +OpCode::MOD:	  INT_BINARY_OP(NUMBER_VAL, %); DISPATCH();
+		case +OpCode::BITSHIFT_LEFT: INT_BINARY_OP(NUMBER_VAL, << ); DISPATCH();
+		case +OpCode::BITSHIFT_RIGHT: INT_BINARY_OP(NUMBER_VAL, >> ); DISPATCH();
 		#pragma endregion
 
 		#pragma region Binary that returns bools
@@ -585,15 +601,15 @@ void runtime::Thread::executeBytecode() {
 			Value b = pop();
 			Value a = pop();
 			push(Value(a == b));
-			break;
+			DISPATCH();
 		}
 		case +OpCode::NOT_EQUAL: {
 			Value b = pop();
 			Value a = pop();
 			push(Value(a != b));
-			break;
+			DISPATCH();
 		}
-		case +OpCode::GREATER: BINARY_OP(BOOL_VAL, > ); break;
+		case +OpCode::GREATER: BINARY_OP(BOOL_VAL, > ); DISPATCH();
 		case +OpCode::GREATER_EQUAL: {
 			//Have to do this because of floating point comparisons
 			if (!peek(0).isNumber() || !peek(1).isNumber()) {
@@ -603,9 +619,9 @@ void runtime::Thread::executeBytecode() {
 			double a = get<double>(pop().value);
 			if (a > b || FLOAT_EQ(a, b)) push(Value(true));
 			else push(Value(false));
-			break;
+			DISPATCH();
 		}
-		case +OpCode::LESS: BINARY_OP(BOOL_VAL, < ); break;
+		case +OpCode::LESS: BINARY_OP(BOOL_VAL, < ); DISPATCH();
 		case +OpCode::LESS_EQUAL: {
 			//Have to do this because of floating point comparisons
 			if (!peek(0).isNumber() || !peek(1).isNumber()) {
@@ -615,7 +631,7 @@ void runtime::Thread::executeBytecode() {
 			double a = get<double>(pop().value);
 			if (a < b || FLOAT_EQ(a, b)) push(Value(true));
 			else push(Value(false));
-			break;
+			DISPATCH();
 		}
 		#pragma endregion
 
@@ -623,20 +639,20 @@ void runtime::Thread::executeBytecode() {
 		case +OpCode::PRINT: {
 			pop().print();
 			std::cout << "\n";
-			break;
+			DISPATCH();
 		}
 
 		case +OpCode::DEFINE_GLOBAL: {
 			byte index = readByte();
 			vm->globals[index].val = pop();
 			vm->globals[index].isDefined = true;
-			break;
+			DISPATCH();
 		}
 		case +OpCode::DEFINE_GLOBAL_LONG: {
 			uInt index = readShort();
 			vm->globals[index].val = pop();
 			vm->globals[index].isDefined = true;
-			break;
+			DISPATCH();
 		}
 
 		case +OpCode::GET_GLOBAL: {
@@ -646,7 +662,7 @@ void runtime::Thread::executeBytecode() {
 				runtimeError(std::format("Undefined variable '{}'.", var.name));
 			}
 			push(var.val);
-			break;
+			DISPATCH();
 		}
 		case +OpCode::GET_GLOBAL_LONG: {
 			uInt index = readShort();
@@ -655,7 +671,7 @@ void runtime::Thread::executeBytecode() {
 				runtimeError(std::format("Undefined variable '{}'.", var.name));
 			}
 			push(var.val);
-			break;
+			DISPATCH();
 		}
 
 		case +OpCode::SET_GLOBAL: {
@@ -665,7 +681,7 @@ void runtime::Thread::executeBytecode() {
 				runtimeError(std::format("Undefined variable '{}'.", var.name));
 			}
 			var.val = peek(0);
-			break;
+			DISPATCH();
 		}
 		case +OpCode::SET_GLOBAL_LONG: {
 			uInt index = readShort();
@@ -674,119 +690,121 @@ void runtime::Thread::executeBytecode() {
 				runtimeError(std::format("Undefined variable '{}'.", var.name));
 			}
 			var.val = peek(0);
-			break;
+			DISPATCH();
 		}
 
 		case +OpCode::GET_LOCAL: {
 			uint8_t slot = readByte();
-			Value val = frame->slots[slot];
+			Value& val = slotStart[slot];
 			if (val.isUpvalue()) {
 				push(val.asUpvalue()->val);
 				break;
 			}
-			push(frame->slots[slot]);
-			break;
+			push(slotStart[slot]);
+			DISPATCH();
 		}
 
 		case +OpCode::SET_LOCAL: {
 			uint8_t slot = readByte();
-			Value val = frame->slots[slot];
+			Value& val = slotStart[slot];
 			if (val.isUpvalue()) {
 				val.asUpvalue()->val = peek(0);
 				break;
 			}
-			frame->slots[slot] = peek(0);
-			break;
+			slotStart[slot] = peek(0);
+			DISPATCH();
 		}
 
 		case +OpCode::GET_UPVALUE: {
 			uint8_t slot = readByte();
 			push(frame->closure->upvals[slot]->val);
-			break;
+			DISPATCH();
 		}
 		case +OpCode::SET_UPVALUE: {
 			uint8_t slot = readByte();
 			frame->closure->upvals[slot]->val = peek(0);
-			break;
+			DISPATCH();
 		}
 		#pragma endregion
 
 		#pragma region Control flow
 		case +OpCode::JUMP: {
 			uint16_t offset = readShort();
-			frame->ip += offset;
-			break;
+			ip += offset;
+			DISPATCH();
 		}
 
 		case +OpCode::JUMP_IF_FALSE: {
 			uint16_t offset = readShort();
-			if (isFalsey(peek(0))) frame->ip += offset;
-			break;
+			if (isFalsey(peek(0))) ip += offset;
+			DISPATCH();
 		}
-
 		case +OpCode::JUMP_IF_TRUE: {
 			uint16_t offset = readShort();
-			if (!isFalsey(peek(0))) frame->ip += offset;
-			break;
+			if (!isFalsey(peek(0))) ip += offset;
+			DISPATCH();
 		}
-
 		case +OpCode::JUMP_IF_FALSE_POP: {
 			uint16_t offset = readShort();
-			if (isFalsey(pop())) frame->ip += offset;
-			break;
+			if (isFalsey(pop())) ip += offset;
+			DISPATCH();
 		}
 
 		case +OpCode::LOOP_IF_TRUE: {
 			uint16_t offset = readShort();
-			if (!isFalsey(pop())) frame->ip -= offset;
-			break;
+			if (!isFalsey(pop())) ip -= offset;
+			DISPATCH();
 		}
-
 		case +OpCode::LOOP: {
 			uint16_t offset = readShort();
-			frame->ip -= offset;
-			break;
+			ip -= offset;
+			DISPATCH();
 		}
 
 		case +OpCode::JUMP_POPN: {
 			stackTop -= readByte();
-			frame->ip += readShort();
-			break;
+			ip += readShort();
+			DISPATCH();
 		}
 
 		case +OpCode::SWITCH: {
 			Value val = pop();
 			uInt caseNum = readShort();
-			uInt offset = frame->ip + caseNum;
-			int jumpOffset = -1;
+			// Offset into constant indexes
+			byte* offset = ip + caseNum;
+			// Place in the bytecode where the jump is held
+			byte* jumpOffset = nullptr;
 			for (int i = 0; i < caseNum; i++) {
 				if (val == readConstant()) {
 					jumpOffset = offset + (i * 2);
 					break;
 				}
 			}
-			if (jumpOffset == -1) jumpOffset = offset + caseNum * 2;
-			frame->ip = jumpOffset;
+			// Default
+			if (!jumpOffset) jumpOffset = offset + caseNum * 2;
+			ip = jumpOffset;
 			uInt jmp = readShort();
-			frame->ip += jmp;
-			break;
+			ip += jmp;
+			DISPATCH();
 		}
 		case +OpCode::SWITCH_LONG: {
 			Value val = pop();
 			uInt caseNum = readShort();
-			uInt offset = frame->ip + caseNum * 2;
-			int jumpOffset = -1;
+			// Offset into constant indexes
+			byte* offset = ip + caseNum * 2;
+			// Place in the bytecode where the jump is held
+			byte* jumpOffset = nullptr;
 			for (int i = 0; i < caseNum; i++) {
 				if (val == readConstantLong()) {
 					jumpOffset = offset + (i * 2);
 					break;
 				}
 			}
-			if (jumpOffset == -1) jumpOffset = offset + caseNum * 2;
-			frame->ip = jumpOffset;
+			if (!jumpOffset) jumpOffset = offset + caseNum * 2;
+			ip = jumpOffset;
 			uInt jmp = readShort();
-			frame->ip += jmp;
-			break;
+			ip += jmp;
+			DISPATCH();
 		}
 		#pragma endregion
 
@@ -794,12 +812,13 @@ void runtime::Thread::executeBytecode() {
 		case +OpCode::CALL: {
 			// How many values are on the stack right now
 			int argCount = readByte();
+			storeFrame();
 			if (!callValue(peek(argCount), argCount)) {
 				return;
 			}
-			// If the call is succesful, there is a new call frame, so we need to update the pointer
-			frame = &frames[frameCount - 1];
-			break;
+			// If the call is succesful, there is a new call frame, so we need to update locals
+			loadFrame();
+			DISPATCH();
 		}
 
 		case +OpCode::RETURN: {
@@ -825,12 +844,11 @@ void runtime::Thread::executeBytecode() {
 				cv.notify_one();
 				return;
 			}
-
-			stackTop = frame->slots;
+			stackTop = slotStart;
 			push(result);
-			// If the call is succesful, there is a new call frame, so we need to update the pointer
-			frame = &frames[frameCount - 1];
-			break;
+			// Update locals with the values of the frame below
+			loadFrame();
+			DISPATCH();
 		}
 
 		case +OpCode::CLOSURE: {
@@ -839,14 +857,14 @@ void runtime::Thread::executeBytecode() {
 				uint8_t isLocal = readByte();
 				uint8_t index = readByte();
 				if (isLocal) {
-					closure->upvals[i] = captureUpvalue(frame->slots + index);
+					closure->upvals[i] = captureUpvalue(slotStart + index);
 				}
 				else {
 					closure->upvals[i] = frame->closure->upvals[index];
 				}
 			}
 			push(Value(closure));
-			break;
+			DISPATCH();
 		}
 		case +OpCode::CLOSURE_LONG: {
 			object::ObjClosure* closure = new object::ObjClosure(readConstantLong().asFunction());
@@ -854,14 +872,14 @@ void runtime::Thread::executeBytecode() {
 				uint8_t isLocal = readByte();
 				uint8_t index = readByte();
 				if (isLocal) {
-					closure->upvals[i] = captureUpvalue(frame->slots + index);
+					closure->upvals[i] = captureUpvalue(slotStart + index);
 				}
 				else {
 					closure->upvals[i] = frame->closure->upvals[index];
 				}
 			}
 			push(Value(closure));
-			break;
+			DISPATCH();
 		}
 		#pragma endregion
 
@@ -882,7 +900,7 @@ void runtime::Thread::executeBytecode() {
 			}
 			newFut->startParallelExecution();
 			push(Value(newFut));
-			break;
+			DISPATCH();
 		}
 
 		case +OpCode::AWAIT: {
@@ -894,7 +912,7 @@ void runtime::Thread::executeBytecode() {
 			deleteThread(futToAwait, vm);
 			// Can safely access fut->val from this thread since the value is being read and won't be written to again 
 			push(futToAwait->val);
-			break;
+			DISPATCH();
 		}
 		#pragma endregion
 
@@ -913,7 +931,7 @@ void runtime::Thread::executeBytecode() {
 				i++;
 			}
 			push(Value(arr));
-			break;
+			DISPATCH();
 		}
 
 		case +OpCode::GET: {
@@ -948,7 +966,7 @@ void runtime::Thread::executeBytecode() {
 				break;
 			}
 			}
-			break;
+			DISPATCH();
 		}
 
 		case +OpCode::SET: {
@@ -981,12 +999,12 @@ void runtime::Thread::executeBytecode() {
 				break;
 			}
 			}
-			break;
+			DISPATCH();
 		}
 
 		case +OpCode::CLASS: {
 			push(Value(new object::ObjClass(readStringLong()->str)));
-			break;
+			DISPATCH();
 		}
 
 		case +OpCode::GET_PROPERTY: {
@@ -1006,7 +1024,7 @@ void runtime::Thread::executeBytecode() {
 
 			if (instance->klass && bindMethod(instance->klass, name)) break;
 			runtimeError(std::format("Field '{}' doesn't exist.", name));
-			break;
+			DISPATCH();
 		}
 		case +OpCode::GET_PROPERTY_LONG: {
 			Value inst = pop();
@@ -1025,7 +1043,7 @@ void runtime::Thread::executeBytecode() {
 
 			if (instance->klass && bindMethod(instance->klass, name)) break;
 			runtimeError(std::format("Field '{}' doesn't exist.", name));
-			break;
+			DISPATCH();
 		}
 
 		case +OpCode::SET_PROPERTY: {
@@ -1037,7 +1055,7 @@ void runtime::Thread::executeBytecode() {
 
 			//we don't care if we're overriding or creating a new field
 			instance->fields.insert_or_assign(readString()->str, peek(0));
-			break;
+			DISPATCH();
 		}
 		case +OpCode::SET_PROPERTY_LONG: {
 			Value inst = pop();
@@ -1048,7 +1066,7 @@ void runtime::Thread::executeBytecode() {
 
 			//we don't care if we're overriding or creating a new field
 			instance->fields.insert_or_assign(readStringLong()->str, peek(0));
-			break;
+			DISPATCH();
 		}
 
 		case +OpCode::CREATE_STRUCT: {
@@ -1063,7 +1081,7 @@ void runtime::Thread::executeBytecode() {
 				inst->fields.insert_or_assign(name->str, pop());
 			}
 			push(Value(inst));
-			break;
+			DISPATCH();
 		}
 		case +OpCode::CREATE_STRUCT_LONG: {
 			int numOfFields = readByte();
@@ -1077,34 +1095,36 @@ void runtime::Thread::executeBytecode() {
 				inst->fields.insert_or_assign(name->str, pop());
 			}
 			push(Value(inst));
-			break;
+			DISPATCH();
 		}
 
 		case +OpCode::METHOD: {
 			//class that this method binds too
 			defineMethod(readStringLong()->str);
-			break;
+			DISPATCH();
 		}
 
 		case +OpCode::INVOKE: {
 			//gets the method and calls it immediatelly, without converting it to a objBoundMethod
 			string method = readString()->str;
 			int argCount = readByte();
+			storeFrame();
 			if (!invoke(method, argCount)) {
 				return;
 			}
-			frame = &frames[frameCount - 1];
-			break;
+			loadFrame();
+			DISPATCH();
 		}
 		case +OpCode::INVOKE_LONG: {
 			//gets the method and calls it immediatelly, without converting it to a objBoundMethod
 			string method = readStringLong()->str;
 			int argCount = readByte();
+			storeFrame();
 			if (!invoke(method, argCount)) {
 				return;
 			}
-			frame = &frames[frameCount - 1];
-			break;
+			loadFrame();
+			DISPATCH();
 		}
 
 		case +OpCode::INHERIT: {
@@ -1117,7 +1137,7 @@ void runtime::Thread::executeBytecode() {
 			for (auto it : superclass.asClass()->methods) {
 				subclass->methods.insert_or_assign(it.first, it.second);
 			}
-			break;
+			DISPATCH();
 		}
 
 		case +OpCode::GET_SUPER: {
@@ -1126,7 +1146,7 @@ void runtime::Thread::executeBytecode() {
 			object::ObjClass* superclass = pop().asClass();
 
 			if (!bindMethod(superclass, name)) return;
-			break;
+			DISPATCH();
 		}
 		case +OpCode::GET_SUPER_LONG: {
 			//super is ALWAYS followed by a field
@@ -1134,7 +1154,7 @@ void runtime::Thread::executeBytecode() {
 			object::ObjClass* superclass = pop().asClass();
 
 			if (!bindMethod(superclass, name)) return;
-			break;
+			DISPATCH();
 		}
 
 		case +OpCode::SUPER_INVOKE: {
@@ -1142,30 +1162,24 @@ void runtime::Thread::executeBytecode() {
 			string method = readString()->str;
 			int argCount = readByte();
 			object::ObjClass* superclass = pop().asClass();
-
+			storeFrame();
 			if (!invokeFromClass(superclass, method, argCount)) return;
-			frame = &frames[frameCount - 1];
-			break;
+			loadFrame();
+			DISPATCH();
 		}
 		case +OpCode::SUPER_INVOKE_LONG: {
 			//works same as +OpCode::INVOKE, but uses invokeFromClass() to specify the superclass
 			string method = readStringLong()->str;
 			int argCount = readByte();
 			object::ObjClass* superclass = pop().asClass();
-
+			storeFrame();
 			if (!invokeFromClass(superclass, method, argCount)) return;
-			frame = &frames[frameCount - 1];
-			break;
+			loadFrame();
+			DISPATCH();
 		}
 		#pragma endregion
-
 		}
-	}
 
-#undef READ_BYTE
-#undef READ_CONSTANT
 #undef BINARY_OP
 #undef INT_BINARY_OP
-#undef READ_STRING
-#undef READ_SHORT
 }

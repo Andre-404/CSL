@@ -80,6 +80,7 @@ namespace memory {
 		}
 		c->func->marked = true;
 		c->func->trace();
+		for (Value& val : c->chunk.constants) val.mark();
 	}
 
 	void GarbageCollector::sweep() {

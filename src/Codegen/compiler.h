@@ -42,6 +42,7 @@ namespace compileCore {
 		CurrentChunkInfo* enclosing;
 		//function whose information is contained within this chunk info
 		object::ObjFunc* func;
+		Chunk chunk;
 		FuncType type;
 		bool hasReturnStmt;
 
@@ -71,15 +72,18 @@ namespace compileCore {
 
 	class Compiler : public AST::Visitor {
 	public:
-		//compiler only ever emits the code for a single function, top level code is considered a function
+		// Compiler only ever emits the code for a single function, top level code is considered a function
 		CurrentChunkInfo* current;
 		ClassChunkInfo* currentClass;
-		//passed to the VM, used for highlighting runtime errors, managed by the VM
+		// Passed to the VM, used for highlighting runtime errors, managed by the VM
 		vector<File*> sourceFiles;
+		// Passed to the VM
+		vector<Globalvar> globals;
+		Chunk mainCodeBlock;
+
 		Compiler(vector<CSLModule*>& units);
 		Chunk* getChunk();
 		object::ObjFunc* endFuncDecl();
-		vector<Globalvar> globals;
 
 		#pragma region Visitor pattern
 		void visitAssignmentExpr(AST::AssignmentExpr* expr);

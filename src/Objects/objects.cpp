@@ -40,14 +40,14 @@ ObjString* ObjString::concat(ObjString* other) {
 ObjFunc::ObjFunc() {
 	arity = 0;
 	upvalueCount = 0;
+	bytecodeOffset = 0;
+	constantsOffset = 0;
 	type = ObjType::FUNC;
 	name = "";
 }
 
 void ObjFunc::trace() {
-	for (Value& val : body.constants) {
-		val.mark();
-	}
+	// Nothing
 }
 
 string ObjFunc::toString() {

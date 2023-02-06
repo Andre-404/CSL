@@ -242,7 +242,7 @@ struct codeLine {
 class Chunk {
 public:
 	vector<codeLine> lines;
-	vector<uint8_t> code;
+	vector<uint8_t> bytecode;
 	vector<Value> constants;
 	Chunk();
 	void writeData(uint8_t opCode, uInt line, byte fileIndex);
@@ -256,9 +256,9 @@ public:
 
 struct CallFrame {
 	object::ObjClosure* closure;
-	uInt64 ip;
+	byte* ip;
 	Value* slots;
-	CallFrame() : closure(nullptr), ip(0), slots(nullptr) {};
+	CallFrame() : closure(nullptr), ip(nullptr), slots(nullptr) {};
 };
 
 enum class RuntimeResult {

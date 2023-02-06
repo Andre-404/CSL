@@ -13,10 +13,12 @@ namespace runtime {
 		void execute();
 		void mark(memory::GarbageCollector* gc);
 		bool allThreadsPaused();
-		//used by threads
+		// Used by all threads
 		vector<Globalvar> globals;
 		vector<File*> sourceFiles;
-		//for adding/removing threads
+		// Main code block, all function look into this vector at some offset
+		Chunk code;
+		// For adding/removing threads
 		std::mutex mtx;
 		vector<Thread*> childThreads;
 

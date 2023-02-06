@@ -9,8 +9,13 @@ using std::get;
 
 runtime::VM::VM(compileCore::Compiler* compiler) {
 	globals = compiler->globals;
+	// For stack tracing during error printing
 	sourceFiles = compiler->sourceFiles;
+	// Have to do this before assigning compiler->mainCodeBlock to code becuase endFuncDecl mutates mainCodeBlock
 	Value val = Value(new object::ObjClosure(compiler->endFuncDecl()));
+	// Main code block
+	code = compiler->mainCodeBlock;
+
 	mainThread = new Thread(this);
 	// First value on the stack is the future holding the thread, mainThread has nil
 	mainThread->copyVal(Value::nil());
@@ -22,6 +27,7 @@ void runtime::VM::mark(memory::GarbageCollector* gc) {
 	// All threads in vector are active, finished threads get deleted automatically
 	for (Thread* t : childThreads) t->mark(gc);
 	mainThread->mark(gc);
+	for (Value& val : code.constants) val.mark();
 }
 
 void runtime::VM::execute() {

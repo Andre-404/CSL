@@ -84,7 +84,8 @@ namespace object {
 
 	class ObjFunc : public Obj {
 	public:
-		Chunk body;
+		uInt64 bytecodeOffset;
+		uInt64 constantsOffset;
 		string name;
 		//function can have a maximum of 255 parameters
 		byte arity;

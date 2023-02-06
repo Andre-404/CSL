@@ -34,6 +34,7 @@ CurrentChunkInfo::CurrentChunkInfo(CurrentChunkInfo* _enclosing, FuncType _type)
 	else {
 		local->name = "";
 	}
+	chunk = Chunk();
 	func = new ObjFunc();
 }
 
@@ -582,7 +583,7 @@ void Compiler::visitWhileStmt(AST::WhileStmt* stmt) {
 	stmt->condition->accept(this);
 	int jump = emitJump(+OpCode::JUMP_IF_FALSE_POP);
 	//if the condition is true, compile the body and then the condition again and if its true we loop back to the start of the body
-	int loopStart = getChunk()->code.size();
+	int loopStart = getChunk()->bytecode.size();
 	//loop body gets it's own scope because we only patch break and continue jumps which are declared in higher scope depths
 	//user might not use {} block when writing a loop, this ensures the body is always in it's own scope
 	current->scopeWithLoop.push_back(current->scopeDepth);
@@ -610,7 +611,7 @@ void Compiler::visitForStmt(AST::ForStmt* stmt) {
 		exitJump = emitJump(+OpCode::JUMP_IF_FALSE_POP);
 	}
 
-	int loopStart = getChunk()->code.size();
+	int loopStart = getChunk()->bytecode.size();
 	//loop body gets it's own scope because we only patch break and continue jumps which are declared in higher scope depths
 	//user might not use {} block when writing a loop, this ensures the body is always in it's own scope
 	current->scopeWithLoop.push_back(current->scopeDepth);
@@ -634,7 +635,7 @@ void Compiler::visitForStmt(AST::ForStmt* stmt) {
 		//if there isn't a condition, it's implictly defined as 'true'
 		emitByte(+OpCode::LOOP);
 
-		int offset = getChunk()->code.size() - loopStart + 2;
+		int offset = getChunk()->bytecode.size() - loopStart + 2;
 		if (offset > UINT16_MAX) error("Loop body too large.");
 
 		emit16Bit(offset);
@@ -662,7 +663,7 @@ void Compiler::visitBreakStmt(AST::BreakStmt* stmt) {
 		error(stmt->token, "To many variables to pop.");
 	}
 	emitByte(+ScopeJumpType::BREAK);
-	int breakJump = getChunk()->code.size();
+	int breakJump = getChunk()->bytecode.size();
 	emitBytes((current->scopeDepth >> 8) & 0xff, current->scopeDepth & 0xff);
 	emitByte(toPop);
 	current->scopeJumps.push_back(breakJump);
@@ -685,7 +686,7 @@ void Compiler::visitContinueStmt(AST::ContinueStmt* stmt) {
 		error(stmt->token, "To many variables to pop.");
 	}
 	emitByte(+ScopeJumpType::CONTINUE);
-	int continueJump = getChunk()->code.size();
+	int continueJump = getChunk()->bytecode.size();
 	emitBytes((current->scopeDepth >> 8) & 0xff, current->scopeDepth & 0xff);
 	emitByte(toPop);
 	current->scopeJumps.push_back(continueJump);
@@ -755,11 +756,11 @@ void Compiler::visitSwitchStmt(AST::SwitchStmt* stmt) {
 	}
 
 	for (int i = 0; i < constants.size(); i++) {
-		jumps.push_back(getChunk()->code.size());
+		jumps.push_back(getChunk()->bytecode.size());
 		emit16Bit(0xffff);
 	}
 	//default jump
-	jumps.push_back(getChunk()->code.size());
+	jumps.push_back(getChunk()->bytecode.size());
 	emit16Bit(0xffff);
 
 	//at the end of each case is a implicit break
@@ -789,7 +790,7 @@ void Compiler::visitSwitchStmt(AST::SwitchStmt* stmt) {
 		patchScopeJumps(ScopeJumpType::ADVANCE);
 	}
 	//if there is no default case the default jump goes to the end of the switch stmt
-	if (!stmt->hasDefault) jumps[jumps.size() - 1] = getChunk()->code.size();
+	if (!stmt->hasDefault) jumps[jumps.size() - 1] = getChunk()->bytecode.size();
 
 	//all implicit breaks lead to the end of the switch statement
 	for (uInt jmp : implicitBreaks) {
@@ -823,7 +824,7 @@ void Compiler::visitAdvanceStmt(AST::AdvanceStmt* stmt) {
 		error(stmt->token, "To many variables to pop.");
 	}
 	emitByte(+ScopeJumpType::ADVANCE);
-	int advanceJump = getChunk()->code.size();
+	int advanceJump = getChunk()->bytecode.size();
 	emitBytes((current->scopeDepth >> 8) & 0xff, current->scopeDepth & 0xff);
 	emitByte(toPop);
 	current->scopeJumps.push_back(advanceJump);
@@ -896,37 +897,37 @@ void Compiler::emitReturn() {
 int Compiler::emitJump(byte jumpType) {
 	emitByte(jumpType);
 	emitBytes(0xff, 0xff);
-	return getChunk()->code.size() - 2;
+	return getChunk()->bytecode.size() - 2;
 }
 
 void Compiler::patchJump(int offset) {
 	// -2 to adjust for the bytecode for the jump offset itself.
-	int jump = getChunk()->code.size() - offset - 2;
+	int jump = getChunk()->bytecode.size() - offset - 2;
 	//fix for future: insert 2 more bytes into the array, but make sure to do the same in lines array
 	if (jump > UINT16_MAX) {
 		error("Too much code to jump over.");
 	}
-	getChunk()->code[offset] = (jump >> 8) & 0xff;
-	getChunk()->code[offset + 1] = jump & 0xff;
+	getChunk()->bytecode[offset] = (jump >> 8) & 0xff;
+	getChunk()->bytecode[offset + 1] = jump & 0xff;
 }
 
 void Compiler::emitLoop(int start) {
 	emitByte(+OpCode::LOOP_IF_TRUE);
 
-	int offset = getChunk()->code.size() - start + 2;
+	int offset = getChunk()->bytecode.size() - start + 2;
 	if (offset > UINT16_MAX) error("Loop body too large.");
 
 	emit16Bit(offset);
 }
 
 void Compiler::patchScopeJumps(ScopeJumpType type) {
-	int curCode = getChunk()->code.size();
+	int curCode = getChunk()->bytecode.size();
 	//most recent jumps are going to be on top
 	for (int i = current->scopeJumps.size() - 1; i >= 0; i--) {
 		uInt jumpPatchPos = current->scopeJumps[i];
-		byte jumpType = getChunk()->code[jumpPatchPos - 1];
-		uInt jumpDepth = (getChunk()->code[jumpPatchPos] << 8) | getChunk()->code[jumpPatchPos + 1];
-		uInt toPop = getChunk()->code[jumpPatchPos + 2];
+		byte jumpType = getChunk()->bytecode[jumpPatchPos - 1];
+		uInt jumpDepth = (getChunk()->bytecode[jumpPatchPos] << 8) | getChunk()->bytecode[jumpPatchPos + 1];
+		uInt toPop = getChunk()->bytecode[jumpPatchPos + 2];
 		//break and advance statements which are in a strictly deeper scope get patched, on the other hand
 		//continue statements which are in current or a deeper scope get patched
 		if (jumpDepth > current->scopeDepth && +type == jumpType) {
@@ -934,12 +935,12 @@ void Compiler::patchScopeJumps(ScopeJumpType type) {
 			if (jumpLenght > UINT16_MAX) error("Too much code to jump over.");
 			if (toPop > UINT8_MAX) error("Too many variables to pop.");
 
-			getChunk()->code[jumpPatchPos - 1] = +OpCode::JUMP_POPN;
+			getChunk()->bytecode[jumpPatchPos - 1] = +OpCode::JUMP_POPN;
 			//variables declared by the time we hit the break whose depth is lower or equal to this break stmt
-			getChunk()->code[jumpPatchPos] = toPop;
+			getChunk()->bytecode[jumpPatchPos] = toPop;
 			//amount to jump
-			getChunk()->code[jumpPatchPos + 1] = (jumpLenght >> 8) & 0xff;
-			getChunk()->code[jumpPatchPos + 2] = jumpLenght & 0xff;
+			getChunk()->bytecode[jumpPatchPos + 1] = (jumpLenght >> 8) & 0xff;
+			getChunk()->bytecode[jumpPatchPos + 2] = jumpLenght & 0xff;
 
 			current->scopeJumps.erase(current->scopeJumps.begin() + i);
 		}
@@ -1229,7 +1230,7 @@ bool Compiler::invoke(AST::CallExpr* expr) {
 
 
 Chunk* Compiler::getChunk() {
-	return &current->func->body;
+	return &current->chunk;
 }
 
 void Compiler::error(string message) {
@@ -1244,13 +1245,28 @@ void Compiler::error(Token token, string msg) {
 
 ObjFunc* Compiler::endFuncDecl() {
 	if (!current->hasReturnStmt) emitReturn();
-	//get the current function we've just compiled, delete it's compiler info, and replace it with the enclosing functions compiler info
+	// Get the current function we've just compiled, delete it's compiler info, and replace it with the enclosing functions compiler info
 	ObjFunc* func = current->func;
-	//for the last line of code
-	func->body.lines[func->body.lines.size() - 1].end = func->body.code.size();
+	Chunk& chunk = current->chunk;
+	// For the last line of code
+	chunk.lines[chunk.lines.size() - 1].end = chunk.bytecode.size();
 #ifdef COMPILER_DEBUG
-	current->func->body.disassemble(current->func->name.length() == 0 ? "script" : current->func->name);
+	chunk.disassemble(current->func->name.length() == 0 ? "script" : current->func->name);
 #endif
+	//Add the bytecode, lines and constants to the main code block
+	uInt64 bytecodeOffset = mainCodeBlock.bytecode.size();
+	mainCodeBlock.bytecode.insert(mainCodeBlock.bytecode.end(), chunk.bytecode.begin(), chunk.bytecode.end());
+	uInt64 constantsOffset = mainCodeBlock.constants.size();
+	mainCodeBlock.constants.insert(mainCodeBlock.constants.end(), chunk.constants.begin(), chunk.constants.end());
+	// Update lines to reflect the offset in the main code block
+	for (codeLine& line : chunk.lines) {
+		line.end += bytecodeOffset;
+		mainCodeBlock.lines.push_back(line);
+	}
+	// Set the offsets in the function object
+	func->bytecodeOffset = bytecodeOffset;
+	func->constantsOffset = constantsOffset;
+
 	CurrentChunkInfo* temp = current->enclosing;
 	delete current;
 	current = temp;

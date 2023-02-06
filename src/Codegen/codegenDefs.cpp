@@ -12,7 +12,7 @@ using std::get;
 Chunk::Chunk() {}
 
 void Chunk::writeData(uint8_t opCode, uInt line, byte fileIndex) {
-	code.push_back(opCode);
+	bytecode.push_back(opCode);
 	if (lines.size() == 0) {
 		lines.push_back(codeLine(line, fileIndex));
 		return;
@@ -20,7 +20,7 @@ void Chunk::writeData(uint8_t opCode, uInt line, byte fileIndex) {
 	if (lines[lines.size() - 1].line == line) return;
 	//if we're on a new line, mark the end of the bytecode for this line
 	//when looking up the line of code for a particular OP we check if it's position in 'code' is less than .end of a line
-	lines[lines.size() - 1].end = code.size() - 1;
+	lines[lines.size() - 1].end = bytecode.size() - 1;
 	lines.push_back(codeLine(line, fileIndex));
 }
 
@@ -36,7 +36,7 @@ codeLine Chunk::getLine(uInt offset) {
 void Chunk::disassemble(string name) {
 	std::cout << "=======" << name << "=======\n";
 	//prints every instruction in chunk
-	for (uInt offset = 0; offset < code.size();) {
+	for (uInt offset = 0; offset < bytecode.size();) {
 		offset = disassembleInstruction(this, offset);
 	}
 }
