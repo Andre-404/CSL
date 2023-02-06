@@ -15,11 +15,12 @@ int main(int argc, char* argv[]) {
 	AST::Parser pa;
 	pa.parse(modules);
 	compileCore::Compiler c(modules);
+	errorHandler::showCompileErrors();
+	if (errorHandler::hasErrors()) exit(64);
 	runtime::VM* vm = new runtime::VM(&c);
 	auto t1 = std::chrono::high_resolution_clock::now();
 	vm->execute();
 	auto t2 = std::chrono::high_resolution_clock::now();
 	std::cout << duration_cast<std::chrono::milliseconds>(t2 - t1) << std::endl;
-	errorHandler::showCompileErrors();
 	return 0;
 }

@@ -173,6 +173,7 @@ string Value::typeToStr() {
 	case 1: return "bool";
 	case 2:
 		object::Obj* temp = get<object::Obj*>(value);
+		if (!temp) return "nil";
 		switch (temp->type) {
 		case object::ObjType::ARRAY: return "array";
 		case object::ObjType::BOUND_METHOD: return "method";

@@ -20,7 +20,7 @@ namespace runtime {
 
 		VM* vm;
 
-		byte getOp(long _ip);
+		byte getOp(uInt64 _ip);
 		void push(Value val);
 		Value pop();
 		Value peek(int depth);

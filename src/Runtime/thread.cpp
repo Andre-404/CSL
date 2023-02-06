@@ -37,7 +37,7 @@ string runtime::expectedType(string msg, Value val) {
 	return msg + val.typeToStr() + ".";
 }
 
-byte runtime::Thread::getOp(long _ip) {
+byte runtime::Thread::getOp(^uInt64 _ip) {
 	return frames[frameCount - 1].closure->func->body.code[_ip];
 }
 
@@ -121,10 +121,9 @@ bool runtime::Thread::callValue(Value callee, int argCount) {
 			return true;
 		}
 		case object::ObjType::CLASS: {
-			//we do this so if a GC runs we safely update all the pointers(since the stack is considered a root)
-			push(callee);
-			stackTop[-argCount - 2] = Value(new object::ObjInstance(peek(0).asClass()));
-			object::ObjClass* klass = pop().asClass();
+			// We do this so if a GC runs we safely update all the pointers(since the stack is considered a root)
+			stackTop[-argCount - 1] = Value(new object::ObjInstance(peek(0).asClass()));
+			object::ObjClass* klass = callee.asClass();
 			auto it = klass->methods.find(klass->name);
 			if (it != klass->methods.end()) {
 				return call(it->second.asClosure(), argCount);
@@ -165,7 +164,6 @@ bool runtime::Thread::call(object::ObjClosure* closure, int argCount) {
 	frame->ip = 0;
 	frame->slots = stackTop - argCount - 1;
 	return true;
-
 }
 
 object::ObjUpval* runtime::Thread::captureUpvalue(Value* local) {
@@ -280,8 +278,8 @@ void runtime::Thread::executeBytecode() {
 				runtimeError(std::format("Operands must be numbers, got '{}' and '{}'.", peek(1).typeToStr(), peek(0).typeToStr())); \
 			} \
 			double b = get<double>(pop().value); \
-			double a = get<double>(pop().value); \
-			push(Value(a op b)); \
+			Value* a = stackTop - 1; \
+			a->value = get<double>(a->value) op b; \
 		} while (false)
 
 	#define INT_BINARY_OP(valueType, op)\
@@ -289,9 +287,12 @@ void runtime::Thread::executeBytecode() {
 			if (!peek(0).isNumber() || !peek(1).isNumber()) { \
 				runtimeError(std::format("Operands must be numbers, got '{}' and '{}'.", peek(1).typeToStr(), peek(0).typeToStr())); \
 			} \
-			double b = get<double>(pop().value); \
-			double a = get<double>(pop().value); \
-			push(Value((double)((uInt64)a op (uInt64)b))); \
+			if (!IS_INT(get<double>(peek(0).value)) || !IS_INT(get<double>(peek(1).value))) { \
+				runtimeError("Operands must be a integers, got floats."); \
+			} \
+			uInt64 b = static_cast<uInt64>(get<double>(pop().value)); \
+			Value* a = stackTop - 1; \
+			a->value = static_cast<double>(static_cast<uInt64>(get<double>(a->value)) op b); \
 		} while (false)
 
 	#ifdef DEBUG_TRACE_EXECUTION
@@ -562,8 +563,8 @@ void runtime::Thread::executeBytecode() {
 			}
 			else if (peek(0).isNumber() && peek(1).isNumber()) {
 				double b = get<double>(pop().value);
-				double a = get<double>(pop().value);
-				push(Value(a + b));
+				Value* a = stackTop - 1;
+				a->value = get<double>(a->value) + b;
 			}
 			else {
 				runtimeError(std::format("Operands must be two numbers or two strings, got {} and {}.",

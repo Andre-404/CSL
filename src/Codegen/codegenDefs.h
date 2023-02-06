@@ -121,7 +121,7 @@ enum class OpCode {
 	POPN,//arg: 8-bit num
 	//constants
 	CONSTANT,//arg: 8-bit constant index
-	CONSTANT_LONG,//arg: 8-bit constant index
+	CONSTANT_LONG,//arg: 16-bit constant index
 	NIL,
 	TRUE,
 	FALSE,
