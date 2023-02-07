@@ -20,7 +20,7 @@ namespace memory {
 	}
 
 	void* GarbageCollector::alloc(uInt64 size) {
-		std::lock_guard<std::mutex> lk(allocMtx);
+		std::scoped_lock<std::mutex> lk(allocMtx);
 		heapSize += size;
 		if (heapSize > heapSizeLimit) shouldCollect = true;
 		byte* block = nullptr;
