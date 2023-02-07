@@ -319,15 +319,16 @@ void runtime::Thread::executeBytecode() {
 			// If fut is null, this is the main thread of execution which runs the GC
 			if (vm->allThreadsPaused()) {
 				memory::gc.collect(vm);
-				return;
 			}
-			// If some threads aren't sleeping yet, use a cond var to wait, every child thread will notify the var when it goes to sleep
-			std::unique_lock lk(vm->pauseMtx);
-			vm->mainThreadCv.wait(lk, [&] { return vm->allThreadsPaused(); });
-			// Release the mutex here so that GC can aquire it
-			lk.unlock();
-			// After all threads are asleep, run the GC and subsequently awaken all child threads
-			memory::gc.collect(vm);
+			else {
+				// If some threads aren't sleeping yet, use a cond var to wait, every child thread will notify the var when it goes to sleep
+				std::unique_lock lk(vm->pauseMtx);
+				vm->mainThreadCv.wait(lk, [&] { return vm->allThreadsPaused(); });
+				// Release the mutex here so that GC can aquire it
+				lk.unlock();
+				// After all threads are asleep, run the GC and subsequently awaken all child threads
+				memory::gc.collect(vm);
+			}
 		}
 		else if (fut && memory::gc.shouldCollect.load()) {
 			// If this is a child thread and the GC must run, notify the main thread that this one is paused
@@ -1176,6 +1177,13 @@ void runtime::Thread::executeBytecode() {
 		}
 		#pragma endregion
 		}
-#undef BINARY_OP
-#undef INT_BINARY_OP
+
+	#undef READ_BYTE
+	#undef READ_SHORT
+	#undef READ_CONSTANT
+	#undef READ_CONSTANT_LONG
+	#undef READ_STRING
+	#undef READ_STRING_LONG
+	#undef BINARY_OP
+	#undef INT_BINARY_OP
 }
