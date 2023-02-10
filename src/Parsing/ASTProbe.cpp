@@ -1,13 +1,12 @@
 #include "ASTProbe.h"
 
-void AST::ASTProbe::visitAssignmentExpr(AssignmentExpr* expr){}
-void AST::ASTProbe::visitSetExpr(SetExpr* expr){}
-void AST::ASTProbe::visitConditionalExpr(ConditionalExpr* expr){}
-void AST::ASTProbe::visitBinaryExpr(BinaryExpr* expr){}
+void AST::ASTProbe::visitAssignmentExpr(AssignmentExpr* expr) {}
+void AST::ASTProbe::visitSetExpr(SetExpr* expr) {}
+void AST::ASTProbe::visitConditionalExpr(ConditionalExpr* expr) {}
+void AST::ASTProbe::visitBinaryExpr(BinaryExpr* expr) {}
 void AST::ASTProbe::visitUnaryExpr(UnaryExpr* expr) {}
 void AST::ASTProbe::visitCallExpr(CallExpr* expr) {}
 void AST::ASTProbe::visitFieldAccessExpr(FieldAccessExpr* expr) {}
-void AST::ASTProbe::visitGroupingExpr(GroupingExpr* expr) {}
 void AST::ASTProbe::visitAsyncExpr(AsyncExpr* expr) {}
 void AST::ASTProbe::visitAwaitExpr(AwaitExpr* expr) {}
 void AST::ASTProbe::visitArrayLiteralExpr(ArrayLiteralExpr* expr) {}
@@ -16,6 +15,7 @@ void AST::ASTProbe::visitLiteralExpr(LiteralExpr* expr) { probedToken = expr->to
 void AST::ASTProbe::visitFuncLiteral(FuncLiteral* expr) {}
 void AST::ASTProbe::visitSuperExpr(SuperExpr* expr) {}
 void AST::ASTProbe::visitModuleAccessExpr(ModuleAccessExpr* expr) {}
+void AST::ASTProbe::visitMacroExpr(MacroExpr* expr) {}
 
 void AST::ASTProbe::visitVarDecl(VarDecl* decl) {}
 void AST::ASTProbe::visitFuncDecl(FuncDecl* decl) {}

@@ -58,15 +58,14 @@ void ASTPrinter::visitFieldAccessExpr(FieldAccessExpr* expr) {
 	cout << (expr->accessor.type == TokenType::LEFT_BRACKET ? "]" : "");
 }
 
-void ASTPrinter::visitGroupingExpr(GroupingExpr* expr) {
-	cout << "(group ";
-	expr->expr->accept(this);
-	cout << ")";
-}
-
 void ASTPrinter::visitAsyncExpr(AsyncExpr* expr) {
 	cout << "await ";
 	expr->callee->accept(this);
+	for (auto arg : expr->args) {
+		arg->accept(this);
+		cout << ", ";
+	}
+	cout << endl;
 }
 
 void ASTPrinter::visitAwaitExpr(AwaitExpr* expr) {
@@ -115,7 +114,14 @@ void ASTPrinter::visitModuleAccessExpr(ModuleAccessExpr* expr) {
 	cout << expr->moduleName.getLexeme() << "::" << expr->ident.getLexeme();
 }
 
-
+void AST::ASTPrinter::visitMacroExpr(MacroExpr* expr)
+{
+	cout << "macro invocation: " << expr->macroName.getLexeme() << " ";
+	for (Token token : expr->args) {
+		cout << token.getLexeme() << " ";
+	}
+	cout << endl;
+}
 
 void ASTPrinter::visitVarDecl(VarDecl* decl) {
 	cout << "var decl: " << decl->name.getLexeme() << " = ";
@@ -176,7 +182,7 @@ void ASTPrinter::visitIfStmt(IfStmt* stmt) {
 	stmt->condition->accept(this);
 	cout << ")";
 	stmt->thenBranch->accept(this);
-	if (stmt->elseBranch != nullptr) {
+	if (stmt->elseBranch) {
 		cout << "else";
 		stmt->elseBranch->accept(this);
 	}
@@ -191,15 +197,15 @@ void ASTPrinter::visitWhileStmt(WhileStmt* stmt) {
 
 void ASTPrinter::visitForStmt(ForStmt* stmt) {
 	cout << "for (";
-	if (stmt->init != nullptr) {
+	if (stmt->init) {
 		stmt->init->accept(this);
 		cout << "; ";
 	}
-	if (stmt->condition != nullptr) {
+	if (stmt->condition) {
 		stmt->condition->accept(this);
 		cout << "; ";
 	}
-	if (stmt->increment != nullptr) {
+	if (stmt->increment) {
 		stmt->increment->accept(this);
 	}
 	cout << ")";

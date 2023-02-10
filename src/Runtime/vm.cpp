@@ -1,9 +1,5 @@
 #include "vm.h"
-#include "../Codegen/compiler.h"
-#include "../MemoryManagment/garbageCollector.h"
-#include "../DebugPrinting/BytecodePrinter.h"
-#include <iostream>
-#include <format>
+#include "../codegen/compiler.h"
 
 using std::get;
 
@@ -11,8 +7,8 @@ runtime::VM::VM(compileCore::Compiler* compiler) {
 	globals = compiler->globals;
 	// For stack tracing during error printing
 	sourceFiles = compiler->sourceFiles;
-	// Have to do this before assigning compiler->mainCodeBlock to code becuase endFuncDecl mutates mainCodeBlock
-	Value val = Value(new object::ObjClosure(compiler->endFuncDecl()));
+	// Have to do this before assigning compiler->mainCodeBlock to code because endFuncDecl mutates mainCodeBlock
+	Value val = Value(new object::ObjClosure(compiler->mainBlockFunc));
 	// Main code block
 	code = compiler->mainCodeBlock;
 

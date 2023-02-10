@@ -279,10 +279,6 @@ void Compiler::visitFieldAccessExpr(AST::FieldAccessExpr* expr) {
 	}
 }
 
-void Compiler::visitGroupingExpr(AST::GroupingExpr* expr) {
-	expr->expr->accept(this);//grouping is only important during parsing for precedence levels
-}
-
 void Compiler::visitStructLiteralExpr(AST::StructLiteral* expr) {
 	vector<int> constants;
 
@@ -409,6 +405,11 @@ void Compiler::visitModuleAccessExpr(AST::ModuleAccessExpr* expr) {
 		return;
 	}
 	emitBytes(+OpCode::GET_GLOBAL, arg);
+}
+
+// This shouldn't ever be visited as every macro should be expaneded before compilation
+void Compiler::visitMacroExpr(AST::MacroExpr* expr) {
+	error("Non-expanded macro encountered during compilation.");
 }
 
 void Compiler::visitAsyncExpr(AST::AsyncExpr* expr) {

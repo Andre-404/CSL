@@ -1,7 +1,7 @@
 #include "parser.h"
 #include "../ErrorHandling/errorHandler.h"
 #include "../DebugPrinting/ASTPrinter.h"
-#include <format>
+#include "../Includes/fmt/format.h"
 
 using std::make_shared;
 using namespace AST;
@@ -50,12 +50,12 @@ namespace AST {
 				//grouping can contain a expr of any precedence
 				ASTNodePtr expr = cur->expression();
 				cur->consume(TokenType::RIGHT_PAREN, "Expected ')' at the end of grouping expression.");
-				return make_shared<GroupingExpr>(expr);
+				return expr;
 			}
-			//Array literal
+									  //Array literal
 			case TokenType::LEFT_BRACKET: {
 				vector<ASTNodePtr> members;
-				if (!(cur->peek().type == TokenType::RIGHT_BRACKET)) {
+				if (cur->peek().type != TokenType::RIGHT_BRACKET) {
 					do {
 						members.push_back(cur->expression());
 					} while (cur->match(TokenType::COMMA));
@@ -63,10 +63,10 @@ namespace AST {
 				cur->consume(TokenType::RIGHT_BRACKET, "Expect ']' at the end of an array literal.");
 				return make_shared<ArrayLiteralExpr>(members);
 			}
-			//Struct literal
+										//Struct literal
 			case TokenType::LEFT_BRACE: {
 				vector<StructEntry> entries;
-				if (!(cur->peek().type == TokenType::RIGHT_BRACE)) {
+				if (cur->peek().type != TokenType::RIGHT_BRACE) {
 					//a struct literal looks like this: {var1 : expr1, var2 : expr2}
 					do {
 						Token identifier = cur->consume(TokenType::IDENTIFIER, "Expected a identifier.");
@@ -78,7 +78,7 @@ namespace AST {
 				cur->consume(TokenType::RIGHT_BRACE, "Expect '}' after struct literal.");
 				return make_shared<StructLiteral>(entries);
 			}
-			//function literal
+									  //function literal
 			case TokenType::FUNC: {
 				//the depths are used for throwing errors for switch and loops stmts, 
 				//and since a function can be declared inside a loop we need to account for that
@@ -107,7 +107,7 @@ namespace AST {
 				cur->switchDepth = tempSwitchDepth;
 				return make_shared<FuncLiteral>(args, body);
 			}
-			//number, string, boolean or nil
+								//number, string, boolean or nil
 			default:
 				return make_shared<LiteralExpr>(token);
 			}
@@ -192,7 +192,7 @@ namespace AST {
 		}
 	};
 
-	//any binary operation + module alias access operator(::)
+	//any binary operation + module alias access operator(::) + macro invocation (!)
 	class BinaryParselet : public InfixParselet {
 	public:
 		BinaryParselet(Parser* _cur, int _prec) {
@@ -200,8 +200,8 @@ namespace AST {
 			prec = _prec;
 		}
 		ASTNodePtr parse(ASTNodePtr left, Token token, int surroundingPrec) {
+			// Module access operator
 			if (token.type == TokenType::DOUBLE_COLON) {
-				//dynamic cast B2D is dumb but its the best solution for this outlier
 				if (left->type == ASTType::LITERAL) {
 					left->accept(cur->probe);
 					Token ident = cur->consume(TokenType::IDENTIFIER, "Expected variable name.");
@@ -209,6 +209,23 @@ namespace AST {
 				}
 				else throw cur->error(token, "Expected module name identifier.");
 			}
+
+			// Macro invocation
+			if (token.type == TokenType::BANG) {
+				if (left->type == ASTType::LITERAL) {
+					left->accept(cur->probe);
+					Token macroName = cur->probe->getProbedToken();
+					if (macroName.type != TokenType::IDENTIFIER) {
+						throw cur->error(macroName, "Expected macro name to be an identifier.");
+					}
+					if (!cur->macros.contains(macroName.getLexeme())) {
+						throw cur->error(macroName, "Invoked macro isn't defined");
+					}
+					return make_shared<MacroExpr>(macroName, cur->readTokenTree());
+				}
+				throw cur->error(token, "Expected macro name to be an identifier.");
+			}
+
 			ASTNodePtr right = cur->expression(prec);
 			return make_shared<BinaryExpr>(left, token, right);
 		}
@@ -288,13 +305,16 @@ namespace AST {
 
 Parser::Parser() {
 	probe = new ASTProbe;
+	macroExpander = new MacroExpander(this);
 
-	current = 0;
 	loopDepth = 0;
 	switchDepth = 0;
-	curUnit = nullptr;
+	parsedUnit = nullptr;
 
-	#pragma region Parselets
+	currentContainer = nullptr;
+	currentPtr = 0;
+
+#pragma region Parselets
 	// Prefix
 	addPrefix<LiteralParselet>(TokenType::THIS, Precedence::NONE);
 
@@ -357,6 +377,7 @@ Parser::Parser() {
 	addInfix<BinaryParselet>(TokenType::SLASH, Precedence::FACTOR);
 	addInfix<BinaryParselet>(TokenType::STAR, Precedence::FACTOR);
 	addInfix<BinaryParselet>(TokenType::PERCENTAGE, Precedence::FACTOR);
+	addInfix<BinaryParselet>(TokenType::BANG, Precedence::PRIMARY);
 
 	addInfix<CallParselet>(TokenType::LEFT_PAREN, Precedence::CALL);
 	addInfix<FieldAccessParselet>(TokenType::LEFT_BRACKET, Precedence::CALL);
@@ -364,36 +385,43 @@ Parser::Parser() {
 
 	addInfix<BinaryParselet>(TokenType::DOUBLE_COLON, Precedence::PRIMARY);
 
-	//Postfix
-	//postfix and mixfix operators get parsed with the infix parselets
+	//postfix and mix-fix operators get parsed with the infix parselets
 	addInfix<UnaryPostfixParselet>(TokenType::INCREMENT, Precedence::ALTER);
 	addInfix<UnaryPostfixParselet>(TokenType::DECREMENT, Precedence::ALTER);
 #pragma endregion
 }
 
 void Parser::parse(vector<CSLModule*>& modules) {
-	#ifdef AST_DEBUG
+#ifdef AST_DEBUG
 	ASTPrinter printer;
-	#endif
-	//modules are already sorted using topsort
+#endif
+	//modules are already sorted using toposort
 	for (CSLModule* unit : modules) {
-		curUnit = unit;
+		parsedUnit = unit;
 
-		current = 0;
+		// Parse tokenized source into AST
 		loopDepth = 0;
 		switchDepth = 0;
+		currentContainer = &parsedUnit->tokens;
+		currentPtr = 0;
 		while (!isAtEnd()) {
 			try {
+				if (match(TokenType::ADDMACRO)) {
+					defineMacro();
+					continue;
+				}
 				unit->stmts.push_back(topLevelDeclaration());
-				#ifdef AST_DEBUG
+#ifdef AST_DEBUG
 				//prints statement
 				unit->stmts[unit->stmts.size() - 1]->accept(&printer);
-				#endif
+#endif
 			}
-			catch (ParserException e) {
+			catch (ParserException& e) {
 				sync();
 			}
 		}
+
+		expandMacros();
 	}
 	//look at each unit and determine if any of its dependencies that are imported without an alias are exporting the same symbol,
 	//or if 2 or more units using aliases share the same alias, which is forbidden
@@ -403,7 +431,7 @@ void Parser::parse(vector<CSLModule*>& modules) {
 
 		for (Dependency& dep : unit->deps) {
 			if (dep.alias.type == TokenType::NONE) {
-				for (Token token : dep.module->exports) {
+				for (const Token& token : dep.module->exports) {
 					string lexeme = token.getLexeme();
 
 					if (importedSymbols.count(lexeme) == 0) {
@@ -412,7 +440,7 @@ void Parser::parse(vector<CSLModule*>& modules) {
 					}
 					//if there are 2 or more declaration which use the same symbol,
 					//throw an error and tell the user exactly which dependencies caused the error
-					string str = std::format("Ambiguous definition, symbol '{}' defined in {} and {}.",
+					string str = fmt::format("Ambiguous definition, symbol '{}' defined in {} and {}.",
 						lexeme, importedSymbols[lexeme]->pathString.getLexeme(), dep.pathString.getLexeme());
 					error(dep.pathString, str);
 				}
@@ -429,6 +457,45 @@ void Parser::parse(vector<CSLModule*>& modules) {
 	}
 }
 
+void Parser::defineMacro() {
+	consume(TokenType::BANG, "Expected '!' after 'addMacro' token.");
+	Token macroName = consume(TokenType::IDENTIFIER, "Expected macro name to be an identifier.");
+	consume(TokenType::LEFT_BRACE, "Expected '{' initiating macro definition.");
+
+	macros[macroName.getLexeme()] = std::make_unique<Macro>(macroName, this);
+	auto& macro = macros[macroName.getLexeme()];
+
+	while (!isAtEnd() && !check(TokenType::RIGHT_BRACE)) {
+		MatchPattern matcher(readTokenTree(), this);
+		consume(TokenType::ARROW, "Expected '=>' after matcher expression.");
+		consume(TokenType::LEFT_BRACE, "Expected '{' initiating transcriber expression.");
+		vector<Token> transcriber;
+		int parenCount = 0, braceCount = 1, bracketCount = 0;
+		while (!isAtEnd() && braceCount >= 0) {
+			// Update bracket counters
+			if (check(TokenType::LEFT_PAREN)) parenCount++;
+			if (check(TokenType::LEFT_BRACE)) braceCount++;
+			if (check(TokenType::LEFT_BRACKET)) bracketCount++;
+			if (check(TokenType::RIGHT_PAREN)) parenCount--;
+			if (check(TokenType::RIGHT_BRACE)) braceCount--;
+			if (check(TokenType::RIGHT_BRACKET)) bracketCount--;
+
+			// Check for invalid transcriber
+			if (braceCount < 0) throw error(peek(), "Unexpected '}' in transcriber.");
+			if (bracketCount < 0) throw error(peek(), "Unexpected ']' in transcriber.");
+			transcriber.push_back(advance());
+		}
+		if (parenCount >= 0 || braceCount >= 0 || bracketCount >= 0) {
+			throw error(peek(), "Unexpected incomplete transcriber expression.");
+		}
+		consume(TokenType::SEMICOLON, "Expected ';' after transcriber expression.");
+
+		macro->matchers.push_back(matcher);
+		macro->transcribers.push_back(transcriber);
+	}
+	consume(TokenType::RIGHT_BRACE, "Unexpected incomplete macro definition.");
+}
+
 ASTNodePtr Parser::expression(int prec) {
 	Token token = advance();
 	//check if the token has a prefix function associated with it, and if it does, parse with it
@@ -438,8 +505,8 @@ ASTNodePtr Parser::expression(int prec) {
 	unique_ptr<PrefixParselet>& prefix = prefixParselets[token.type];
 	shared_ptr<ASTNode> left = prefix->parse(token);
 
-	//advances only if the next token has a higher precedence than the current one
-	//eg. 1 + 2 compiles because the base precedence is 0, and '+' has a precedence of 11
+	//advances only if the next token has a higher precedence than the parserCurrent one
+	//e.g. 1 + 2 compiles because the base precedence is 0, and '+' has a precedence of 11
 	//loop runs as long as the next operator has a higher precedence than the one that called this function
 	while (prec < getPrec()) {
 		token = advance();
@@ -467,18 +534,16 @@ ASTNodePtr Parser::topLevelDeclaration() {
 		else if (match(TokenType::CLASS)) node = classDecl();
 		else if (match(TokenType::FUNC)) node = funcDecl();
 
-		for (Token token : curUnit->exports) {
+		for (const Token& token : parsedUnit->exports) {
 			if (node->getName().compare(token)) {
-				error(node->getName(), std::format("Error, {} already defined and exported.", node->getName().getLexeme()));
+				error(node->getName(), fmt::format("Error, {} already defined and exported.", node->getName().getLexeme()));
 			}
 		}
 
-		curUnit->exports.push_back(node->getName());
-		curUnit->topDeclarations.push_back(node->getName());
+		parsedUnit->exports.push_back(node->getName());
+		parsedUnit->topDeclarations.push_back(node->getName());
 
 		return node;
-
-		throw error(peek(), "Expected variable, class or function declaration");
 	}
 	else {
 		//top level declarations get put in a list for later loopup during compilation
@@ -487,7 +552,7 @@ ASTNodePtr Parser::topLevelDeclaration() {
 		else if (match(TokenType::CLASS)) node = classDecl();
 		else if (match(TokenType::FUNC)) node = funcDecl();
 		if (node != nullptr) {
-			curUnit->topDeclarations.push_back(node->getName());
+			parsedUnit->topDeclarations.push_back(node->getName());
 			return node;
 		}
 	}
@@ -623,7 +688,7 @@ ASTNodePtr Parser::ifStmt() {
 	return make_shared<IfStmt>(thenBranch, elseBranch, condition);
 }
 
-ASTNodePtr Parser::whileStmt() { 
+ASTNodePtr Parser::whileStmt() {
 	//loopDepth is used to see if a 'continue' or 'break' statement is allowed within the body
 	loopDepth++;
 	consume(TokenType::LEFT_PAREN, "Expect '(' after 'while'.");
@@ -716,7 +781,7 @@ shared_ptr<CaseStmt> Parser::caseStmt() {
 	consume(TokenType::COLON, "Expect ':' after 'case' or 'default'.");
 	vector<ASTNodePtr> stmts;
 	while (!check(TokenType::CASE) && !check(TokenType::RIGHT_BRACE) && !check(TokenType::DEFAULT)) {
-		stmts.push_back(statement());
+		stmts.push_back(localDeclaration());
 	}
 	return make_shared<CaseStmt>(matchConstants, stmts);
 }
@@ -740,7 +805,7 @@ ASTNodePtr Parser::returnStmt() {
 #pragma endregion
 
 #pragma region Helpers
-//if the current token type matches any of the provided tokenTypes it's consumed, if not false is returned
+//if the parserCurrent token type matches any of the provided tokenTypes it's consumed, if not false is returned
 bool Parser::match(const std::initializer_list<TokenType>& tokenTypes) {
 	for (TokenType type : tokenTypes) {
 		if (check(type)) {
@@ -756,7 +821,7 @@ bool Parser::match(const TokenType type) {
 }
 
 bool Parser::isAtEnd() {
-	return peek().type == TokenType::TOKEN_EOF;
+	return currentContainer->size() <= currentPtr;
 }
 
 bool Parser::check(TokenType type) {
@@ -764,39 +829,87 @@ bool Parser::check(TokenType type) {
 	return peek().type == type;
 }
 
-//returns current token and increments to the next one
+//returns parserCurrent token and increments to the next one
 Token Parser::advance() {
-	if (!isAtEnd()) current++;
+	if (!isAtEnd()) currentPtr++;
 	return previous();
 }
 
-//gets current token
+//gets parserCurrent token
 Token Parser::peek() {
-	if (curUnit->tokens.size() < current) throw error(curUnit->tokens[current - 1], "Expected token.");
-	return curUnit->tokens[current];
+	if (isAtEnd()) throw error(currentContainer->back(), "Expected token.");
+	return currentContainer->at(currentPtr);
 }
 
 //gets next token
 Token Parser::peekNext() {
-	if (curUnit->tokens.size() < current + 1) throw error(curUnit->tokens[current], "Expected token.");
-	return curUnit->tokens[current + 1];
+	if (currentContainer->size() <= currentPtr + 1) throw error(currentContainer->back(), "Expected token.");
+	return currentContainer->at(currentPtr + 1);
 }
 
 Token Parser::previous() {
-	if (current - 1 < 0) throw error(curUnit->tokens[current], "Expected token.");
-	return curUnit->tokens[current - 1];
+	if (currentPtr - 1 < 0) throw error(currentContainer->at(0), "Expected token.");
+	return currentContainer->at(currentPtr - 1);
 }
 
-//if the current token is of the correct type, it's consumed, if not an error is thrown
+//if the parserCurrent token is of the correct type, it's consumed, if not an error is thrown
 Token Parser::consume(TokenType type, string msg) {
 	if (check(type)) return advance();
 
 	throw error(peek(), msg);
 }
 
-ParserException Parser::error(Token token, string msg) {
-	errorHandler::addCompileError(msg, token);
+ParserException Parser::error(Token token, string msg, bool ignoreParseMode) {
+	if (parseMode == ParseMode::Standard || ignoreParseMode) {
+		errorHandler::addCompileError(msg, token);
+	}
 	return ParserException();
+}
+
+vector<Token> Parser::readTokenTree()
+{
+	int parenCount = 0, braceCount = 0, bracketCount = 0;
+	consume(TokenType::LEFT_PAREN, "Expected '(' after macro invocation.");
+	parenCount++;
+
+	vector<Token> tokenTree = { previous() };
+
+	Token curToken;
+	while (parenCount > 0) {
+		std::cout << curToken.getLexeme() << " ";
+		if (isAtEnd()) {
+			throw error(curToken, "Unexpected end of file.");
+		}
+
+		// Update bracket counters
+		if (check(TokenType::LEFT_PAREN)) { parenCount++; }
+		if (check(TokenType::LEFT_BRACE)) { braceCount++; }
+		if (check(TokenType::LEFT_BRACKET)) { bracketCount++; }
+		if (check(TokenType::RIGHT_PAREN)) { parenCount--; }
+		if (check(TokenType::RIGHT_BRACE)) { braceCount--; }
+		if (check(TokenType::RIGHT_BRACKET)) { bracketCount--; }
+
+		curToken = advance();
+
+		// Check for invalid token tree
+		if (braceCount < 0) throw error(curToken, "Unexpected '}' in token tree.");
+		if (bracketCount < 0) throw error(curToken, "Unexpected ']' in token tree.");
+
+		std::cout << "\n" << parenCount << " " << braceCount << " " << bracketCount << "\n";
+	}
+
+	if (braceCount >= 0 || bracketCount >= 0) {
+		throw error(curToken, "Unexpected early termination of token tree.");
+	}
+
+	return tokenTree;
+}
+
+void Parser::expandMacros()
+{
+	for (ASTNodePtr stmt : parsedUnit->stmts) {
+		stmt->accept(macroExpander);
+	}
 }
 
 //syncs when we find a ';' or one of the keywords
@@ -837,7 +950,7 @@ void Parser::addInfix(TokenType type, Precedence prec) {
 	infixParselets[type] = std::make_unique<ParseletType>(this, +prec);
 }
 
-//checks if the current token has any infix parselet associated with it, and if so the precedence of that operation is returned
+//checks if the parserCurrent token has any infix parselet associated with it, and if so the precedence of that operation is returned
 int Parser::getPrec() {
 	Token token = peek();
 	if (infixParselets.count(token.type) == 0) {

@@ -1,9 +1,9 @@
 #include "garbageCollector.h"
 #include "../ErrorHandling/errorHandler.h"
-#include "../Codegen/compiler.h"
+#include "../codegen/compiler.h"
 #include "../Objects/objects.h"
 #include "../Runtime/vm.h"
-#include <format>
+#include "../Includes/fmt/format.h"
 
 //start size of heap in KB
 #define HEAP_START_SIZE 1024
@@ -14,7 +14,7 @@ namespace memory {
 
 	GarbageCollector::GarbageCollector() {
 		heapSize = 0;
-		heapSizeLimit = HEAP_START_SIZE*1024;
+		heapSizeLimit = HEAP_START_SIZE * 1024;
 
 		shouldCollect.store(false);
 	}
@@ -28,8 +28,7 @@ namespace memory {
 			block = new byte[size];
 		}
 		catch (const std::bad_alloc& e) {
-			errorHandler::addSystemError(std::format("Failed allocation, tried to allocate {} bytes", size));
-			throw errorHandler::SystemException();
+			errorHandler::addSystemError(fmt::format("Failed allocation, tried to allocate {} bytes", size));
 		}
 		objects.push_back(reinterpret_cast<object::Obj*>(block));
 		return block;
@@ -72,15 +71,8 @@ namespace memory {
 	}
 
 	void GarbageCollector::markRoots(compileCore::Compiler* compiler) {
-		compileCore::CurrentChunkInfo* c = compiler->current;
-		while (c->enclosing) {
-			c->func->marked = true;
-			c->func->trace();
-			c = c->enclosing;
-		}
-		c->func->marked = true;
-		c->func->trace();
-		for (Value& val : c->chunk.constants) val.mark();
+		for (Value& val : compiler->mainCodeBlock.constants) val.mark();
+		compiler->mainBlockFunc->marked = true;
 	}
 
 	void GarbageCollector::sweep() {

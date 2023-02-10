@@ -1,12 +1,12 @@
 #pragma once
-#include "../Codegen/codegenDefs.h"
+#include "../codegen/codegenDefs.h"
 #include "../Objects/objects.h"
 #include "thread.h"
 #include <condition_variable>
 
 namespace runtime {
 	string expectedType(string msg, Value val);
-	
+
 	class VM {
 	public:
 		VM(compileCore::Compiler* compiler);

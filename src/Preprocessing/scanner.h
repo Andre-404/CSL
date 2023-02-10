@@ -1,9 +1,9 @@
 #pragma once
-#include "../modulesDefs.h"
+#include "../moduleDefs.h"
 
 namespace preprocessing {
 
-class Scanner {
+	class Scanner {
 	public:
 		vector<Token> tokenizeSource(string source, string sourcename);
 		File* getFile() { return curFile; }

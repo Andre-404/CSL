@@ -8,6 +8,7 @@ using namespace memory;
 #pragma region ObjString
 ObjString::ObjString(string& _str) {
 	str = _str;
+	marked = false;
 	type = ObjType::STRING;
 }
 uInt64 ObjString::getSize() {
@@ -44,6 +45,7 @@ ObjFunc::ObjFunc() {
 	constantsOffset = 0;
 	type = ObjType::FUNC;
 	name = "";
+	marked = false;
 }
 
 void ObjFunc::trace() {
@@ -63,6 +65,7 @@ uInt64 ObjFunc::getSize() {
 ObjNativeFunc::ObjNativeFunc(NativeFn _func, byte _arity) {
 	func = _func;
 	arity = _arity;
+	marked = false;
 	type = ObjType::NATIVE;
 }
 
@@ -83,6 +86,7 @@ uInt64 ObjNativeFunc::getSize() {
 ObjClosure::ObjClosure(ObjFunc* _func) {
 	func = _func;
 	upvals = vector<ObjUpval*>(func->upvalueCount);
+	marked = false;
 	type = ObjType::CLOSURE;
 }
 
@@ -105,6 +109,7 @@ uInt64 ObjClosure::getSize() {
 #pragma region ObjUpval
 ObjUpval::ObjUpval(Value& _val) {
 	val = _val;
+	marked = false;
 	type = ObjType::UPVALUE;
 }
 
@@ -125,6 +130,7 @@ uInt64 ObjUpval::getSize() {
 ObjArray::ObjArray() {
 	type = ObjType::ARRAY;
 	numOfHeapPtr = 0;
+	marked = false;
 }
 ObjArray::ObjArray(size_t size) {
 	values = vector<Value>(size);
@@ -140,7 +146,7 @@ void ObjArray::trace() {
 	uInt64 arrSize = values.size();
 	while (i < arrSize && temp < numOfHeapPtr) {
 		values[i].mark();
-		if(values[i].isObj()) temp++;
+		if (values[i].isObj()) temp++;
 	}
 }
 
@@ -156,6 +162,7 @@ uInt64 ObjArray::getSize() {
 #pragma region ObjClass
 ObjClass::ObjClass(string _name) {
 	name = _name;
+	marked = false;
 	type = ObjType::CLASS;
 }
 
@@ -177,6 +184,7 @@ uInt64 ObjClass::getSize() {
 #pragma region ObjInstance
 ObjInstance::ObjInstance(ObjClass* _klass) {
 	klass = _klass;
+	marked = false;
 	type = ObjType::INSTANCE;
 }
 
@@ -184,7 +192,7 @@ void ObjInstance::trace() {
 	for (auto it = fields.begin(); it != fields.end(); it++) {
 		it->second.mark();
 	}
-	if(klass) gc.markObj(klass);
+	if (klass) gc.markObj(klass);
 }
 
 string ObjInstance::toString() {
@@ -201,6 +209,7 @@ uInt64 ObjInstance::getSize() {
 ObjBoundMethod::ObjBoundMethod(Value _receiver, ObjClosure* _method) {
 	receiver = _receiver;
 	method = _method;
+	marked = false;
 	type = ObjType::BOUND_METHOD;
 }
 
@@ -221,6 +230,7 @@ uInt64 ObjBoundMethod::getSize() {
 #pragma region ObjFile
 ObjFile::ObjFile(string& _path) {
 	path = _path;
+	marked = false;
 	stream.open(path);
 	type = ObjType::FILE;
 }
@@ -243,6 +253,7 @@ uInt64 ObjFile::getSize() {
 
 #pragma region ObjMutex
 ObjMutex::ObjMutex() {
+	marked = false;
 	type = ObjType::MUTEX;
 }
 ObjMutex::~ObjMutex() {
@@ -265,6 +276,7 @@ uInt64 ObjMutex::getSize() {
 #pragma region ObjFuture
 ObjFuture::ObjFuture(runtime::Thread* t) {
 	thread = t;
+	marked = false;
 	val = Value::nil();
 	type = ObjType::FUTURE;
 }

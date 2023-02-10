@@ -1,5 +1,5 @@
 #pragma once
-#include "../Codegen/codegenDefs.h"
+#include "../codegen/codegenDefs.h"
 #include "../MemoryManagment/garbageCollector.h"
 #include "../Includes/robin_hood.h"
 #include <fstream>
@@ -29,7 +29,7 @@ namespace object {
 		FUTURE
 	};
 
-	class Obj{
+	class Obj {
 	public:
 		ObjType type;
 		bool marked;
@@ -154,7 +154,7 @@ namespace object {
 		Value receiver;
 		ObjClosure* method;
 		ObjBoundMethod(Value _receiver, ObjClosure* _method);
-		~ObjBoundMethod() {}
+		~ObjBoundMethod() = default;
 
 		void trace();
 		string toString();
@@ -167,7 +167,7 @@ namespace object {
 		ObjClass* klass;
 		robin_hood::unordered_map<string, Value> fields;
 		ObjInstance(ObjClass* _klass);
-		~ObjInstance() {};
+		~ObjInstance() = default;
 
 		void trace();
 		string toString();

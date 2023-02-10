@@ -1,10 +1,9 @@
 #pragma once
 #pragma once
-#include "../modulesDefs.h"
+#include "../moduleDefs.h"
 
 namespace AST {
 	using std::shared_ptr;
-
 
 	enum class ASTType {
 		ASSIGNMENT,
@@ -15,7 +14,6 @@ namespace AST {
 		ARRAY_LITERAL,
 		CALL,
 		FIELD_ACCESS,
-		GROUPING,
 		ASYNC,
 		AWAIT,
 		STRUCT,
@@ -23,11 +21,12 @@ namespace AST {
 		SUPER,
 		FUNC_LITERAL,
 		MODULE_ACCESS,
+		MACRO,
 
 		VAR,
 		FUNC,
 		CLASS,
-		
+
 		PRINT,
 		EXPR_STMT,
 		BLOCK,
@@ -49,7 +48,6 @@ namespace AST {
 	class ArrayLiteralExpr;
 	class CallExpr;
 	class FieldAccessExpr;
-	class GroupingExpr;
 	class AsyncExpr;
 	class AwaitExpr;
 	class StructLiteral;
@@ -57,6 +55,7 @@ namespace AST {
 	class SuperExpr;
 	class FuncLiteral;
 	class ModuleAccessExpr;
+	class MacroExpr;
 
 	class VarDecl;
 	class FuncDecl;
@@ -85,7 +84,6 @@ namespace AST {
 		virtual void visitUnaryExpr(UnaryExpr* expr) = 0;
 		virtual void visitCallExpr(CallExpr* expr) = 0;
 		virtual void visitFieldAccessExpr(FieldAccessExpr* expr) = 0;
-		virtual void visitGroupingExpr(GroupingExpr* expr) = 0;
 		virtual void visitAsyncExpr(AsyncExpr* expr) = 0;
 		virtual void visitAwaitExpr(AwaitExpr* expr) = 0;
 		virtual void visitArrayLiteralExpr(ArrayLiteralExpr* expr) = 0;
@@ -94,6 +92,7 @@ namespace AST {
 		virtual void visitSuperExpr(SuperExpr* expr) = 0;
 		virtual void visitFuncLiteral(FuncLiteral* expr) = 0;
 		virtual void visitModuleAccessExpr(ModuleAccessExpr* expr) = 0;
+		virtual void visitMacroExpr(MacroExpr* expr) = 0;
 
 		virtual void visitVarDecl(VarDecl* decl) = 0;
 		virtual void visitFuncDecl(FuncDecl* decl) = 0;
@@ -120,14 +119,14 @@ namespace AST {
 		virtual ~ASTNode() {};
 		virtual void accept(Visitor* vis) = 0;
 	};
-	using ASTNodePtr = std::shared_ptr<ASTNode>;
+	using ASTNodePtr = shared_ptr<ASTNode>;
 
 	class ASTDecl : public ASTNode {
 	public:
 		virtual Token getName() = 0;
 	};
 
-	#pragma region Expressions
+#pragma region Expressions
 
 	class AssignmentExpr : public ASTNode {
 	public:
@@ -161,7 +160,7 @@ namespace AST {
 			op = _op;
 			type = ASTType::SET;
 		}
-		void accept(Visitor* vis) {
+		void accept(Visitor* vis) override {
 			vis->visitSetExpr(this);
 		}
 	};
@@ -178,7 +177,7 @@ namespace AST {
 			elseBranch = _elseBranch;
 			type = ASTType::CONDITIONAL;
 		}
-		void accept(Visitor* vis) {
+		void accept(Visitor* vis) override {
 			vis->visitConditionalExpr(this);
 		}
 	};
@@ -195,7 +194,7 @@ namespace AST {
 			right = _right;
 			type = ASTType::BINARY;
 		}
-		void accept(Visitor* vis) {
+		void accept(Visitor* vis) override {
 			vis->visitBinaryExpr(this);
 		}
 	};
@@ -212,7 +211,7 @@ namespace AST {
 			isPrefix = _isPrefix;
 			type = ASTType::UNARY;
 		}
-		void accept(Visitor* vis) {
+		void accept(Visitor* vis) override {
 			vis->visitUnaryExpr(this);
 		}
 	};
@@ -225,7 +224,7 @@ namespace AST {
 			members = _members;
 			type = ASTType::ARRAY_LITERAL;
 		}
-		void accept(Visitor* vis) {
+		void accept(Visitor* vis) override {
 			vis->visitArrayLiteralExpr(this);
 		}
 	};
@@ -240,7 +239,7 @@ namespace AST {
 			args = _args;
 			type = ASTType::CALL;
 		}
-		void accept(Visitor* vis) {
+		void accept(Visitor* vis) override {
 			vis->visitCallExpr(this);
 		}
 	};
@@ -258,7 +257,7 @@ namespace AST {
 			field = _field;
 			type = ASTType::FIELD_ACCESS;
 		}
-		void accept(Visitor* vis) {
+		void accept(Visitor* vis) override {
 			vis->visitFieldAccessExpr(this);
 		}
 	};
@@ -271,21 +270,8 @@ namespace AST {
 			methodName = _methodName;
 			type = ASTType::SUPER;
 		}
-		void accept(Visitor* vis) {
+		void accept(Visitor* vis) override {
 			vis->visitSuperExpr(this);
-		}
-	};
-
-	class GroupingExpr : public ASTNode {
-	public:
-		ASTNodePtr expr;
-
-		GroupingExpr(ASTNodePtr _expr) {
-			expr = _expr;
-			type = ASTType::GROUPING;
-		}
-		void accept(Visitor* vis) {
-			vis->visitGroupingExpr(this);
 		}
 	};
 
@@ -301,7 +287,7 @@ namespace AST {
 			type = ASTType::ASYNC;
 			token = _token;
 		}
-		void accept(Visitor* vis) {
+		void accept(Visitor* vis) override {
 			vis->visitAsyncExpr(this);
 		}
 	};
@@ -316,7 +302,7 @@ namespace AST {
 			type = ASTType::AWAIT;
 			token = _token;
 		}
-		void accept(Visitor* vis) {
+		void accept(Visitor* vis) override {
 			vis->visitAwaitExpr(this);
 		}
 	};
@@ -329,7 +315,7 @@ namespace AST {
 			token = _token;
 			type = ASTType::LITERAL;
 		}
-		void accept(Visitor* vis) {
+		void accept(Visitor* vis) override {
 			vis->visitLiteralExpr(this);
 		}
 	};
@@ -337,7 +323,10 @@ namespace AST {
 	struct StructEntry {
 		ASTNodePtr expr;
 		Token name;
-		StructEntry(Token _name, ASTNodePtr _expr) : expr(_expr), name(_name) {};
+		StructEntry(Token _name, ASTNodePtr _expr) {
+			name = _name;
+			expr = _expr;
+		};
 	};
 
 	class StructLiteral : public ASTNode {
@@ -386,9 +375,25 @@ namespace AST {
 		}
 	};
 
+	class MacroExpr : public ASTNode {
+	public:
+		Token macroName;
+		vector<Token> args;
+
+		MacroExpr(Token _macroName, vector<Token> _args) {
+			macroName = _macroName;
+			args = _args;
+			type = ASTType::MACRO;
+		}
+
+		void accept(Visitor* vis) {
+			vis->visitMacroExpr(this);
+		}
+	};
+
 #pragma endregion
 
-	#pragma region Statements
+#pragma region Statements
 
 	//temporary, will replace with a native function
 	class PrintStmt : public ASTNode {
